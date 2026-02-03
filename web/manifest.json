@@ -1,0 +1,10 @@
+{
+  "name": "ProSME",
+  "short_name": "ProSME",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#1E7F3E",
+  "theme_color": "#1E7F3E",
+  "description": "ProSME marketplace",
+  "icons": []
+}
