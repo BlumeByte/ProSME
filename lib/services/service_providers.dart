@@ -1,7 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' as sb;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../config/supabase_options.dart';
 import 'auth_service.dart';
@@ -20,7 +18,7 @@ final authServiceProvider = Provider<AuthService>((ref) {
   if (kDevMode) {
     return MockAuthService();
   }
-  return FirebaseAuthService(firebase_auth.FirebaseAuth.instance);
+  return SupabaseAuthService(Supabase.instance.client);
 });
 
 /// A Supabase-backed [AuthService] provider.
@@ -37,14 +35,14 @@ final listingServiceProvider = Provider<ListingService>((ref) {
   if (kDevMode) {
     return MockListingService();
   }
-  return FirestoreListingService(FirebaseFirestore.instance);
+  return SupabaseListingService(Supabase.instance.client);
 });
 
 final chatServiceProvider = Provider<ChatService>((ref) {
   if (kDevMode) {
     return MockChatService();
   }
-  return FirestoreChatService(FirebaseFirestore.instance);
+  return SupabaseChatService(Supabase.instance.client);
 });
 
 final paymentServiceProvider = Provider((ref) => PaymentService());
