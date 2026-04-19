@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../config/constants.dart';
@@ -19,9 +21,12 @@ import '../services/service_providers.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authStream = ref.watch(authStateProvider.stream);
+  final refreshListenable = StreamRouterRefresh(authStream);
+  ref.onDispose(refreshListenable.dispose);
+
   return GoRouter(
     initialLocation: RouteNames.onboarding,
-    refreshListenable: GoRouterRefreshStream(authStream),
+    refreshListenable: refreshListenable,
     redirect: (context, state) {
       final authState = ref.read(authStateProvider).valueOrNull;
       final isLoggedIn = authState != null;
@@ -108,5 +113,21 @@ String _homeForRole(AppUser? user) {
     case UserRole.customer:
     default:
       return RouteNames.home;
+  }
+}
+
+class StreamRouterRefresh extends ChangeNotifier {
+  StreamRouterRefresh(Stream<dynamic> stream) {
+    _subscription = stream.asBroadcastStream().listen((_) {
+      notifyListeners();
+    });
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
   }
 }

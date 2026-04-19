@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../core/utils/mock_data.dart';
 import '../models/chat_models.dart';
@@ -36,45 +36,37 @@ class MockChatService implements ChatService {
   }
 }
 
-class FirestoreChatService implements ChatService {
-  FirestoreChatService(this._firestore);
+class SupabaseChatService implements ChatService {
+  SupabaseChatService(this._supabase);
 
-  final FirebaseFirestore _firestore;
+  final SupabaseClient _supabase;
 
   @override
   Stream<List<ChatThread>> watchThreads(String userId) {
-    return _firestore
-        .collection('threads')
-        .where('userId', isEqualTo: userId)
-        .snapshots()
-        .map((snapshot) =>
-            snapshot.docs.map((doc) => ChatThread.fromJson(doc.data())).toList());
+    return _supabase.from('threads').stream(primaryKey: ['id']).map(
+          (rows) => rows
+              .where((row) => row['userId'] == userId)
+              .map((row) => ChatThread.fromJson(row))
+              .toList(),
+        );
   }
 
   @override
   Stream<List<ChatMessage>> watchMessages(String threadId) {
-    return _firestore
-        .collection('threads')
-        .doc(threadId)
-        .collection('messages')
-        .orderBy('createdAt')
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => ChatMessage.fromJson(doc.data()))
-            .toList());
+    return _supabase.from('messages').stream(primaryKey: ['id']).map(
+          (rows) => rows
+              .where((row) => row['threadId'] == threadId)
+              .map((row) => ChatMessage.fromJson(row))
+              .toList(),
+        );
   }
 
   @override
   Future<void> sendMessage(ChatMessage message) async {
-    await _firestore
-        .collection('threads')
-        .doc(message.threadId)
-        .collection('messages')
-        .doc(message.id)
-        .set(message.toJson());
+    await _supabase.from('messages').insert(message.toJson());
   }
 }
 
-ChatService buildChatService(FirebaseFirestore firestore) {
-  return kDevMode ? MockChatService() : FirestoreChatService(firestore);
+ChatService buildChatService(SupabaseClient supabase) {
+  return kDevMode ? MockChatService() : SupabaseChatService(supabase);
 }

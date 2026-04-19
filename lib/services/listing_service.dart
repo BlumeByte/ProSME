@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../core/utils/mock_data.dart';
 import '../models/listing.dart';
@@ -24,27 +24,29 @@ class MockListingService implements ListingService {
   Future<List<Listing>> fetchListings() async => demoListings;
 }
 
-class FirestoreListingService implements ListingService {
-  FirestoreListingService(this._firestore);
+class SupabaseListingService implements ListingService {
+  SupabaseListingService(this._supabase);
 
-  final FirebaseFirestore _firestore;
+  final SupabaseClient _supabase;
 
   @override
   Stream<List<Listing>> watchListings() {
-    return _firestore.collection('listings').snapshots().map(
-          (snapshot) => snapshot.docs
-              .map((doc) => Listing.fromJson(doc.data()))
-              .toList(),
+    return _supabase
+        .from('listings')
+        .stream(primaryKey: ['id']).map(
+          (rows) => rows.map((row) => Listing.fromJson(row)).toList(),
         );
   }
 
   @override
   Future<List<Listing>> fetchListings() async {
-    final snapshot = await _firestore.collection('listings').get();
-    return snapshot.docs.map((doc) => Listing.fromJson(doc.data())).toList();
+    final List<dynamic> response = await _supabase.from('listings').select();
+    return response
+        .map((row) => Listing.fromJson(row as Map<String, dynamic>))
+        .toList();
   }
 }
 
-ListingService buildListingService(FirebaseFirestore firestore) {
-  return kDevMode ? MockListingService() : FirestoreListingService(firestore);
+ListingService buildListingService(SupabaseClient supabase) {
+  return kDevMode ? MockListingService() : SupabaseListingService(supabase);
 }

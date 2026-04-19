@@ -1,15 +1,15 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/listing.dart';
 
 class SyncService {
-  SyncService(this._firestore);
+  SyncService(this._supabase);
 
-  final FirebaseFirestore _firestore;
+  final SupabaseClient _supabase;
 
   Stream<List<Listing>> listenListings() {
-    return _firestore.collection('listings').snapshots().map(
-          (snapshot) => snapshot.docs
-              .map((doc) => Listing.fromJson(doc.data()))
+    return _supabase.from('listings').stream(primaryKey: ['id']).map(
+          (rows) => rows
+              .map((row) => Listing.fromJson(row))
               .toList(),
         );
   }

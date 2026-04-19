@@ -1,6 +1,5 @@
 import 'dart:async';
-import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../core/utils/mock_data.dart';
 import '../models/app_user.dart';
@@ -66,65 +65,65 @@ class MockAuthService implements AuthService {
   }
 }
 
-class FirebaseAuthService implements AuthService {
-  FirebaseAuthService(this._firebaseAuth);
+class SupabaseAuthService implements AuthService {
+  SupabaseAuthService(this._supabase);
 
-  final firebase_auth.FirebaseAuth _firebaseAuth;
+  final SupabaseClient _supabase;
 
-  AppUser? _mapUser(firebase_auth.User? user) {
+  AppUser? _mapUser(User? user) {
     if (user == null) return null;
     return AppUser(
-      id: user.uid,
+      id: user.id,
       role: UserRole.customer,
-      name: user.displayName ?? 'User',
-      phone: user.phoneNumber ?? '',
+      name: user.userMetadata?['full_name'] as String? ?? 'User',
+      phone: user.phone ?? '',
       email: user.email ?? '',
-      photoUrl: user.photoURL ?? '',
-      createdAt: user.metadata.creationTime ?? DateTime.now(),
+      photoUrl: user.userMetadata?['avatar_url'] as String? ?? '',
+      createdAt: DateTime.tryParse(user.createdAt) ?? DateTime.now(),
     );
   }
 
   @override
   Stream<AppUser?> authStateChanges() {
-    return _firebaseAuth.authStateChanges().map(_mapUser);
+    return _supabase.auth.onAuthStateChange.map(
+      (authState) => _mapUser(authState.session?.user),
+    );
   }
 
   @override
-  AppUser? get currentUser => _mapUser(_firebaseAuth.currentUser);
+  AppUser? get currentUser => _mapUser(_supabase.auth.currentUser);
 
   @override
   Future<AppUser> signInWithEmail(String email, String password) async {
-    final credential = await _firebaseAuth.signInWithEmailAndPassword(
+    final response = await _supabase.auth.signInWithPassword(
       email: email,
       password: password,
     );
-    return _mapUser(credential.user)!;
+    return _mapUser(response.user)!;
   }
 
   @override
   Future<AppUser> signInWithGoogle() async {
-    final googleUser = await GoogleSignIn().signIn();
-    final googleAuth = await googleUser?.authentication;
-    final credential = firebase_auth.GoogleAuthProvider.credential(
-      accessToken: googleAuth?.accessToken,
-      idToken: googleAuth?.idToken,
-    );
-    final userCredential = await _firebaseAuth.signInWithCredential(credential);
-    return _mapUser(userCredential.user)!;
+    await _supabase.auth.signInWithOAuth(OAuthProvider.google);
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      throw StateError('Google sign-in did not return a user session.');
+    }
+    return _mapUser(user)!;
   }
 
   @override
   Future<AppUser> signInWithPhone(String phone) async {
-    throw UnimplementedError('Phone OTP should be implemented with Firebase.');
+    throw UnimplementedError('Phone OTP should be implemented with Supabase.');
   }
 
   @override
   Future<void> signOut() async {
-    await _firebaseAuth.signOut();
+    await _supabase.auth.signOut();
   }
 
   @override
   Future<void> updateRole(UserRole role) async {
-    // TODO: Persist role in Firestore user profile.
+    // TODO: Persist role in Supabase profiles table.
   }
 }
