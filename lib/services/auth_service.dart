@@ -65,76 +65,13 @@ class MockAuthService implements AuthService {
   }
 }
 
-class SupabaseAuthService implements AuthService {
-  SupabaseAuthService(this._supabase);
-
-  final SupabaseClient _supabase;
-
-  AppUser? _mapUser(User? user) {
-    if (user == null) return null;
-    return AppUser(
-      id: user.id,
-      role: UserRole.customer,
-      name: user.userMetadata?['full_name'] as String? ?? 'User',
-      phone: user.phone ?? '',
-      email: user.email ?? '',
-      photoUrl: user.userMetadata?['avatar_url'] as String? ?? '',
-      createdAt: DateTime.tryParse(user.createdAt) ?? DateTime.now(),
-    );
-  }
-
-  @override
-  Stream<AppUser?> authStateChanges() {
-    return _supabase.auth.onAuthStateChange.map(
-      (authState) => _mapUser(authState.session?.user),
-    );
-  }
-
-  @override
-  AppUser? get currentUser => _mapUser(_supabase.auth.currentUser);
-
-  @override
-  Future<AppUser> signInWithEmail(String email, String password) async {
-    final response = await _supabase.auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
-    return _mapUser(response.user)!;
-  }
-
-  @override
-  Future<AppUser> signInWithGoogle() async {
-    await _supabase.auth.signInWithOAuth(OAuthProvider.google);
-    final user = _supabase.auth.currentUser;
-    if (user == null) {
-      throw StateError('Google sign-in did not return a user session.');
-    }
-    return _mapUser(user)!;
-  }
-
-  @override
-  Future<AppUser> signInWithPhone(String phone) async {
-    throw UnimplementedError('Phone OTP should be implemented with Supabase.');
-  }
-
-  @override
-  Future<void> signOut() async {
-    await _supabase.auth.signOut();
-  }
-
-  @override
-  Future<void> updateRole(UserRole role) async {
-    // TODO: Persist role in Supabase profiles table.
-  }
-}
-
 /// [AuthService] implementation backed by Supabase Auth.
 class SupabaseAuthService implements AuthService {
   SupabaseAuthService(this._client);
 
-  final sb.SupabaseClient _client;
+  final SupabaseClient _client;
 
-  AppUser? _mapUser(sb.User? user) {
+  AppUser? _mapUser(User? user) {
     if (user == null) return null;
     final meta = user.userMetadata ?? {};
     return AppUser(
@@ -175,7 +112,7 @@ class SupabaseAuthService implements AuthService {
     // The authenticated user is delivered through [authStateChanges] once the
     // redirect completes. Callers should listen to that stream instead of
     // awaiting this method's return value.
-    await _client.auth.signInWithOAuth(sb.OAuthProvider.google);
+    await _client.auth.signInWithOAuth(OAuthProvider.google);
     throw UnimplementedError(
       'Google sign-in uses a browser redirect. '
       'Listen to authStateChanges() for the authenticated user.',
@@ -197,7 +134,7 @@ class SupabaseAuthService implements AuthService {
     final response = await _client.auth.verifyOTP(
       phone: phone,
       token: token,
-      type: sb.OtpType.sms,
+      type: OtpType.sms,
     );
     final user = response.user;
     if (user == null) {
@@ -214,7 +151,7 @@ class SupabaseAuthService implements AuthService {
   @override
   Future<void> updateRole(UserRole role) async {
     await _client.auth.updateUser(
-      sb.UserAttributes(data: {'role': role.name}),
+      UserAttributes(data: {'role': role.name}),
     );
   }
 }
