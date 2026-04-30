@@ -114,24 +114,7 @@ class SupabaseAuthService implements AuthService {
 
   @override
   Future<AppUser> signInWithPhone(String phone) async {
-    await _supabase.auth.signInWithOtp(phone: phone);
-    throw UnimplementedError(
-      'Phone sign-in is a two-step flow. Call verifyPhoneOtp(phone, token) after receiving the SMS code.',
-    );
-  }
-
-  /// Verifies an SMS OTP and returns the authenticated user.
-  Future<AppUser> verifyPhoneOtp(String phone, String token) async {
-    final response = await _supabase.auth.verifyOTP(
-      phone: phone,
-      token: token,
-      type: OtpType.sms,
-    );
-    final user = response.user;
-    if (user == null) {
-      throw StateError('OTP verification failed: no user session returned.');
-    }
-    return _mapUser(user)!;
+    throw UnimplementedError('Phone OTP should be implemented with Supabase.');
   }
 
   @override
@@ -141,8 +124,6 @@ class SupabaseAuthService implements AuthService {
 
   @override
   Future<void> updateRole(UserRole role) async {
-    await _supabase.auth.updateUser(
-      UserAttributes(data: {'role': role.name}),
-    );
+    // TODO: Persist role in Supabase profiles table.
   }
 }
