@@ -52,8 +52,9 @@ class SupabaseListingService implements ListingService {
             (profile['id'] ?? '').toString():
                 ((profile['full_name'] ?? profile['name'] ?? '') as String),
         };
-      } catch (_) {
-        debugPrint('Failed to load artisan profiles for listings.');
+      } catch (error, stackTrace) {
+        debugPrint('Failed to load artisan profiles for listings: $error');
+        debugPrintStack(stackTrace: stackTrace);
         artisanNames = {};
       }
     }
