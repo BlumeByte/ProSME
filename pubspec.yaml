@@ -24,7 +24,6 @@ dependencies:
   google_maps_flutter: ^2.6.1
   intl: 0.20.2
   uuid: ^4.4.0
-  supabase_flutter: 2.1.0
 
 
 dev_dependencies:
