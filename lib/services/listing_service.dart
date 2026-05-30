@@ -29,21 +29,61 @@ class SupabaseListingService implements ListingService {
 
   final SupabaseClient _supabase;
 
+  Future<List<Listing>> _hydrateListings(List<Map<String, dynamic>> rows) async {
+    final artisanIds = rows
+        .map(
+          (row) => (row['artisan_id'] ?? row['artisanId'])?.toString() ?? '',
+        )
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    Map<String, String> artisanNames = {};
+    if (artisanIds.isNotEmpty) {
+      try {
+        final List<dynamic> profiles = await _supabase
+            .from('profiles')
+            .select('id,full_name,name')
+            .inFilter('id', artisanIds);
+
+        artisanNames = {
+          for (final profile in profiles)
+            (profile['id'] ?? '').toString():
+                ((profile['full_name'] ?? profile['name'] ?? '') as String),
+        };
+      } catch (_) {
+        artisanNames = {};
+      }
+    }
+
+    return rows.map((row) {
+      final artisanId = (row['artisan_id'] ?? row['artisanId'])?.toString();
+      final hydratedRow = Map<String, dynamic>.from(row);
+      if (artisanId != null && artisanNames.containsKey(artisanId)) {
+        hydratedRow['artisanName'] = artisanNames[artisanId];
+      }
+      return Listing.fromJson(hydratedRow);
+    }).toList();
+  }
+
   @override
   Stream<List<Listing>> watchListings() {
     return _supabase
         .from('listings')
-        .stream(primaryKey: ['id']).map(
-          (rows) => rows.map((row) => Listing.fromJson(row)).toList(),
+        .stream(primaryKey: ['id'])
+        .asyncMap(
+          (rows) => _hydrateListings(
+            rows.map((row) => Map<String, dynamic>.from(row)).toList(),
+          ),
         );
   }
 
   @override
   Future<List<Listing>> fetchListings() async {
     final List<dynamic> response = await _supabase.from('listings').select();
-    return response
-        .map((row) => Listing.fromJson(row as Map<String, dynamic>))
-        .toList();
+    return _hydrateListings(
+      response.map((row) => Map<String, dynamic>.from(row as Map)).toList(),
+    );
   }
 }
 

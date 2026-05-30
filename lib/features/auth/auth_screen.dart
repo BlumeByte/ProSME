@@ -25,6 +25,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       if (mounted) {
         context.go(RouteNames.role);
       }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -44,7 +49,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   Widget build(BuildContext context) {
     final authService = ref.watch(authServiceProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Sign in')),
+      appBar: AppBar(title: const Text('Sign in / Sign up')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),
@@ -68,6 +73,17 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               onPressed: _isLoading
                   ? () {}
                   : () => _signIn(() => authService.signInWithEmail(
+                        _emailController.text,
+                        _passwordController.text,
+                      )),
+            ),
+            const SizedBox(height: 16),
+            PrimaryButton(
+              label: _isLoading ? 'Creating account...' : 'Create account',
+              icon: Icons.person_add_alt_1,
+              onPressed: _isLoading
+                  ? () {}
+                  : () => _signIn(() => authService.signUpWithEmail(
                         _emailController.text,
                         _passwordController.text,
                       )),
