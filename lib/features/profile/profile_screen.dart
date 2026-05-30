@@ -15,12 +15,17 @@ class ProfileScreen extends ConsumerWidget {
       children: [
         ListTile(
           leading: CircleAvatar(
-            backgroundImage: user?.photoUrl.isNotEmpty == true
-                ? NetworkImage(user!.photoUrl)
-                : null,
-            child: user?.photoUrl.isEmpty == true
-                ? const Icon(Icons.person)
-                : null,
+            child: user?.photoUrl.isNotEmpty == true
+                ? ClipOval(
+                    child: Image.network(
+                      user!.photoUrl,
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.person),
+                    ),
+                  )
+                : const Icon(Icons.person),
           ),
           title: Text(user?.name ?? 'Guest'),
           subtitle: Text(user?.phone ?? ''),
