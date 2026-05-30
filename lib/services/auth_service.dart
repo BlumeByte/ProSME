@@ -79,6 +79,7 @@ class SupabaseAuthService implements AuthService {
   SupabaseAuthService(this._supabase);
 
   final SupabaseClient _supabase;
+  static const String _defaultDisplayName = 'New User';
   AppUser? _resolvedCurrentUser;
 
   bool _isMissingProfilesTable(Object error) {
@@ -105,8 +106,9 @@ class SupabaseAuthService implements AuthService {
 
   Future<void> _upsertProfile(User user) async {
     final metadata = user.userMetadata ?? const <String, dynamic>{};
-    final fullName = (metadata['full_name'] ?? metadata['name'] ?? 'New User')
-        .toString();
+    final fullName =
+        (metadata['full_name'] ?? metadata['name'] ?? _defaultDisplayName)
+            .toString();
     final avatarUrl = (metadata['avatar_url'] ?? '').toString();
     final role = (metadata['role'] ?? UserRole.customer.name).toString();
 
@@ -140,7 +142,7 @@ class SupabaseAuthService implements AuthService {
                   source['name'] ??
                   metadata['full_name'] ??
                   metadata['name'] ??
-                  'New User')
+                  _defaultDisplayName)
               .toString(),
       phone: (source['phone'] ?? user.phone ?? '').toString(),
       email: (source['email'] ?? user.email ?? '').toString(),
