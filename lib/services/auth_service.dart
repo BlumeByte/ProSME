@@ -93,7 +93,7 @@ class SupabaseAuthService implements AuthService {
     try {
       final response = await _supabase
           .from('profiles')
-          .select('id,full_name,name,phone,email,avatar_url,role,created_at')
+          .select('id,full_name,phone,email,avatar_url,role,created_at')
           .eq('id', userId)
           .maybeSingle();
       if (response == null) return null;

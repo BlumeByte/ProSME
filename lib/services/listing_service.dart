@@ -44,13 +44,13 @@ class SupabaseListingService implements ListingService {
       try {
         final List<dynamic> profiles = await _supabase
             .from('profiles')
-            .select('id,full_name,name')
+            .select('id,full_name')
             .inFilter('id', artisanIds);
 
         artisanNames = {
           for (final profile in profiles)
             (profile['id'] ?? '').toString():
-                ((profile['full_name'] ?? profile['name'] ?? '') as String),
+                ((profile['full_name'] ?? '') as String),
         };
       } catch (error, stackTrace) {
         debugPrint('Failed to load artisan profiles for listings: $error');
