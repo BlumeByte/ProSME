@@ -17,11 +17,14 @@ class AuthScreen extends ConsumerStatefulWidget {
 
 class _AuthScreenState extends ConsumerState<AuthScreen> {
   static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+  static final RegExp _usernamePattern = RegExp(r'^[a-zA-Z0-9_]{3,20}$');
+  final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _phoneController = TextEditingController();
   bool _isLoading = false;
 
+  String get _username => _usernameController.text.trim();
   String get _email => _emailController.text.trim();
   String get _password => _passwordController.text;
 
@@ -36,6 +39,17 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (message.contains('already registered')) {
       return 'This email is already registered. Please sign in.';
     }
+    if (message.contains('email') &&
+        message.contains('duplicate') &&
+        message.contains('unique')) {
+      return 'This email is already registered. Please sign in.';
+    }
+    if (message.contains('username') &&
+        (message.contains('duplicate') ||
+            message.contains('already') ||
+            message.contains('unique'))) {
+      return 'That username is already taken. Please choose another one.';
+    }
     if (message.contains('verify your email')) {
       return 'Account created. Check your email to verify, then sign in.';
     }
@@ -48,6 +62,18 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
     if (!_emailPattern.hasMatch(_email)) {
       return 'Please enter a valid email.';
+    }
+    return null;
+  }
+
+  String? _validateSignUp() {
+    final baseValidation = _validateEmailPassword();
+    if (baseValidation != null) return baseValidation;
+    if (_username.isEmpty) {
+      return 'Please enter a username.';
+    }
+    if (!_usernamePattern.hasMatch(_username)) {
+      return 'Username must be 3-20 characters (letters, numbers, underscores).';
     }
     return null;
   }
@@ -87,6 +113,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   @override
   void dispose() {
+    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _phoneController.dispose();
@@ -105,6 +132,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             const Icon(Icons.lock_outline, size: 64),
             const SizedBox(height: 16),
             TextField(
+              controller: _usernameController,
+              decoration: const InputDecoration(labelText: 'Username'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
               controller: _emailController,
               decoration: const InputDecoration(labelText: 'Email'),
             ),
@@ -121,7 +153,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               onPressed: _isLoading
                   ? null
                   : () {
-                      final validation = _validateEmailPassword();
+                      final validation = _validateSignUp();
                       if (validation != null) {
                         ScaffoldMessenger.of(
                           context,
@@ -148,7 +180,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                         return;
                       }
                       _signIn(
-                        () => authService.signUpWithEmail(_email, _password),
+                        () => authService.signUpWithEmail(
+                          _email,
+                          _password,
+                          username: _username,
+                        ),
                         forceRoleSelection: true,
                       );
                     },
@@ -183,7 +219,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             ),
             const SizedBox(height: 16),
             TextButton(
-              onPressed: () => context.go(RouteNames.onboarding),
+              onPressed: () => context.go(RouteNames.home),
               child: const Text('Back'),
             )
           ],

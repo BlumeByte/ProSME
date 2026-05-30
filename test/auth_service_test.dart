@@ -12,4 +12,42 @@ void main() {
     await service.updateRole(UserRole.artisan);
     expect(service.currentUser?.role, UserRole.artisan);
   });
+
+  test('MockAuthService enforces unique usernames and releases on change/delete', () async {
+    final service = MockAuthService();
+
+    final first = await service.signUpWithEmail(
+      'first@example.com',
+      'pass',
+      username: 'first_user',
+    );
+    expect(first.name, 'first_user');
+
+    expect(
+      () => service.signUpWithEmail(
+        'second@example.com',
+        'pass',
+        username: 'first_user',
+      ),
+      throwsA(isA<StateError>()),
+    );
+
+    await service.updateUsername('updated_user');
+
+    final second = await service.signUpWithEmail(
+      'second@example.com',
+      'pass',
+      username: 'first_user',
+    );
+    expect(second.email, 'second@example.com');
+
+    await service.deleteAccount();
+
+    final third = await service.signUpWithEmail(
+      'third@example.com',
+      'pass',
+      username: 'first_user',
+    );
+    expect(third.email, 'third@example.com');
+  });
 }
