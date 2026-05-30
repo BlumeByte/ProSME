@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_launch_service.dart';
 
 class OnboardingScreen extends StatelessWidget {
   const OnboardingScreen({super.key});
@@ -31,7 +32,22 @@ class OnboardingScreen extends StatelessWidget {
               PrimaryButton(
                 label: 'Get Started',
                 icon: Icons.arrow_forward,
-                onPressed: () => context.go(RouteNames.auth),
+                onPressed: () async {
+                  await AppLaunchService.markWelcomeSeen();
+                  if (context.mounted) {
+                    context.go(RouteNames.home);
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () async {
+                  await AppLaunchService.markWelcomeSeen();
+                  if (context.mounted) {
+                    context.go(RouteNames.auth);
+                  }
+                },
+                child: const Text('Sign in / Sign up'),
               ),
             ],
           ),

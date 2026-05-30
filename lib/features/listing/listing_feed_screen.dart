@@ -12,6 +12,7 @@ class ListingFeedScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final listingService = ref.watch(listingServiceProvider);
+    final user = ref.watch(authStateProvider).valueOrNull;
     return Column(
       children: [
         Padding(
@@ -60,9 +61,13 @@ class ListingFeedScreen extends ConsumerWidget {
                   final listing = listings[index];
                   return ListingCard(
                     listing: listing,
-                    onTap: () => context.go(
-                      '${RouteNames.listingDetail}/${listing.id}',
-                    ),
+                    onTap: () {
+                      if (user == null) {
+                        context.go(RouteNames.auth);
+                        return;
+                      }
+                      context.go('${RouteNames.listingDetail}/${listing.id}');
+                    },
                   );
                 },
               );

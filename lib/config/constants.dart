@@ -12,6 +12,11 @@ const String kSupabaseAnonKey = String.fromEnvironment(
   'SUPABASE_ANON_KEY',
   defaultValue: 'your-anon-key',
 );
+const String kGoogleOAuthRedirectUrl = String.fromEnvironment(
+  'GOOGLE_OAUTH_REDIRECT_URL',
+  // Override with your Android applicationId, e.g. com.yourcompany.prosme://login-callback
+  defaultValue: 'com.example.prosme://login-callback',
+);
 
 const Color kPrimaryGreen = Color(0xFF1E7F3E);
 const List<String> kSupportedLanguages = ['English', 'Twi', 'Ewe'];

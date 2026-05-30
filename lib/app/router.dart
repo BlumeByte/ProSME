@@ -17,6 +17,7 @@ import '../features/onboarding/onboarding_screen.dart';
 import '../features/support/ai_support_screen.dart';
 import '../models/app_user.dart';
 import '../routes/route_names.dart';
+import '../services/app_launch_service.dart';
 import '../services/service_providers.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -30,20 +31,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final authState = ref.read(authStateProvider).valueOrNull;
       final isLoggedIn = authState != null;
-      final isAuthFlow = state.fullPath == RouteNames.onboarding ||
-          state.fullPath == RouteNames.auth ||
-          state.fullPath == RouteNames.role;
+      final fullPath = state.fullPath ?? state.matchedLocation;
+      final isOnboarding = fullPath == RouteNames.onboarding;
 
-      if (!isLoggedIn && !isAuthFlow) {
+      if (!isLoggedIn &&
+          !AppLaunchService.hasSeenWelcome &&
+          !isOnboarding) {
         return RouteNames.onboarding;
       }
 
-      if (isLoggedIn && state.fullPath == RouteNames.onboarding) {
+      if (!isLoggedIn &&
+          AppLaunchService.hasSeenWelcome &&
+          isOnboarding) {
+        return RouteNames.home;
+      }
+
+      if (!isLoggedIn && _requiresAuth(fullPath)) {
+        return RouteNames.auth;
+      }
+
+      if (isLoggedIn && isOnboarding) {
         return _homeForRole(authState);
       }
 
-      if (isLoggedIn && state.fullPath == RouteNames.auth) {
-        return RouteNames.role;
+      if (isLoggedIn && fullPath == RouteNames.auth) {
+        return _homeForRole(authState);
       }
 
       return null;
@@ -103,6 +115,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+bool _requiresAuth(String fullPath) {
+  final protectedExactPaths = <String>{
+    RouteNames.role,
+    RouteNames.artisanVerification,
+    RouteNames.artisanHome,
+    RouteNames.adminHome,
+    RouteNames.invoice,
+    RouteNames.aiSupport,
+  };
+  if (protectedExactPaths.contains(fullPath)) return true;
+  if (fullPath.startsWith('${RouteNames.listingDetail}/')) return true;
+  if (fullPath.startsWith('${RouteNames.chatThread}/')) return true;
+  if (fullPath.startsWith('${RouteNames.jobDetail}/')) return true;
+  return false;
+}
 
 String _homeForRole(AppUser? user) {
   switch (user?.role) {
