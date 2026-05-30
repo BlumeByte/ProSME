@@ -80,6 +80,7 @@ class SupabaseAuthService implements AuthService {
 
   final SupabaseClient _supabase;
   static const String _defaultDisplayName = 'New User';
+  static const String _googleRedirectTo = 'com.example.prosme://login-callback';
   AppUser? _resolvedCurrentUser;
 
   bool _isMissingProfilesTable(Object error) {
@@ -171,10 +172,40 @@ class SupabaseAuthService implements AuthService {
     }
   }
 
+  Future<AppUser> _waitForActiveUser({
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
+    final existingUser = _supabase.auth.currentUser;
+    if (existingUser != null) {
+      return _resolveUser(existingUser);
+    }
+
+    final completer = Completer<User>();
+    late final StreamSubscription<AuthState> subscription;
+
+    subscription = _supabase.auth.onAuthStateChange.listen((authState) {
+      final user = authState.session?.user ?? _supabase.auth.currentUser;
+      if (user != null && !completer.isCompleted) {
+        completer.complete(user);
+      }
+    });
+
+    try {
+      final user = await completer.future.timeout(timeout);
+      return _resolveUser(user);
+    } on TimeoutException {
+      throw StateError(
+        'Google sign-in is taking too long. Please complete the browser flow and try again.',
+      );
+    } finally {
+      await subscription.cancel();
+    }
+  }
+
   @override
   Stream<AppUser?> authStateChanges() {
     return _supabase.auth.onAuthStateChange.asyncMap((authState) async {
-      final user = authState.session?.user;
+      final user = authState.session?.user ?? _supabase.auth.currentUser;
       if (user == null) {
         _resolvedCurrentUser = null;
         return null;
@@ -190,7 +221,7 @@ class SupabaseAuthService implements AuthService {
   @override
   Future<AppUser> signInWithEmail(String email, String password) async {
     final response = await _supabase.auth.signInWithPassword(
-      email: email,
+      email: email.trim(),
       password: password,
     );
     final user = response.user ?? _supabase.auth.currentUser;
@@ -203,12 +234,18 @@ class SupabaseAuthService implements AuthService {
   @override
   Future<AppUser> signUpWithEmail(String email, String password) async {
     final response = await _supabase.auth.signUp(
-      email: email,
+      email: email.trim(),
       password: password,
       data: {
         'full_name': 'New User',
       },
     );
+
+    if (response.session == null && _supabase.auth.currentUser == null) {
+      throw StateError(
+        'Account created. Please verify your email, then sign in.',
+      );
+    }
 
     final user = response.user ?? _supabase.auth.currentUser;
     if (user == null) {
@@ -221,12 +258,11 @@ class SupabaseAuthService implements AuthService {
 
   @override
   Future<AppUser> signInWithGoogle() async {
-    await _supabase.auth.signInWithOAuth(OAuthProvider.google);
-    final user = _supabase.auth.currentUser;
-    if (user == null) {
-      throw StateError('Google sign-in did not return a user session.');
-    }
-    return _resolveUser(user);
+    await _supabase.auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: kIsWeb ? null : _googleRedirectTo,
+    );
+    return _waitForActiveUser();
   }
 
   @override
@@ -242,6 +278,30 @@ class SupabaseAuthService implements AuthService {
 
   @override
   Future<void> updateRole(UserRole role) async {
+    final user = _supabase.auth.currentUser;
+    if (user != null) {
+      try {
+        await _supabase.from('profiles').upsert({
+          'id': user.id,
+          'full_name':
+              (user.userMetadata?['full_name'] ??
+                      user.userMetadata?['name'] ??
+                      _defaultDisplayName)
+                  .toString(),
+          'email': user.email ?? '',
+          'phone': user.phone ?? '',
+          'avatar_url': (user.userMetadata?['avatar_url'] ?? '').toString(),
+          'role': role.name,
+        }, onConflict: 'id');
+      } catch (error) {
+        if (!_isMissingProfilesTable(error)) rethrow;
+      }
+      final mapped = _resolvedCurrentUser ?? _mapUser(user);
+      if (mapped != null) {
+        _resolvedCurrentUser = mapped.copyWith(role: role);
+      }
+    }
+
     await _supabase.auth.updateUser(
       UserAttributes(
         data: {'role': role.name},
