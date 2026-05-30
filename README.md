@@ -7,7 +7,7 @@ ProSME is a lightweight Flutter marketplace for connecting customers with verifi
 - **Simple onboarding** with role selection and artisan verification flow
 - **Listing feed** with search and category chips
 - **Listing details** with image carousel, map preview, and quick actions
-- **Realtime chat** (mock + Firestore ready)
+- **Realtime chat** (mock + Supabase Realtime ready)
 - **Invoice workflow** with Paystack MoMo or cash option
 - **Job tracking** with timelines and ETA updates
 - **AI support** FAQ screen
@@ -17,7 +17,7 @@ ProSME is a lightweight Flutter marketplace for connecting customers with verifi
 - State management: Riverpod
 - Routing: go_router
 - Local DB (offline-first): Drift (stubbed service ready)
-- Cloud sync/auth: Firebase Auth + Firestore
+- Cloud sync/auth: Supabase Auth + Postgres + Realtime
 - Notifications: flutter_local_notifications
 - Payments: Paystack (via URL launch / WebView)
 - Maps: google_maps_flutter
@@ -53,15 +53,21 @@ lib/
 flutter pub get
 ```
 
-### 2) Firebase setup (for production mode)
-1. Create a Firebase project.
-2. Add Android, iOS, and Web apps in Firebase Console.
-3. Download configuration files:
-   - `android/app/google-services.json`
-   - `ios/Runner/GoogleService-Info.plist`
-   - `web/firebase-messaging-sw.js` (if using web messaging)
-4. Enable Authentication providers (Email, Phone, Google).
-5. Create Firestore collections: `users`, `listings`, `threads`, `messages`, `invoices`, `jobs`.
+### 2) Supabase setup
+1. Create a Supabase project.
+2. Enable Authentication providers you need (Email, Google, Phone/OTP if implemented).
+3. Apply migration SQL:
+   - `supabase/migrations/20260530220000_init_profiles_and_realtime.sql`
+4. Add runtime defines when running the app:
+   ```bash
+   flutter run \
+     --dart-define=SUPABASE_URL=https://<your-project>.supabase.co \
+     --dart-define=SUPABASE_ANON_KEY=<your-anon-key>
+   ```
+5. Verify realtime feed:
+   - Open one signed-in client and keep listings/chat/jobs screens open.
+   - Insert/update rows in `listings`, `messages`, or `jobs`.
+   - Confirm the app stream updates without restart.
 
 ### 3) Enable Google Maps
 1. Get a Google Maps API key.
@@ -84,7 +90,7 @@ flutter run
 ```
 
 ## Dev Mode
-`lib/config/constants.dart` contains `kDevMode`. When `true`, the app uses mock services and demo data. Set to `false` to enable Firebase services.
+`kDevMode` is controlled with `--dart-define=DEV_MODE=true`. Without it, the app attempts Supabase initialization and falls back to mocks if Supabase is unavailable.
 
 ## Testing
 ```bash

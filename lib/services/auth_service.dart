@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../core/utils/mock_data.dart';
@@ -78,33 +79,111 @@ class SupabaseAuthService implements AuthService {
   SupabaseAuthService(this._supabase);
 
   final SupabaseClient _supabase;
+  AppUser? _resolvedCurrentUser;
 
-  AppUser? _mapUser(User? user) {
+  bool _isMissingProfilesTable(Object error) {
+    if (error is! PostgrestException) return false;
+    if (error.code == '42P01') return true;
+    final details = '${error.message} ${error.details}'.toLowerCase();
+    return details.contains('profiles') && details.contains('does not exist');
+  }
+
+  Future<Map<String, dynamic>?> _fetchProfile(String userId) async {
+    try {
+      final response = await _supabase
+          .from('profiles')
+          .select('id,full_name,name,phone,email,avatar_url,role,created_at')
+          .eq('id', userId)
+          .maybeSingle();
+      if (response == null) return null;
+      return Map<String, dynamic>.from(response);
+    } catch (error) {
+      if (_isMissingProfilesTable(error)) return null;
+      rethrow;
+    }
+  }
+
+  Future<void> _upsertProfile(User user) async {
+    final metadata = user.userMetadata ?? const <String, dynamic>{};
+    final fullName = (metadata['full_name'] ?? metadata['name'] ?? 'User')
+        .toString();
+    final avatarUrl = (metadata['avatar_url'] ?? '').toString();
+    final role = (metadata['role'] ?? UserRole.customer.name).toString();
+
+    try {
+      await _supabase.from('profiles').upsert({
+        'id': user.id,
+        'full_name': fullName,
+        'email': user.email ?? '',
+        'phone': user.phone ?? '',
+        'avatar_url': avatarUrl,
+        'role': role,
+      }, onConflict: 'id');
+    } catch (error) {
+      if (_isMissingProfilesTable(error)) return;
+      rethrow;
+    }
+  }
+
+  AppUser? _mapUser(User? user, {Map<String, dynamic>? profile}) {
     if (user == null) return null;
-    final roleName = user.userMetadata?['role'] as String?;
+    final metadata = user.userMetadata ?? const <String, dynamic>{};
+    final source = profile ?? metadata;
+    final roleName = (source['role'] ?? metadata['role']) as String?;
     return AppUser(
       id: user.id,
       role: UserRole.values.firstWhere(
         (role) => role.name == roleName,
         orElse: () => UserRole.customer,
       ),
-      name: user.userMetadata?['full_name'] as String? ?? 'User',
-      phone: user.phone ?? '',
-      email: user.email ?? '',
-      photoUrl: user.userMetadata?['avatar_url'] as String? ?? '',
-      createdAt: DateTime.tryParse(user.createdAt) ?? DateTime.now(),
+      name: (source['full_name'] ??
+                  source['name'] ??
+                  metadata['full_name'] ??
+                  metadata['name'] ??
+                  'User')
+              .toString(),
+      phone: (source['phone'] ?? user.phone ?? '').toString(),
+      email: (source['email'] ?? user.email ?? '').toString(),
+      photoUrl:
+          (source['avatar_url'] ?? metadata['avatar_url'] ?? '').toString(),
+      createdAt: DateTime.tryParse(
+            (source['created_at'] ?? user.createdAt).toString(),
+          ) ??
+          DateTime.now(),
     );
+  }
+
+  Future<AppUser> _resolveUser(User user) async {
+    try {
+      await _upsertProfile(user);
+      final profile = await _fetchProfile(user.id);
+      final mappedUser = _mapUser(user, profile: profile)!;
+      _resolvedCurrentUser = mappedUser;
+      return mappedUser;
+    } catch (error, stackTrace) {
+      debugPrint('Failed to resolve Supabase profile: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      final mappedUser = _mapUser(user)!;
+      _resolvedCurrentUser = mappedUser;
+      return mappedUser;
+    }
   }
 
   @override
   Stream<AppUser?> authStateChanges() {
-    return _supabase.auth.onAuthStateChange.map(
-      (authState) => _mapUser(authState.session?.user),
-    );
+    return _supabase.auth.onAuthStateChange.asyncMap((authState) async {
+      final user = authState.session?.user;
+      if (user == null) {
+        _resolvedCurrentUser = null;
+        return null;
+      }
+      return _resolveUser(user);
+    });
   }
 
   @override
-  AppUser? get currentUser => _mapUser(_supabase.auth.currentUser);
+  AppUser? get currentUser =>
+      _resolvedCurrentUser ?? _mapUser(_supabase.auth.currentUser);
 
   @override
   Future<AppUser> signInWithEmail(String email, String password) async {
@@ -112,7 +191,11 @@ class SupabaseAuthService implements AuthService {
       email: email,
       password: password,
     );
-    return _mapUser(response.user)!;
+    final user = response.user ?? _supabase.auth.currentUser;
+    if (user == null) {
+      throw StateError('Sign-in completed but no active session was returned.');
+    }
+    return _resolveUser(user);
   }
 
   @override
@@ -131,7 +214,7 @@ class SupabaseAuthService implements AuthService {
         'Sign-up completed but no active session was returned. Please sign in.',
       );
     }
-    return _mapUser(user)!;
+    return _resolveUser(user);
   }
 
   @override
@@ -141,7 +224,7 @@ class SupabaseAuthService implements AuthService {
     if (user == null) {
       throw StateError('Google sign-in did not return a user session.');
     }
-    return _mapUser(user)!;
+    return _resolveUser(user);
   }
 
   @override
@@ -152,6 +235,7 @@ class SupabaseAuthService implements AuthService {
   @override
   Future<void> signOut() async {
     await _supabase.auth.signOut();
+    _resolvedCurrentUser = null;
   }
 
   @override

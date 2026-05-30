@@ -17,21 +17,25 @@ class ChatThread {
 
   factory ChatThread.fromJson(Map<String, dynamic> json) {
     return ChatThread(
-      id: json['id'] as String,
-      userId: json['userId'] as String,
-      artisanId: json['artisanId'] as String,
-      lastMessage: json['lastMessage'] as String,
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
+      id: (json['id'] ?? '').toString(),
+      userId: (json['userId'] ?? json['user_id'] ?? '').toString(),
+      artisanId: (json['artisanId'] ?? json['artisan_id'] ?? '').toString(),
+      lastMessage:
+          (json['lastMessage'] ?? json['last_message'] ?? '').toString(),
+      updatedAt: DateTime.tryParse(
+            (json['updatedAt'] ?? json['updated_at'] ?? '').toString(),
+          ) ??
+          DateTime.now(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'userId': userId,
-      'artisanId': artisanId,
-      'lastMessage': lastMessage,
-      'updatedAt': updatedAt.toIso8601String(),
+      'user_id': userId,
+      'artisan_id': artisanId,
+      'last_message': lastMessage,
+      'updated_at': updatedAt.toIso8601String(),
     };
   }
 }
@@ -55,26 +59,29 @@ class ChatMessage {
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     return ChatMessage(
-      id: json['id'] as String,
-      threadId: json['threadId'] as String,
-      senderId: json['senderId'] as String,
+      id: (json['id'] ?? '').toString(),
+      threadId: (json['threadId'] ?? json['thread_id'] ?? '').toString(),
+      senderId: (json['senderId'] ?? json['sender_id'] ?? '').toString(),
       type: MessageType.values.firstWhere(
-        (type) => type.name == json['type'],
+        (type) => type.name == (json['type'] ?? '').toString(),
         orElse: () => MessageType.text,
       ),
-      content: json['content'] as String,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      content: (json['content'] ?? '').toString(),
+      createdAt: DateTime.tryParse(
+            (json['createdAt'] ?? json['created_at'] ?? '').toString(),
+          ) ??
+          DateTime.now(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'threadId': threadId,
-      'senderId': senderId,
+      'thread_id': threadId,
+      'sender_id': senderId,
       'type': type.name,
       'content': content,
-      'createdAt': createdAt.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
     };
   }
 }

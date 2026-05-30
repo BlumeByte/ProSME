@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-const bool kDevMode = true;
+const bool kDevMode = bool.fromEnvironment('DEV_MODE', defaultValue: false);
 const String kAppName = 'ProSME';
 
 // Supabase configuration – replace with your project URL and anon key.
