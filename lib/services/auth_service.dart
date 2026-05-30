@@ -15,16 +15,17 @@ abstract class AuthService {
 }
 
 class MockAuthService implements AuthService {
-  MockAuthService() {
-    _controller.add(null);
-  }
+  MockAuthService();
 
   final StreamController<AppUser?> _controller =
       StreamController<AppUser?>.broadcast();
   AppUser? _currentUser;
 
   @override
-  Stream<AppUser?> authStateChanges() => _controller.stream;
+  Stream<AppUser?> authStateChanges() async* {
+    yield _currentUser;
+    yield* _controller.stream;
+  }
 
   @override
   AppUser? get currentUser => _currentUser;
