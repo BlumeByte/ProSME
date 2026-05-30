@@ -59,12 +59,13 @@ flutter pub get
 3. Apply migration SQL:
    - `supabase/migrations/20260530220000_init_profiles_and_realtime.sql`
 4. For Google OAuth on Android, add this redirect URL in Supabase Auth settings:
-   - `com.example.prosme://login-callback`
+   - `<your.android.applicationId>://login-callback`
 5. Add runtime defines when running the app:
    ```bash
    flutter run \
      --dart-define=SUPABASE_URL=https://<your-project>.supabase.co \
-     --dart-define=SUPABASE_ANON_KEY=<your-anon-key>
+     --dart-define=SUPABASE_ANON_KEY=<your-anon-key> \
+     --dart-define=GOOGLE_OAUTH_REDIRECT_URL=<your.android.applicationId>://login-callback
    ```
 6. Verify realtime feed:
    - Open one signed-in client and keep listings/chat/jobs screens open.

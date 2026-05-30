@@ -32,7 +32,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:host="login-callback"
-                    android:scheme="com.example.prosme" />
+                    android:scheme="${applicationId}" />
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

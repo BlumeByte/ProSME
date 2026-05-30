@@ -5,6 +5,7 @@ import '../../config/constants.dart';
 import '../../models/app_user.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../routes/route_names.dart';
+import '../../services/auth_service.dart';
 import '../../services/service_providers.dart';
 
 class AuthScreen extends ConsumerStatefulWidget {
@@ -15,6 +16,7 @@ class AuthScreen extends ConsumerStatefulWidget {
 }
 
 class _AuthScreenState extends ConsumerState<AuthScreen> {
+  static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -24,6 +26,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   String get _password => _passwordController.text;
 
   String _friendlyError(Object error) {
+    if (error is PendingEmailVerificationException) {
+      return 'Account created. Click the verification link in your email, then sign in.';
+    }
     final message = error.toString().toLowerCase();
     if (message.contains('invalid login credentials')) {
       return 'Invalid email or password.';
@@ -34,9 +39,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (message.contains('verify your email')) {
       return 'Account created. Check your email to verify, then sign in.';
     }
-    if (message.contains('google sign-in is taking too long')) {
-      return 'Complete Google sign-in in the browser and try again.';
-    }
     return 'Something went wrong. Please try again.';
   }
 
@@ -44,7 +46,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (_email.isEmpty || _password.isEmpty) {
       return 'Please enter email and password.';
     }
-    if (!_email.contains('@')) {
+    if (!_emailPattern.hasMatch(_email)) {
       return 'Please enter a valid email.';
     }
     return null;

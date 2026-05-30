@@ -16,6 +16,10 @@ abstract class AuthService {
   Future<void> updateRole(UserRole role);
 }
 
+class PendingEmailVerificationException implements Exception {
+  const PendingEmailVerificationException();
+}
+
 class MockAuthService implements AuthService {
   MockAuthService();
 
@@ -80,7 +84,6 @@ class SupabaseAuthService implements AuthService {
 
   final SupabaseClient _supabase;
   static const String _defaultDisplayName = 'New User';
-  static const String _googleRedirectTo = 'com.example.prosme://login-callback';
   AppUser? _resolvedCurrentUser;
 
   bool _isMissingProfilesTable(Object error) {
@@ -173,7 +176,7 @@ class SupabaseAuthService implements AuthService {
   }
 
   Future<AppUser> _waitForActiveUser({
-    Duration timeout = const Duration(seconds: 60),
+    Duration timeout = const Duration(seconds: 120),
   }) async {
     final existingUser = _supabase.auth.currentUser;
     if (existingUser != null) {
@@ -188,6 +191,10 @@ class SupabaseAuthService implements AuthService {
       if (user != null && !completer.isCompleted) {
         completer.complete(user);
       }
+    }, onError: (Object error, StackTrace stackTrace) {
+      if (!completer.isCompleted) {
+        completer.completeError(error, stackTrace);
+      }
     });
 
     try {
@@ -195,7 +202,7 @@ class SupabaseAuthService implements AuthService {
       return _resolveUser(user);
     } on TimeoutException {
       throw StateError(
-        'Google sign-in is taking too long. Please complete the browser flow and try again.',
+        'Google sign-in timed out. Please complete the sign-in flow and return to the app.',
       );
     } finally {
       await subscription.cancel();
@@ -242,9 +249,7 @@ class SupabaseAuthService implements AuthService {
     );
 
     if (response.session == null && _supabase.auth.currentUser == null) {
-      throw StateError(
-        'Account created. Please verify your email, then sign in.',
-      );
+      throw const PendingEmailVerificationException();
     }
 
     final user = response.user ?? _supabase.auth.currentUser;
@@ -260,7 +265,7 @@ class SupabaseAuthService implements AuthService {
   Future<AppUser> signInWithGoogle() async {
     await _supabase.auth.signInWithOAuth(
       OAuthProvider.google,
-      redirectTo: kIsWeb ? null : _googleRedirectTo,
+      redirectTo: kIsWeb ? null : kGoogleOAuthRedirectUrl,
     );
     return _waitForActiveUser();
   }
