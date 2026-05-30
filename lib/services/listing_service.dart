@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../core/utils/mock_data.dart';
@@ -52,6 +53,7 @@ class SupabaseListingService implements ListingService {
                 ((profile['full_name'] ?? profile['name'] ?? '') as String),
         };
       } catch (_) {
+        debugPrint('Failed to load artisan profiles for listings.');
         artisanNames = {};
       }
     }
@@ -82,7 +84,9 @@ class SupabaseListingService implements ListingService {
   Future<List<Listing>> fetchListings() async {
     final List<dynamic> response = await _supabase.from('listings').select();
     return _hydrateListings(
-      response.map((row) => Map<String, dynamic>.from(row as Map)).toList(),
+      response
+          .map((row) => Map<String, dynamic>.from(row as Map<String, dynamic>))
+          .toList(),
     );
   }
 }

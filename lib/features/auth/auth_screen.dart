@@ -18,6 +18,17 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _phoneController = TextEditingController();
   bool _isLoading = false;
 
+  String _friendlyError(Object error) {
+    final message = error.toString().toLowerCase();
+    if (message.contains('invalid login credentials')) {
+      return 'Invalid email or password.';
+    }
+    if (message.contains('already registered')) {
+      return 'This email is already registered. Please sign in.';
+    }
+    return 'Something went wrong. Please try again.';
+  }
+
   Future<void> _signIn(Future<void> Function() action) async {
     setState(() => _isLoading = true);
     try {
@@ -28,7 +39,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
+        SnackBar(content: Text(_friendlyError(error))),
       );
     } finally {
       if (mounted) {

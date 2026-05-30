@@ -10,6 +10,8 @@ class ListingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final imageUrl = listing.images.isNotEmpty ? listing.images.first : null;
+    final hasArtisanName = listing.artisanName?.trim().isNotEmpty ?? false;
+    final displayArtisan = hasArtisanName ? listing.artisanName! : listing.artisanId;
 
     return InkWell(
       onTap: onTap,
@@ -55,7 +57,7 @@ class ListingCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Artisan: ${listing.artisanName?.trim().isNotEmpty == true ? listing.artisanName : listing.artisanId}',
+                    'Artisan: $displayArtisan',
                   ),
                 ],
               ),

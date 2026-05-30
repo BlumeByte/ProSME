@@ -127,7 +127,9 @@ class SupabaseAuthService implements AuthService {
 
     final user = response.user ?? _supabase.auth.currentUser;
     if (user == null) {
-      throw StateError('Sign-up succeeded but no user session was returned.');
+      throw StateError(
+        'Sign-up completed but no active session was returned. Please sign in.',
+      );
     }
     return _mapUser(user)!;
   }
