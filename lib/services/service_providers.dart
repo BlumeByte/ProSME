@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../config/constants.dart';
 import '../config/supabase_options.dart';
 import 'auth_service.dart';
 import 'chat_service.dart';
@@ -14,8 +13,17 @@ final supabaseClientProvider = Provider<SupabaseClient>((ref) {
   return supabaseClient;
 });
 
+bool _isSupabaseInitialized() {
+  try {
+    Supabase.instance.client;
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 final authServiceProvider = Provider<AuthService>((ref) {
-  if (kDevMode) {
+  if (!_isSupabaseInitialized()) {
     return MockAuthService();
   }
   return SupabaseAuthService(Supabase.instance.client);
@@ -32,14 +40,14 @@ final authStateProvider = StreamProvider((ref) {
 });
 
 final listingServiceProvider = Provider<ListingService>((ref) {
-  if (kDevMode) {
+  if (!_isSupabaseInitialized()) {
     return MockListingService();
   }
   return SupabaseListingService(Supabase.instance.client);
 });
 
 final chatServiceProvider = Provider<ChatService>((ref) {
-  if (kDevMode) {
+  if (!_isSupabaseInitialized()) {
     return MockChatService();
   }
   return SupabaseChatService(Supabase.instance.client);

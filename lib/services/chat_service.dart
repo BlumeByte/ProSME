@@ -45,7 +45,10 @@ class SupabaseChatService implements ChatService {
   Stream<List<ChatThread>> watchThreads(String userId) {
     return _supabase.from('threads').stream(primaryKey: ['id']).map(
           (rows) => rows
-              .where((row) => row['userId'] == userId)
+              .where(
+                (row) =>
+                    (row['user_id'] ?? row['userId'])?.toString() == userId,
+              )
               .map((row) => ChatThread.fromJson(row))
               .toList(),
         );
@@ -55,7 +58,11 @@ class SupabaseChatService implements ChatService {
   Stream<List<ChatMessage>> watchMessages(String threadId) {
     return _supabase.from('messages').stream(primaryKey: ['id']).map(
           (rows) => rows
-              .where((row) => row['threadId'] == threadId)
+              .where(
+                (row) =>
+                    (row['thread_id'] ?? row['threadId'])?.toString() ==
+                    threadId,
+              )
               .map((row) => ChatMessage.fromJson(row))
               .toList(),
         );

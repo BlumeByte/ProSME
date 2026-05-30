@@ -9,6 +9,10 @@ class ListingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final imageUrl = listing.images.isNotEmpty ? listing.images.first : null;
+    final hasArtisanName = listing.artisanName?.trim().isNotEmpty ?? false;
+    final displayArtisan = hasArtisanName ? listing.artisanName! : listing.artisanId;
+
     return InkWell(
       onTap: onTap,
       child: Card(
@@ -16,19 +20,27 @@ class ListingCard extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                listing.images.first,
-                width: 96,
-                height: 96,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  width: 96,
-                  height: 96,
-                  color: Colors.grey.shade200,
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.image_not_supported_outlined),
-                ),
-              ),
+              child: imageUrl == null
+                  ? Container(
+                      width: 96,
+                      height: 96,
+                      color: Colors.grey.shade200,
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.image_not_supported_outlined),
+                    )
+                  : Image.network(
+                      imageUrl,
+                      width: 96,
+                      height: 96,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 96,
+                        height: 96,
+                        color: Colors.grey.shade200,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.image_not_supported_outlined),
+                      ),
+                    ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -42,6 +54,10 @@ class ListingCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     'GHS ${listing.priceMin.toStringAsFixed(0)} - ${listing.priceMax.toStringAsFixed(0)}',
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Artisan: $displayArtisan',
                   ),
                 ],
               ),
