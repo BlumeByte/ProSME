@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 const bool kDevMode = bool.fromEnvironment('DEV_MODE', defaultValue: false);
 const String kAppName = 'ProSME';
 
-// Supabase configuration – replace with your project URL and anon key.
+// Supabase configuration – override at build time via --dart-define.
 const String kSupabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
-  defaultValue: 'https://your-project.supabase.co',
+  defaultValue: 'https://wbnvifrzckjttyxhmlcf.supabase.co',
 );
 const String kSupabaseAnonKey = String.fromEnvironment(
   'SUPABASE_ANON_KEY',
@@ -17,6 +17,16 @@ const String kGoogleOAuthRedirectUrl = String.fromEnvironment(
   // Override with your Android applicationId, e.g. com.yourcompany.prosme://login-callback
   defaultValue: 'com.example.prosme://login-callback',
 );
+
+// OAuth 2.1 / OIDC endpoints – derived from kSupabaseUrl.
+// Share these with third-party applications that integrate with this server.
+const String kOAuthAuthorizationEndpoint =
+    '$kSupabaseUrl/auth/v1/oauth/authorize';
+const String kOAuthTokenEndpoint = '$kSupabaseUrl/auth/v1/oauth/token';
+const String kOAuthJwksEndpoint =
+    '$kSupabaseUrl/auth/v1/.well-known/jwks.json';
+const String kOAuthOidcDiscoveryEndpoint =
+    '$kSupabaseUrl/auth/v1/.well-known/openid-configuration';
 
 const Color kPrimaryGreen = Color(0xFF1E7F3E);
 const List<String> kSupportedLanguages = ['English', 'Twi', 'Ewe'];
