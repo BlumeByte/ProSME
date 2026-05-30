@@ -121,7 +121,7 @@ class SupabaseAuthService implements AuthService {
       email: email,
       password: password,
       data: {
-        'full_name': email.split('@').first,
+        'full_name': 'New User',
       },
     );
 
