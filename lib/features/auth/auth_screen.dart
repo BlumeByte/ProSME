@@ -153,7 +153,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               onPressed: _isLoading
                   ? null
                   : () {
-                      final validation = _validateSignUp();
+                    final validation = _validateEmailPassword();
                       if (validation != null) {
                         ScaffoldMessenger.of(
                           context,
@@ -172,7 +172,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               onPressed: _isLoading
                   ? null
                   : () {
-                      final validation = _validateEmailPassword();
+                    final validation = _validateSignUp();
                       if (validation != null) {
                         ScaffoldMessenger.of(
                           context,
