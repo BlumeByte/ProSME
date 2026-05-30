@@ -9,7 +9,7 @@ import 'payment_service.dart';
 import 'admin_service.dart';
 import 'db_service.dart';
 
-/// Exposes the global [sb.SupabaseClient] as a Riverpod provider.
+/// Exposes the global [SupabaseClient] as a Riverpod provider.
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
   return supabaseClient;
 });
