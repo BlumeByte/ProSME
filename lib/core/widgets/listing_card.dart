@@ -21,6 +21,13 @@ class ListingCard extends StatelessWidget {
                 width: 96,
                 height: 96,
                 fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 96,
+                  height: 96,
+                  color: Colors.grey.shade200,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.image_not_supported_outlined),
+                ),
               ),
             ),
             const SizedBox(width: 12),

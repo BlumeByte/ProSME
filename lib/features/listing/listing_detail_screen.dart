@@ -37,7 +37,15 @@ class ListingDetailScreen extends ConsumerWidget {
                   children: listing.images
                       .map((url) => ClipRRect(
                             borderRadius: BorderRadius.circular(16),
-                            child: Image.network(url, fit: BoxFit.cover),
+                            child: Image.network(
+                              url,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: Colors.grey.shade200,
+                                alignment: Alignment.center,
+                                child: const Icon(Icons.image_not_supported_outlined),
+                              ),
+                            ),
                           ))
                       .toList(),
                 ),
@@ -68,6 +76,11 @@ class ListingDetailScreen extends ConsumerWidget {
                   child: Image.network(
                     'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee',
                     fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Colors.grey.shade200,
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.map_outlined),
+                    ),
                   ),
                 ),
               ),
