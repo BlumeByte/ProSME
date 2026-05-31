@@ -23,6 +23,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _passwordController = TextEditingController();
   final _phoneController = TextEditingController();
   bool _isLoading = false;
+  bool _isCreateAccountMode = false;
 
   String get _username => _usernameController.text.trim();
   String get _email => _emailController.text.trim();
@@ -123,19 +124,40 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     final authService = ref.watch(authServiceProvider);
+    final title = _isCreateAccountMode ? 'Create account' : 'Sign in';
     return Scaffold(
-      appBar: AppBar(title: const Text('Sign in / Sign up')),
+      appBar: AppBar(title: Text(title)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
             const Icon(Icons.lock_outline, size: 64),
             const SizedBox(height: 16),
-            TextField(
-              controller: _usernameController,
-              decoration: const InputDecoration(labelText: 'Username'),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment<bool>(value: false, label: Text('Sign in')),
+                ButtonSegment<bool>(
+                  value: true,
+                  label: Text('Create account'),
+                ),
+              ],
+              selected: {_isCreateAccountMode},
+              onSelectionChanged: _isLoading
+                  ? null
+                  : (selection) {
+                      setState(() {
+                        _isCreateAccountMode = selection.first;
+                      });
+                    },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+            if (_isCreateAccountMode) ...[
+              TextField(
+                controller: _usernameController,
+                decoration: const InputDecoration(labelText: 'Username'),
+              ),
+              const SizedBox(height: 12),
+            ],
             TextField(
               controller: _emailController,
               decoration: const InputDecoration(labelText: 'Email'),
@@ -148,16 +170,32 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             ),
             const SizedBox(height: 16),
             PrimaryButton(
-              label: _isLoading ? 'Signing in...' : 'Email Sign in',
+              label: _isLoading
+                  ? (_isCreateAccountMode ? 'Creating account...' : 'Signing in...')
+                  : (_isCreateAccountMode ? 'Create account' : 'Email Sign in'),
               icon: Icons.email,
               onPressed: _isLoading
                   ? null
                   : () {
-                    final validation = _validateEmailPassword();
+                      final validation =
+                          _isCreateAccountMode
+                              ? _validateSignUp()
+                              : _validateEmailPassword();
                       if (validation != null) {
                         ScaffoldMessenger.of(
                           context,
                         ).showSnackBar(SnackBar(content: Text(validation)));
+                        return;
+                      }
+                      if (_isCreateAccountMode) {
+                        _signIn(
+                          () => authService.signUpWithEmail(
+                            _email,
+                            _password,
+                            username: _username,
+                          ),
+                          forceRoleSelection: true,
+                        );
                         return;
                       }
                       _signIn(
@@ -165,58 +203,36 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       );
                     },
             ),
-            const SizedBox(height: 16),
-            PrimaryButton(
-              label: _isLoading ? 'Creating account...' : 'Create account',
-              icon: Icons.person_add_alt_1,
-              onPressed: _isLoading
-                  ? null
-                  : () {
-                    final validation = _validateSignUp();
-                      if (validation != null) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text(validation)));
-                        return;
-                      }
-                      _signIn(
-                        () => authService.signUpWithEmail(
-                          _email,
-                          _password,
-                          username: _username,
+            if (!_isCreateAccountMode) ...[
+              const SizedBox(height: 16),
+              PrimaryButton(
+                label: 'Google Sign in',
+                icon: Icons.login,
+                onPressed: _isLoading
+                    ? null
+                    : () => _signIn(
+                          authService.signInWithGoogle,
+                          forceRoleSelection: true,
                         ),
-                        forceRoleSelection: true,
-                      );
-                    },
-            ),
-            const SizedBox(height: 16),
-            PrimaryButton(
-              label: 'Google Sign in',
-              icon: Icons.login,
-              onPressed: _isLoading
-                  ? null
-                  : () => _signIn(
-                        authService.signInWithGoogle,
-                        forceRoleSelection: true,
-                      ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _phoneController,
-              decoration: const InputDecoration(labelText: 'Phone (OTP)'),
-            ),
-            const SizedBox(height: 12),
-            PrimaryButton(
-              label: 'Phone Sign in',
-              icon: Icons.phone,
-              onPressed: _isLoading
-                  ? null
-                  : () => _signIn(
-                        () => authService.signInWithPhone(
-                          _phoneController.text,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _phoneController,
+                decoration: const InputDecoration(labelText: 'Phone (OTP)'),
+              ),
+              const SizedBox(height: 12),
+              PrimaryButton(
+                label: 'Phone Sign in',
+                icon: Icons.phone,
+                onPressed: _isLoading
+                    ? null
+                    : () => _signIn(
+                          () => authService.signInWithPhone(
+                            _phoneController.text,
+                          ),
                         ),
-                      ),
-            ),
+              ),
+            ],
             const SizedBox(height: 16),
             TextButton(
               onPressed: () => context.go(RouteNames.home),

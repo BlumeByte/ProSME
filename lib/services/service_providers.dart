@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/constants.dart';
 import '../config/supabase_options.dart';
 import 'auth_service.dart';
 import 'chat_service.dart';
@@ -22,8 +23,16 @@ bool _isSupabaseInitialized() {
   }
 }
 
+bool _hasSupabaseCredentials() {
+  return kSupabaseUrl.trim().isNotEmpty &&
+      kSupabaseAnonKey.trim().isNotEmpty &&
+      kSupabaseAnonKey != 'your-anon-key';
+}
+
+bool _shouldUseSupabase() => _isSupabaseInitialized() && _hasSupabaseCredentials();
+
 final authServiceProvider = Provider<AuthService>((ref) {
-  if (!_isSupabaseInitialized()) {
+  if (!_shouldUseSupabase()) {
     return MockAuthService();
   }
   return SupabaseAuthService(Supabase.instance.client);
@@ -40,14 +49,14 @@ final authStateProvider = StreamProvider((ref) {
 });
 
 final listingServiceProvider = Provider<ListingService>((ref) {
-  if (!_isSupabaseInitialized()) {
+  if (!_shouldUseSupabase()) {
     return MockListingService();
   }
   return SupabaseListingService(Supabase.instance.client);
 });
 
 final chatServiceProvider = Provider<ChatService>((ref) {
-  if (!_isSupabaseInitialized()) {
+  if (!_shouldUseSupabase()) {
     return MockChatService();
   }
   return SupabaseChatService(Supabase.instance.client);
