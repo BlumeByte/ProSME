@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 const bool kDevMode = bool.fromEnvironment('DEV_MODE', defaultValue: false);
-const String kAppName = 'ProSME';
+const String kAppName = 'Pro SME';
 const String kCurrencySymbol = 'GHS';
 
 // Supabase configuration – override at build time via --dart-define.

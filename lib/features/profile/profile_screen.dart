@@ -149,8 +149,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           title: 'About',
           onTap: () => _showInfoSheet(
             context,
-            'About ProSME',
-            'ProSME helps customers connect with verified SMEs and artisans.',
+            'About Pro SME',
+            'Pro SME helps customers connect with verified SMEs and artisans.',
           ),
         ),
         const Divider(),
