@@ -11,7 +11,7 @@ final themeModeControllerProvider =
 });
 
 class ThemeModeController extends StateNotifier<ThemeMode> {
-  ThemeModeController(ThemeMode initialMode) : super(initialMode);
+  ThemeModeController(super.initialMode);
 
   static ThemeMode _initialThemeMode = _defaultThemeMode;
 
