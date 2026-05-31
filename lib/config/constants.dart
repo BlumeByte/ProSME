@@ -8,11 +8,11 @@ const String kSupabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
   defaultValue: 'https://wbnvifrzckjttyxhmlcf.supabase.co',
 );
+const String kSupabaseAnonKeyPlaceholder = 'your-anon-key';
 const String kSupabaseAnonKey = String.fromEnvironment(
   'SUPABASE_ANON_KEY',
-  defaultValue: 'your-anon-key',
+  defaultValue: kSupabaseAnonKeyPlaceholder,
 );
-const String kSupabaseAnonKeyPlaceholder = 'your-anon-key';
 const String kGoogleOAuthRedirectUrl = String.fromEnvironment(
   'GOOGLE_OAUTH_REDIRECT_URL',
   // Override with your Android applicationId, e.g. com.yourcompany.prosme://login-callback
