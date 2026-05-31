@@ -8,6 +8,7 @@ import 'listing_service.dart';
 import 'payment_service.dart';
 import 'admin_service.dart';
 import 'db_service.dart';
+import 'saved_service.dart';
 
 /// Exposes the global [SupabaseClient] as a Riverpod provider.
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
@@ -67,3 +68,19 @@ final paymentServiceProvider = Provider((ref) => PaymentService());
 final adminServiceProvider = Provider((ref) => AdminService());
 
 final localDbProvider = Provider((ref) => LocalDbService());
+
+final savedServiceProvider = Provider<SavedService>((ref) {
+  if (!_shouldUseSupabase()) {
+    return MockSavedService();
+  }
+  return SupabaseSavedService(
+    Supabase.instance.client,
+    ref.watch(listingServiceProvider),
+  );
+});
+
+/// Emits the list of listing IDs saved by the given user, updating in real-time.
+final savedListingIdsProvider =
+    StreamProvider.family<List<String>, String>((ref, userId) {
+  return ref.watch(savedServiceProvider).watchSavedListingIds(userId);
+});

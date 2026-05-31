@@ -16,6 +16,14 @@ class ListingDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final listingService = ref.watch(listingServiceProvider);
+    final user = ref.watch(authStateProvider).valueOrNull;
+
+    // Watch saved IDs in real-time when the user is logged in.
+    final savedIds = user == null
+        ? const <String>[]
+        : ref.watch(savedListingIdsProvider(user.id)).valueOrNull ?? const [];
+    final isSaved = savedIds.contains(listingId);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Listing')),
       body: FutureBuilder<List<Listing>>(
@@ -98,9 +106,20 @@ class ListingDetailScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               PrimaryButton(
-                label: 'Bookmark',
-                icon: Icons.bookmark_border,
-                onPressed: () {},
+                label: isSaved ? 'Bookmarked' : 'Bookmark',
+                icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
+                onPressed: () async {
+                  if (user == null) {
+                    context.go(RouteNames.auth);
+                    return;
+                  }
+                  final savedService = ref.read(savedServiceProvider);
+                  if (isSaved) {
+                    await savedService.unsaveListing(user.id, listingId);
+                  } else {
+                    await savedService.saveListing(user.id, listingId);
+                  }
+                },
               ),
             ],
           );

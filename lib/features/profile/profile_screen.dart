@@ -77,41 +77,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         const SizedBox(height: 20),
         _SectionTitle(title: 'Favourites'),
         const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'No favourites added',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Save all your favourites in one place using the heart icon.',
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                child: const Icon(Icons.favorite, color: Colors.white),
-              ),
-            ],
-          ),
-        ),
+        _FavouritesBlock(userId: user.id),
         const SizedBox(height: 26),
         Row(
           children: [
@@ -509,6 +475,65 @@ class _SettingsTile extends StatelessWidget {
       subtitle: subtitle == null ? null : Text(subtitle!),
       trailing: trailing,
       onTap: onTap,
+    );
+  }
+}
+
+/// Shows the live count of saved listings and taps through to [SavedScreen].
+class _FavouritesBlock extends ConsumerWidget {
+  const _FavouritesBlock({required this.userId});
+
+  final String userId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final savedIdsAsync = ref.watch(savedListingIdsProvider(userId));
+
+    final count = savedIdsAsync.valueOrNull?.length ?? 0;
+    final hasAny = count > 0;
+
+    return GestureDetector(
+      onTap: () => context.go(RouteNames.saved),
+      child: Container(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    hasAny
+                        ? '$count saved listing${count == 1 ? '' : 's'}'
+                        : 'No favourites added',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    hasAny
+                        ? 'Tap to view your saved listings.'
+                        : 'Save all your favourites in one place using the bookmark icon.',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            CircleAvatar(
+              radius: 30,
+              backgroundColor: scheme.primary,
+              child: const Icon(Icons.bookmark, color: Colors.white),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -11,4 +11,5 @@ class RouteNames {
   static const invoice = '/invoice';
   static const jobDetail = '/job';
   static const aiSupport = '/support';
+  static const saved = '/saved';
 }

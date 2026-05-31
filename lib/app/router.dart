@@ -14,6 +14,7 @@ import '../features/invoice/invoice_screen.dart';
 import '../features/jobs/job_detail_screen.dart';
 import '../features/listing/listing_detail_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
+import '../features/saved/saved_screen.dart';
 import '../features/support/ai_support_screen.dart';
 import '../models/app_user.dart';
 import '../routes/route_names.dart';
@@ -112,6 +113,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.aiSupport,
         builder: (context, state) => const AiSupportScreen(),
       ),
+      GoRoute(
+        path: RouteNames.saved,
+        builder: (context, state) => const SavedScreen(),
+      ),
     ],
   );
 });
@@ -124,6 +129,7 @@ bool _requiresAuth(String fullPath) {
     RouteNames.adminHome,
     RouteNames.invoice,
     RouteNames.aiSupport,
+    RouteNames.saved,
   };
   if (protectedExactPaths.contains(fullPath)) return true;
   if (fullPath.startsWith('${RouteNames.listingDetail}/')) return true;
