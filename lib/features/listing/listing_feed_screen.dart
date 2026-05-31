@@ -126,8 +126,8 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               width: double.infinity,
               child: FilledButton(
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF0B1635),
-                  foregroundColor: Colors.white,
+                  backgroundColor: scheme.primary,
+                  foregroundColor: scheme.onPrimary,
                 ),
                 onPressed: _applySearch,
                 child: const Text('Search'),
@@ -240,15 +240,15 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                                               padding: const EdgeInsets.symmetric(
                                                   horizontal: 8, vertical: 4),
                                               decoration: BoxDecoration(
-                                                color: Colors.green.withOpacity(0.12),
+                                                color: scheme.primary.withOpacity(0.12),
                                                 borderRadius: BorderRadius.circular(999),
                                               ),
-                                              child: const Text(
+                                              child: Text(
                                                 'Verified',
                                                 style: TextStyle(
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.w600,
-                                                  color: Colors.green,
+                                                  color: scheme.primary,
                                                 ),
                                               ),
                                             ),
@@ -301,8 +301,8 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                                 const SizedBox(width: 8),
                                 FilledButton(
                                   style: FilledButton.styleFrom(
-                                    backgroundColor: const Color(0xFF0B1635),
-                                    foregroundColor: Colors.white,
+                                    backgroundColor: scheme.primary,
+                                    foregroundColor: scheme.onPrimary,
                                   ),
                                   onPressed: () {
                                     if (user == null) {
