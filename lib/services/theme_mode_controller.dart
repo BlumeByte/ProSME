@@ -7,7 +7,7 @@ const _defaultThemeMode = ThemeMode.light;
 
 final themeModeControllerProvider =
     StateNotifierProvider<ThemeModeController, ThemeMode>((ref) {
-  return ThemeModeController(_initialThemeMode);
+  return ThemeModeController(ThemeModeController._initialThemeMode);
 });
 
 class ThemeModeController extends StateNotifier<ThemeMode> {
