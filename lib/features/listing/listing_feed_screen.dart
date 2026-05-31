@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/constants.dart';
 import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
 import '../../models/listing.dart';
@@ -283,7 +284,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                             Row(
                               children: [
                                 Text(
-                                  'From GHS ${pro.minPrice.toStringAsFixed(0)}',
+                                  'From $kCurrencySymbol ${pro.minPrice.toStringAsFixed(0)}',
                                   style: Theme.of(context).textTheme.titleMedium,
                                 ),
                                 const Spacer(),
