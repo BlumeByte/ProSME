@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/constants.dart';
 import '../config/supabase_options.dart';
 import 'auth_service.dart';
 import 'chat_service.dart';
@@ -7,6 +8,7 @@ import 'listing_service.dart';
 import 'payment_service.dart';
 import 'admin_service.dart';
 import 'db_service.dart';
+import 'saved_service.dart';
 
 /// Exposes the global [SupabaseClient] as a Riverpod provider.
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
@@ -22,8 +24,16 @@ bool _isSupabaseInitialized() {
   }
 }
 
+bool _hasSupabaseCredentials() {
+  return kSupabaseUrl.trim().isNotEmpty &&
+      kSupabaseAnonKey.trim().isNotEmpty &&
+      kSupabaseAnonKey != kSupabaseAnonKeyPlaceholder;
+}
+
+bool _shouldUseSupabase() => _isSupabaseInitialized() && _hasSupabaseCredentials();
+
 final authServiceProvider = Provider<AuthService>((ref) {
-  if (!_isSupabaseInitialized()) {
+  if (!_shouldUseSupabase()) {
     return MockAuthService();
   }
   return SupabaseAuthService(Supabase.instance.client);
@@ -40,14 +50,14 @@ final authStateProvider = StreamProvider((ref) {
 });
 
 final listingServiceProvider = Provider<ListingService>((ref) {
-  if (!_isSupabaseInitialized()) {
+  if (!_shouldUseSupabase()) {
     return MockListingService();
   }
   return SupabaseListingService(Supabase.instance.client);
 });
 
 final chatServiceProvider = Provider<ChatService>((ref) {
-  if (!_isSupabaseInitialized()) {
+  if (!_shouldUseSupabase()) {
     return MockChatService();
   }
   return SupabaseChatService(Supabase.instance.client);
@@ -55,6 +65,24 @@ final chatServiceProvider = Provider<ChatService>((ref) {
 
 final paymentServiceProvider = Provider((ref) => PaymentService());
 
-final adminServiceProvider = Provider((ref) => AdminService());
+final adminServiceProvider = Provider((ref) {
+  if (_shouldUseSupabase()) {
+    return AdminService(Supabase.instance.client);
+  }
+  return const AdminService();
+});
 
 final localDbProvider = Provider((ref) => LocalDbService());
+
+final savedServiceProvider = Provider<SavedService>((ref) {
+  if (!_shouldUseSupabase()) {
+    return MockSavedService();
+  }
+  return SupabaseSavedService(Supabase.instance.client);
+});
+
+/// Emits the list of listing IDs saved by the given user, updating in real-time.
+final savedListingIdsProvider =
+    StreamProvider.family<List<String>, String>((ref, userId) {
+  return ref.watch(savedServiceProvider).watchSavedListingIds(userId);
+});

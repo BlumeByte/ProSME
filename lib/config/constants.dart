@@ -2,15 +2,17 @@ import 'package:flutter/material.dart';
 
 const bool kDevMode = bool.fromEnvironment('DEV_MODE', defaultValue: false);
 const String kAppName = 'ProSME';
+const String kCurrencySymbol = 'GHS';
 
 // Supabase configuration – override at build time via --dart-define.
 const String kSupabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
   defaultValue: 'https://wbnvifrzckjttyxhmlcf.supabase.co',
 );
+const String kSupabaseAnonKeyPlaceholder = 'your-anon-key';
 const String kSupabaseAnonKey = String.fromEnvironment(
   'SUPABASE_ANON_KEY',
-  defaultValue: 'your-anon-key',
+  defaultValue: kSupabaseAnonKeyPlaceholder,
 );
 const String kGoogleOAuthRedirectUrl = String.fromEnvironment(
   'GOOGLE_OAUTH_REDIRECT_URL',

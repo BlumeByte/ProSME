@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
-import '../core/utils/mock_data.dart';
 import '../models/chat_models.dart';
 
 abstract class ChatService {
@@ -11,28 +10,67 @@ abstract class ChatService {
 }
 
 class MockChatService implements ChatService {
-  final StreamController<List<ChatThread>> _threadController =
-      StreamController<List<ChatThread>>.broadcast();
-  final StreamController<List<ChatMessage>> _messageController =
-      StreamController<List<ChatMessage>>.broadcast();
+  final Map<String, StreamController<List<ChatThread>>> _threadControllers = {};
+  final Map<String, StreamController<List<ChatMessage>>> _messageControllers = {};
+  final Map<String, List<ChatThread>> _threadsByUser = {};
+  final Map<String, List<ChatMessage>> _messagesByThread = {};
+  final Map<String, Set<String>> _threadWatchers = {};
 
-  MockChatService() {
-    _threadController.add(demoChatThreads);
-    _messageController.add(demoMessages);
+  @override
+  Stream<List<ChatThread>> watchThreads(String userId) {
+    final controller = _threadControllers.putIfAbsent(
+      userId,
+      () => StreamController<List<ChatThread>>.broadcast(),
+    );
+    controller.add(List<ChatThread>.from(_threadsByUser[userId] ?? const []));
+    return controller.stream;
   }
 
   @override
-  Stream<List<ChatThread>> watchThreads(String userId) =>
-      _threadController.stream;
-
-  @override
-  Stream<List<ChatMessage>> watchMessages(String threadId) =>
-      _messageController.stream;
+  Stream<List<ChatMessage>> watchMessages(String threadId) {
+    final controller = _messageControllers.putIfAbsent(
+      threadId,
+      () => StreamController<List<ChatMessage>>.broadcast(),
+    );
+    _threadWatchers.putIfAbsent(threadId, () => <String>{});
+    controller.add(
+      List<ChatMessage>.from(_messagesByThread[threadId] ?? const []),
+    );
+    return controller.stream;
+  }
 
   @override
   Future<void> sendMessage(ChatMessage message) async {
-    final updated = List<ChatMessage>.from(demoMessages)..add(message);
-    _messageController.add(updated);
+    final messages = _messagesByThread.putIfAbsent(
+      message.threadId,
+      () => <ChatMessage>[],
+    );
+    messages.add(message);
+    _messageControllers[message.threadId]?.add(List<ChatMessage>.from(messages));
+
+    final ownerIds = _threadWatchers[message.threadId] ?? <String>{};
+    ownerIds.add(message.senderId);
+    _threadWatchers[message.threadId] = ownerIds;
+
+    for (final ownerId in ownerIds) {
+      final threads = _threadsByUser.putIfAbsent(ownerId, () => <ChatThread>[]);
+      final index = threads.indexWhere((thread) => thread.id == message.threadId);
+      final updatedThread = ChatThread(
+        id: message.threadId,
+        userId: ownerId,
+        artisanId: '',
+        lastMessage: message.content,
+        updatedAt: message.createdAt,
+      );
+      if (index == -1) {
+        threads.insert(0, updatedThread);
+      } else {
+        threads
+          ..removeAt(index)
+          ..insert(0, updatedThread);
+      }
+      _threadControllers[ownerId]?.add(List<ChatThread>.from(threads));
+    }
   }
 }
 
