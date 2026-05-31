@@ -20,7 +20,7 @@ class JobsScreen extends ConsumerWidget {
     final jobsAsync = ref.watch(jobsStreamProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Jobs'),
+        title: const Text('Bookings'),
         actions: [
           if (user.role == UserRole.customer)
             IconButton(
@@ -44,7 +44,7 @@ class JobsScreen extends ConsumerWidget {
         data: (jobs) {
           if (jobs.isEmpty) {
             return const Center(
-              child: Text('No jobs yet. Create your first request.'),
+              child: Text('No bookings yet. Create your first request.'),
             );
           }
           return RefreshIndicator(

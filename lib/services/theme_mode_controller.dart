@@ -7,18 +7,18 @@ const _defaultThemeMode = ThemeMode.light;
 
 final themeModeControllerProvider =
     StateNotifierProvider<ThemeModeController, ThemeMode>((ref) {
-  final controller = ThemeModeController();
-  controller.load();
-  return controller;
+  return ThemeModeController(_initialThemeMode);
 });
 
 class ThemeModeController extends StateNotifier<ThemeMode> {
-  ThemeModeController() : super(_defaultThemeMode);
+  ThemeModeController(ThemeMode initialMode) : super(initialMode);
 
-  Future<void> load() async {
+  static ThemeMode _initialThemeMode = _defaultThemeMode;
+
+  static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     final stored = prefs.getString(_themeModeKey) ?? _defaultThemeMode.name;
-    state = _modeFromName(stored);
+    _initialThemeMode = _modeFromName(stored);
   }
 
   Future<void> setDarkMode(bool enabled) async {
@@ -28,7 +28,7 @@ class ThemeModeController extends StateNotifier<ThemeMode> {
     await prefs.setString(_themeModeKey, mode.name);
   }
 
-  ThemeMode _modeFromName(String mode) {
+  static ThemeMode _modeFromName(String mode) {
     for (final value in ThemeMode.values) {
       if (value.name == mode) return value;
     }

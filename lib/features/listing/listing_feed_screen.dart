@@ -283,7 +283,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                             Row(
                               children: [
                                 Text(
-                                  'GHS ${pro.minPrice.toStringAsFixed(0)}/hour',
+                                  'From GHS ${pro.minPrice.toStringAsFixed(0)}',
                                   style: Theme.of(context).textTheme.titleMedium,
                                 ),
                                 const Spacer(),
@@ -296,7 +296,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                                     widget.onOpenChatTab?.call();
                                   },
                                   icon: const Icon(Icons.chat_bubble_outline),
-                                  label: const Text('Chat'),
+                                  label: const Text('Chats'),
                                 ),
                                 const SizedBox(width: 8),
                                 FilledButton(
