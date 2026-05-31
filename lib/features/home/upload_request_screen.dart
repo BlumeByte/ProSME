@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/constants.dart';
 import '../../routes/route_names.dart';
 import '../jobs/jobs_repository.dart';
 import '../../services/service_providers.dart';
@@ -119,7 +120,9 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
               const SizedBox(height: 10),
               TextFormField(
                 controller: _budgetController,
-                decoration: const InputDecoration(labelText: 'Budget (GHS)'),
+                decoration: const InputDecoration(
+                  labelText: 'Budget ($kCurrencySymbol)',
+                ),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
                   final budget = double.tryParse((value ?? '').trim());
