@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../routes/route_names.dart';
 import '../../services/auth_service.dart';
 import '../../services/service_providers.dart';
+import '../../services/theme_mode_controller.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -12,6 +13,8 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authStateProvider).valueOrNull;
     final authService = ref.read(authServiceProvider);
+    final themeMode = ref.watch(themeModeControllerProvider);
+    final isDarkMode = themeMode == ThemeMode.dark;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -46,16 +49,13 @@ class ProfileScreen extends ConsumerWidget {
             subtitle: Text(user.name),
             onTap: () => _showChangeUsernameDialog(context, authService, user.name),
           ),
-        ListTile(
-          leading: const Icon(Icons.language),
-          title: const Text('Language'),
-          subtitle: const Text('English / Twi / Ewe'),
-          onTap: () {},
-        ),
-        ListTile(
-          leading: const Icon(Icons.notifications),
-          title: const Text('Notifications'),
-          onTap: () {},
+        SwitchListTile(
+          secondary: const Icon(Icons.dark_mode_outlined),
+          title: const Text('Dark mode'),
+          value: isDarkMode,
+          onChanged: (value) {
+            ref.read(themeModeControllerProvider.notifier).setDarkMode(value);
+          },
         ),
         ListTile(
           leading: const Icon(Icons.support_agent),

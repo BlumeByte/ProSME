@@ -40,11 +40,12 @@ class SupabaseListingService implements ListingService {
         .toList();
 
     Map<String, String> artisanNames = {};
+    Map<String, String> artisanAvatars = {};
     if (artisanIds.isNotEmpty) {
       try {
         final List<dynamic> profiles = await _supabase
             .from('profiles')
-            .select('id,full_name')
+            .select('id,full_name,avatar_url')
             .inFilter('id', artisanIds);
 
         artisanNames = {
@@ -52,10 +53,16 @@ class SupabaseListingService implements ListingService {
             (profile['id'] ?? '').toString():
                 ((profile['full_name'] ?? '') as String),
         };
+        artisanAvatars = {
+          for (final profile in profiles)
+            (profile['id'] ?? '').toString():
+                ((profile['avatar_url'] ?? '') as String),
+        };
       } catch (error, stackTrace) {
         debugPrint('Failed to load artisan profiles for listings: $error');
         debugPrintStack(stackTrace: stackTrace);
         artisanNames = {};
+        artisanAvatars = {};
       }
     }
 
@@ -64,6 +71,9 @@ class SupabaseListingService implements ListingService {
       final hydratedRow = Map<String, dynamic>.from(row);
       if (artisanId != null && artisanNames.containsKey(artisanId)) {
         hydratedRow['artisanName'] = artisanNames[artisanId];
+      }
+      if (artisanId != null && artisanAvatars.containsKey(artisanId)) {
+        hydratedRow['artisanPhotoUrl'] = artisanAvatars[artisanId];
       }
       return Listing.fromJson(hydratedRow);
     }).toList();

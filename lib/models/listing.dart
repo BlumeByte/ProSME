@@ -3,6 +3,7 @@ class Listing {
     required this.id,
     required this.artisanId,
     this.artisanName,
+    this.artisanPhotoUrl,
     required this.title,
     required this.description,
     required this.category,
@@ -17,6 +18,7 @@ class Listing {
   final String id;
   final String artisanId;
   final String? artisanName;
+  final String? artisanPhotoUrl;
   final String title;
   final String description;
   final String category;
@@ -37,6 +39,9 @@ class Listing {
       id: (json['id'] ?? '') as String,
       artisanId: (json['artisanId'] ?? json['artisan_id'] ?? '') as String,
       artisanName: (json['artisanName'] ?? json['artisan_name'] ?? artisanData?['full_name'] ?? artisanData?['name']) as String?,
+      artisanPhotoUrl: (json['artisanPhotoUrl'] ??
+              json['artisan_photo_url'] ??
+              artisanData?['avatar_url']) as String?,
       title: (json['title'] ?? '') as String,
       description: (json['description'] ?? '') as String,
       category: (json['category'] ?? '') as String,
@@ -57,6 +62,7 @@ class Listing {
       'id': id,
       'artisanId': artisanId,
       'artisanName': artisanName,
+      'artisanPhotoUrl': artisanPhotoUrl,
       'title': title,
       'description': description,
       'category': category,
