@@ -12,6 +12,7 @@ const String kSupabaseAnonKey = String.fromEnvironment(
   'SUPABASE_ANON_KEY',
   defaultValue: 'your-anon-key',
 );
+const String kSupabaseAnonKeyPlaceholder = 'your-anon-key';
 const String kGoogleOAuthRedirectUrl = String.fromEnvironment(
   'GOOGLE_OAUTH_REDIRECT_URL',
   // Override with your Android applicationId, e.g. com.yourcompany.prosme://login-callback

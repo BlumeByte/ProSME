@@ -26,7 +26,7 @@ bool _isSupabaseInitialized() {
 bool _hasSupabaseCredentials() {
   return kSupabaseUrl.trim().isNotEmpty &&
       kSupabaseAnonKey.trim().isNotEmpty &&
-      kSupabaseAnonKey != 'your-anon-key';
+      kSupabaseAnonKey != kSupabaseAnonKeyPlaceholder;
 }
 
 bool _shouldUseSupabase() => _isSupabaseInitialized() && _hasSupabaseCredentials();
