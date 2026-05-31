@@ -33,7 +33,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     final currentIndex = user == null && _currentIndex > 0 ? 0 : _currentIndex;
 
     return AppScaffold(
-      title: currentIndex == 0 ? 'Find Professionals' : 'ProSME',
+      title: currentIndex == 0 ? 'Find Professionals' : 'Pro SME',
       body: pages[currentIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentIndex,

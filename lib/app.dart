@@ -12,7 +12,7 @@ class ProSMEApp extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
     final themeMode = ref.watch(themeModeControllerProvider);
     return MaterialApp.router(
-      title: 'ProSME',
+      title: 'Pro SME',
       theme: buildLightTheme(),
       darkTheme: buildDarkTheme(),
       themeMode: themeMode,

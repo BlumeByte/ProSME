@@ -16,7 +16,7 @@ class NotificationService {
   }) async {
     const androidDetails = AndroidNotificationDetails(
       'prosme_channel',
-      'ProSME Notifications',
+      'Pro SME Notifications',
       importance: Importance.max,
       priority: Priority.high,
     );
