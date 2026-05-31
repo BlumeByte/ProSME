@@ -37,6 +37,14 @@ void main() {
     await service.updateEmail('updated@example.com');
     expect(service.currentUser?.phone, '+233 54 111 2222');
     expect(service.currentUser?.email, 'updated@example.com');
+    expect(
+      () => service.updatePhone('   '),
+      throwsA(isA<StateError>()),
+    );
+    expect(
+      () => service.updateEmail('invalid-email'),
+      throwsA(isA<StateError>()),
+    );
 
     final second = await service.signUpWithEmail(
       'second@example.com',

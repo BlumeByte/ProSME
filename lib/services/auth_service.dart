@@ -5,12 +5,12 @@ import '../config/constants.dart';
 import '../core/utils/mock_data.dart';
 import '../models/app_user.dart';
 
-final _emailPattern = RegExp(
+final _emailRegex = RegExp(
   r'^(?=.{1,254}$)(?=.{1,64}@)[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
 );
 
 bool _isValidEmailAddress(String email) =>
-    _emailPattern.hasMatch(email) && !email.contains('..');
+    _emailRegex.hasMatch(email) && !email.contains('..');
 
 abstract class AuthService {
   Stream<AppUser?> authStateChanges();
