@@ -19,6 +19,8 @@ abstract class AuthService {
   Future<void> signOut();
   Future<void> updateRole(UserRole role);
   Future<void> updateUsername(String username);
+  Future<void> updatePhone(String phone);
+  Future<void> updateEmail(String email);
   Future<void> deleteAccount();
 }
 
@@ -143,6 +145,44 @@ class MockAuthService implements AuthService {
   }
 
   @override
+  Future<void> updatePhone(String phone) async {
+    final user = _currentUser;
+    if (user == null) {
+      throw StateError('No signed-in user.');
+    }
+    final normalized = phone.trim();
+    if (normalized.isEmpty) {
+      throw StateError('Phone cannot be empty.');
+    }
+    _currentUser = user.copyWith(phone: normalized);
+    _accountsByEmail[user.email.toLowerCase()] = _currentUser!;
+    _controller.add(_currentUser);
+  }
+
+  @override
+  Future<void> updateEmail(String email) async {
+    final user = _currentUser;
+    if (user == null) {
+      throw StateError('No signed-in user.');
+    }
+    final normalized = email.trim().toLowerCase();
+    if (normalized.isEmpty || !normalized.contains('@')) {
+      throw StateError('Enter a valid email address.');
+    }
+
+    final existing = _accountsByEmail[normalized];
+    if (existing != null && existing.id != user.id) {
+      throw StateError('This email is already registered.');
+    }
+
+    _accountsByEmail.remove(user.email.toLowerCase());
+    _emailByUsername[user.name.toLowerCase()] = normalized;
+    _currentUser = user.copyWith(email: normalized);
+    _accountsByEmail[normalized] = _currentUser!;
+    _controller.add(_currentUser);
+  }
+
+  @override
   Future<void> deleteAccount() async {
     final user = _currentUser;
     if (user != null) {
@@ -208,6 +248,18 @@ class SupabaseAuthService implements AuthService {
 
     try {
       await _supabase.from('profiles').upsert(payload, onConflict: 'id');
+    } catch (error) {
+      if (_isMissingProfilesTable(error)) return;
+      rethrow;
+    }
+  }
+
+  Future<void> _updateProfile(
+    String userId,
+    Map<String, dynamic> payload,
+  ) async {
+    try {
+      await _supabase.from('profiles').update(payload).eq('id', userId);
     } catch (error) {
       if (_isMissingProfilesTable(error)) return;
       rethrow;
@@ -423,13 +475,10 @@ class SupabaseAuthService implements AuthService {
       throw StateError('Username cannot be empty.');
     }
 
-    await _supabase
-        .from('profiles')
-        .update({
-          'username': normalized,
-          'full_name': normalized,
-        })
-        .eq('id', user.id);
+    await _updateProfile(user.id, {
+      'username': normalized,
+      'full_name': normalized,
+    });
 
     await _supabase.auth.updateUser(
       UserAttributes(
@@ -443,6 +492,53 @@ class SupabaseAuthService implements AuthService {
 
     if (_resolvedCurrentUser != null) {
       _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(name: normalized);
+    }
+  }
+
+  @override
+  Future<void> updatePhone(String phone) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      throw StateError('No signed-in user.');
+    }
+    final normalized = phone.trim();
+    if (normalized.isEmpty) {
+      throw StateError('Phone cannot be empty.');
+    }
+
+    await _updateProfile(user.id, {'phone': normalized});
+    await _supabase.auth.updateUser(
+      UserAttributes(
+        data: {'phone': normalized},
+      ),
+    );
+
+    if (_resolvedCurrentUser != null) {
+      _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(phone: normalized);
+    }
+  }
+
+  @override
+  Future<void> updateEmail(String email) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      throw StateError('No signed-in user.');
+    }
+    final normalized = email.trim().toLowerCase();
+    if (normalized.isEmpty || !normalized.contains('@')) {
+      throw StateError('Enter a valid email address.');
+    }
+
+    await _updateProfile(user.id, {'email': normalized});
+    await _supabase.auth.updateUser(
+      UserAttributes(
+        email: normalized,
+        data: {'email': normalized},
+      ),
+    );
+
+    if (_resolvedCurrentUser != null) {
+      _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(email: normalized);
     }
   }
 
