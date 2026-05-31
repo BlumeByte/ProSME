@@ -5,6 +5,10 @@ import '../config/constants.dart';
 import '../core/utils/mock_data.dart';
 import '../models/app_user.dart';
 
+final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+bool _isValidEmailAddress(String email) => _emailPattern.hasMatch(email);
+
 abstract class AuthService {
   Stream<AppUser?> authStateChanges();
   AppUser? get currentUser;
@@ -166,7 +170,7 @@ class MockAuthService implements AuthService {
       throw StateError('No signed-in user.');
     }
     final normalized = email.trim().toLowerCase();
-    if (normalized.isEmpty || !normalized.contains('@')) {
+    if (!_isValidEmailAddress(normalized)) {
       throw StateError('Enter a valid email address.');
     }
 
@@ -525,7 +529,7 @@ class SupabaseAuthService implements AuthService {
       throw StateError('No signed-in user.');
     }
     final normalized = email.trim().toLowerCase();
-    if (normalized.isEmpty || !normalized.contains('@')) {
+    if (!_isValidEmailAddress(normalized)) {
       throw StateError('Enter a valid email address.');
     }
 

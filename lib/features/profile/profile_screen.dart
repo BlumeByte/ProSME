@@ -40,7 +40,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       );
     }
 
-    final firstName = user.name.trim().split(' ').first;
+    final normalizedName = user.name.trim();
+    final firstName = normalizedName.isEmpty
+        ? 'there'
+        : normalizedName.split(RegExp(r'\s+')).first;
 
     return ListView(
       padding: const EdgeInsets.all(20),
