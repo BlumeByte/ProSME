@@ -217,8 +217,8 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                                   child: (pro.avatarUrl?.isNotEmpty ?? false)
                                       ? null
                                       : Text(
-                                          (pro.name.isNotEmpty
-                                                  ? pro.name[0]
+                                          (pro.name.trim().isNotEmpty
+                                                  ? pro.name.trim()[0]
                                                   : 'P')
                                               .toUpperCase(),
                                         ),
@@ -284,7 +284,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                             Row(
                               children: [
                                 Text(
-                                  'From $kCurrencySymbol ${pro.minPrice.toStringAsFixed(0)}',
+                                  'From $kCurrencySymbol ${pro.minPrice.toStringAsFixed(2)}',
                                   style: Theme.of(context).textTheme.titleMedium,
                                 ),
                                 const Spacer(),
