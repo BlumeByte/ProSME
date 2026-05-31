@@ -12,7 +12,7 @@ class AdminService {
   Future<List<ArtisanProfile>> fetchVerificationQueue() async {
     if (_supabase == null) return const [];
     try {
-      final rows = await _supabase!
+      final rows = await _supabase
           .from('profiles')
           .select(
             'id,verification_status,national_id_url,momo_number,location,categories,bio,rating_summary,role',
@@ -50,7 +50,7 @@ class AdminService {
   Future<List<DiscountOffer>> fetchDiscounts() async {
     if (_supabase == null) return const [];
     try {
-      final rows = await _supabase!
+      final rows = await _supabase
           .from('discount_offers')
           .select('id,title,description,percent,active,start,end');
       return (rows as List<dynamic>)

@@ -95,7 +95,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           onTap: () => _showPaymentMethodDialog(context),
         ),
         const Divider(),
-        const _SettingsTile(icon: Icons.account_balance_wallet_outlined, title: 'Pro SME Balance'),
+        const _SettingsTile(icon: Icons.account_balance_wallet_outlined, title: 'ProSME Balance'),
         const SizedBox(height: 26),
         const _SectionTitle(title: 'Profile'),
         const SizedBox(height: 8),
