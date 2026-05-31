@@ -151,7 +151,9 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
             (job) => Card(
               child: ListTile(
                 title: Text(job.title),
-                subtitle: Text('${job.location} • GHS ${job.budget.toStringAsFixed(2)}'),
+                subtitle: Text(
+                  '${job.location} • $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
+                ),
               ),
             ),
           ),
