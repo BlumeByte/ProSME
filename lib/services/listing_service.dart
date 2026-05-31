@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
-import '../core/utils/mock_data.dart';
 import '../models/listing.dart';
 
 abstract class ListingService {
@@ -13,16 +12,17 @@ abstract class ListingService {
 class MockListingService implements ListingService {
   final StreamController<List<Listing>> _controller =
       StreamController<List<Listing>>.broadcast();
+  final List<Listing> _listings = [];
 
   MockListingService() {
-    _controller.add(demoListings);
+    _controller.add(const []);
   }
 
   @override
   Stream<List<Listing>> watchListings() => _controller.stream;
 
   @override
-  Future<List<Listing>> fetchListings() async => demoListings;
+  Future<List<Listing>> fetchListings() async => List<Listing>.from(_listings);
 }
 
 class SupabaseListingService implements ListingService {

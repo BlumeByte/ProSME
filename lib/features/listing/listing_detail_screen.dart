@@ -36,6 +36,8 @@ class ListingDetailScreen extends ConsumerWidget {
             (item) => item.id == listingId,
             orElse: () => snapshot.data!.first,
           );
+          final previewImageUrl =
+              listing.images.isNotEmpty ? listing.images.first : null;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -82,7 +84,7 @@ class ListingDetailScreen extends ConsumerWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
                   child: Image.network(
-                    'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee',
+                    previewImageUrl ?? '',
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
                       color: Colors.grey.shade200,
@@ -96,13 +98,20 @@ class ListingDetailScreen extends ConsumerWidget {
               PrimaryButton(
                 label: 'Chat',
                 icon: Icons.chat,
-                onPressed: () => context.go('${RouteNames.chatThread}/thread_1'),
+                onPressed: () {
+                  if (user == null) {
+                    context.go(RouteNames.auth);
+                    return;
+                  }
+                  final threadId = _buildThreadId(user.id, listing.artisanId);
+                  context.go('${RouteNames.chatThread}/$threadId');
+                },
               ),
               const SizedBox(height: 12),
               PrimaryButton(
                 label: 'Request Invoice',
                 icon: Icons.receipt_long,
-                onPressed: () => context.go(RouteNames.invoice),
+                onPressed: () => context.go(RouteNames.invoice, extra: listing),
               ),
               const SizedBox(height: 12),
               PrimaryButton(
@@ -127,4 +136,9 @@ class ListingDetailScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+String _buildThreadId(String userId, String artisanId) {
+  final pair = [userId, artisanId]..sort();
+  return 'thread_${pair.join('_')}';
 }

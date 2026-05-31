@@ -65,7 +65,12 @@ final chatServiceProvider = Provider<ChatService>((ref) {
 
 final paymentServiceProvider = Provider((ref) => PaymentService());
 
-final adminServiceProvider = Provider((ref) => AdminService());
+final adminServiceProvider = Provider((ref) {
+  if (_shouldUseSupabase()) {
+    return AdminService(Supabase.instance.client);
+  }
+  return const AdminService();
+});
 
 final localDbProvider = Provider((ref) => LocalDbService());
 

@@ -17,6 +17,7 @@ import '../features/onboarding/onboarding_screen.dart';
 import '../features/saved/saved_screen.dart';
 import '../features/support/ai_support_screen.dart';
 import '../models/app_user.dart';
+import '../models/listing.dart';
 import '../routes/route_names.dart';
 import '../services/app_launch_service.dart';
 import '../services/service_providers.dart';
@@ -102,7 +103,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: RouteNames.invoice,
-        builder: (context, state) => const InvoiceScreen(),
+        builder: (context, state) {
+          final listing = state.extra is Listing ? state.extra as Listing : null;
+          return InvoiceScreen(listing: listing);
+        },
       ),
       GoRoute(
         path: '${RouteNames.jobDetail}/:id',

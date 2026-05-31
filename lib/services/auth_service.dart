@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
-import '../core/utils/mock_data.dart';
 import '../models/app_user.dart';
 
 final _emailRegex = RegExp(
@@ -56,9 +55,17 @@ class MockAuthService implements AuthService {
   @override
   Future<AppUser> signInWithEmail(String email, String password) async {
     final normalizedEmail = email.trim().toLowerCase();
-    _currentUser =
-        _accountsByEmail[normalizedEmail] ??
-        demoUser.copyWith(email: email.trim(), name: 'Demo User');
+    _currentUser = _accountsByEmail[normalizedEmail] ??
+        AppUser(
+          id: 'mock_${DateTime.now().microsecondsSinceEpoch}',
+          role: UserRole.customer,
+          name: normalizedEmail.split('@').first,
+          phone: '',
+          email: normalizedEmail,
+          photoUrl: '',
+          createdAt: DateTime.now(),
+        );
+    _accountsByEmail[normalizedEmail] = _currentUser!;
     _controller.add(_currentUser);
     return _currentUser!;
   }
@@ -99,14 +106,35 @@ class MockAuthService implements AuthService {
 
   @override
   Future<AppUser> signInWithGoogle() async {
-    _currentUser = demoUser;
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final email = 'google_user_$now@example.com';
+    _currentUser = AppUser(
+      id: 'mock_google_$now',
+      role: UserRole.customer,
+      name: 'Google User',
+      phone: '',
+      email: email,
+      photoUrl: '',
+      createdAt: DateTime.now(),
+    );
+    _accountsByEmail[email] = _currentUser!;
     _controller.add(_currentUser);
     return _currentUser!;
   }
 
   @override
   Future<AppUser> signInWithPhone(String phone) async {
-    _currentUser = demoUser.copyWith(phone: phone, name: 'Phone User');
+    final now = DateTime.now().microsecondsSinceEpoch;
+    _currentUser = AppUser(
+      id: 'mock_phone_$now',
+      role: UserRole.customer,
+      name: 'Phone User',
+      phone: phone.trim(),
+      email: 'phone_user_$now@example.com',
+      photoUrl: '',
+      createdAt: DateTime.now(),
+    );
+    _accountsByEmail[_currentUser!.email.toLowerCase()] = _currentUser!;
     _controller.add(_currentUser);
     return _currentUser!;
   }
