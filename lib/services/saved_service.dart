@@ -1,7 +1,4 @@
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/listing.dart';
-import 'listing_service.dart';
 
 abstract class SavedService {
   /// Emits the list of listing IDs saved by [userId] whenever it changes.
@@ -50,10 +47,9 @@ class MockSavedService implements SavedService {
 // ---------------------------------------------------------------------------
 
 class SupabaseSavedService implements SavedService {
-  SupabaseSavedService(this._supabase, this._listingService);
+  SupabaseSavedService(this._supabase);
 
   final SupabaseClient _supabase;
-  final ListingService _listingService;
 
   @override
   Stream<List<String>> watchSavedListingIds(String userId) {
@@ -70,21 +66,9 @@ class SupabaseSavedService implements SavedService {
         .from('saved_listings')
         .select('listing_id')
         .eq('user_id', userId);
-    return rows.map((r) => (r as Map<String, dynamic>)['listing_id'] as String).toList();
-  }
-
-  /// Fetches the full [Listing] objects for all of [userId]'s saved listings.
-  Future<List<Listing>> fetchSavedListings(String userId) async {
-    final ids = await fetchSavedListingIds(userId);
-    if (ids.isEmpty) return [];
-    try {
-      final all = await _listingService.fetchListings();
-      return all.where((l) => ids.contains(l.id)).toList();
-    } catch (error, stackTrace) {
-      debugPrint('Failed to fetch saved listings: $error');
-      debugPrintStack(stackTrace: stackTrace);
-      return [];
-    }
+    return rows
+        .map((r) => (r as Map<String, dynamic>)['listing_id'] as String)
+        .toList();
   }
 
   @override

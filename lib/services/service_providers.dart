@@ -73,10 +73,7 @@ final savedServiceProvider = Provider<SavedService>((ref) {
   if (!_shouldUseSupabase()) {
     return MockSavedService();
   }
-  return SupabaseSavedService(
-    Supabase.instance.client,
-    ref.watch(listingServiceProvider),
-  );
+  return SupabaseSavedService(Supabase.instance.client);
 });
 
 /// Emits the list of listing IDs saved by the given user, updating in real-time.
