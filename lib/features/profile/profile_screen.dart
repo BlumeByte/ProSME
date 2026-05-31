@@ -250,7 +250,11 @@ Future<void> _showChangeUsernameDialog(
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+          onPressed: () {
+            final value = controller.text.trim();
+            if (value.isEmpty) return;
+            Navigator.of(context).pop(value);
+          },
           child: const Text('Save'),
         ),
       ],
