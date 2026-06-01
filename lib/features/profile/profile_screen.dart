@@ -476,7 +476,7 @@ Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
                 },
               ),
               DropdownButtonFormField<String>(
-                value: language,
+                initialValue: language,
                 decoration: const InputDecoration(
                   labelText: 'Language',
                   prefixIcon: Icon(Icons.language_outlined),
