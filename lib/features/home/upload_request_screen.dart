@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:prosme/features/jobs/application/jobs_providers.dart';
 
 import '../../config/constants.dart';
 import '../../routes/route_names.dart';
-import '../jobs/jobs_repository.dart';
+import '../jobs/domain/jobs_repository.dart' hide jobsRepositoryProvider, jobsStreamProvider;
 import '../../services/service_providers.dart';
 
 class UploadRequestScreen extends ConsumerStatefulWidget {
   const UploadRequestScreen({super.key});
 
   @override
-  ConsumerState<UploadRequestScreen> createState() => _UploadRequestScreenState();
+  ConsumerState<UploadRequestScreen> createState() =>
+      _UploadRequestScreenState();
 }
 
 class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
@@ -47,7 +49,6 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
             description: _descriptionController.text.trim(),
             location: _locationController.text.trim(),
             budget: double.parse(_budgetController.text.trim()),
-            createdBy: user.id,
           );
       if (!mounted) return;
       _titleController.clear();
@@ -86,12 +87,14 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
 
     final jobsAsync = ref.watch(jobsStreamProvider);
     final jobs = jobsAsync.valueOrNull ?? const <JobFeedItem>[];
-    final myUploads = jobs.where((job) => job.createdBy == user.id).toList(growable: false);
+    final myUploads =
+        jobs.where((job) => job.createdBy == user.id).toList(growable: false);
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('Upload service request', style: Theme.of(context).textTheme.titleLarge),
+        Text('Upload service request',
+            style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 12),
         Form(
           key: _formKey,
@@ -100,13 +103,15 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
               TextFormField(
                 controller: _titleController,
                 decoration: const InputDecoration(labelText: 'Service title'),
-                validator: (value) =>
-                    value == null || value.trim().isEmpty ? 'Title is required' : null,
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Title is required'
+                    : null,
               ),
               const SizedBox(height: 10),
               TextFormField(
                 controller: _descriptionController,
-                decoration: const InputDecoration(labelText: 'Describe your need'),
+                decoration:
+                    const InputDecoration(labelText: 'Describe your need'),
                 minLines: 3,
                 maxLines: 4,
                 validator: (value) => value == null || value.trim().isEmpty
@@ -117,8 +122,9 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
               TextFormField(
                 controller: _locationController,
                 decoration: const InputDecoration(labelText: 'Location'),
-                validator: (value) =>
-                    value == null || value.trim().isEmpty ? 'Location is required' : null,
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Location is required'
+                    : null,
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -126,10 +132,12 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Budget ($kCurrencySymbol)',
                 ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
                   final budget = double.tryParse((value ?? '').trim());
-                  if (budget == null || budget <= 0) return 'Enter a valid budget';
+                  if (budget == null || budget <= 0)
+                    return 'Enter a valid budget';
                   return null;
                 },
               ),
@@ -145,10 +153,12 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
           ),
         ),
         const SizedBox(height: 20),
-        Text('My uploaded requests', style: Theme.of(context).textTheme.titleMedium),
+        Text('My uploaded requests',
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         if (jobsAsync.hasError)
-          const Text('Could not load uploads. Check Supabase credentials and try again.')
+          const Text(
+              'Could not load uploads. Check Supabase credentials and try again.')
         else if (myUploads.isEmpty)
           const Text('No uploads yet.')
         else

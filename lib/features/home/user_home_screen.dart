@@ -7,7 +7,7 @@ import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
 import '../chat/chat_list_screen.dart';
 import '../listing/listing_feed_screen.dart';
-import '../jobs/jobs_screen.dart';
+import '../jobs/presentation/jobs_screen.dart';
 import '../profile/profile_screen.dart';
 import 'upload_request_screen.dart';
 

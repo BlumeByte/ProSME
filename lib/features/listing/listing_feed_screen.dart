@@ -6,7 +6,8 @@ import '../../config/constants.dart';
 import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
 import '../../models/listing.dart';
-import '../jobs/jobs_repository.dart';
+import '../jobs/domain/jobs_repository.dart' hide jobsStreamProvider;
+import '../jobs/application/jobs_providers.dart';
 
 class ListingFeedScreen extends ConsumerStatefulWidget {
   const ListingFeedScreen({super.key, this.onOpenChatTab});
@@ -97,7 +98,8 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not start chat. Please try again.')),
+        const SnackBar(
+            content: Text('Could not start chat. Please try again.')),
       );
     }
   }
@@ -159,7 +161,8 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
           final category = listing.category.trim().isEmpty
               ? 'Other'
               : listing.category.trim();
-          categoryCounts.update(category, (value) => value + 1, ifAbsent: () => 1);
+          categoryCounts.update(category, (value) => value + 1,
+              ifAbsent: () => 1);
         }
         final categoryCards = _defaultCategories.map((item) {
           final count = categoryCounts[item.$1] ?? item.$3;
@@ -186,7 +189,9 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             continue;
           }
           professionalsById[listing.artisanId] = existing.copyWith(
-            location: existing.location.isNotEmpty ? existing.location : listing.location,
+            location: existing.location.isNotEmpty
+                ? existing.location
+                : listing.location,
             minPrice: listing.priceMin < existing.minPrice
                 ? listing.priceMin
                 : existing.minPrice,
@@ -232,7 +237,8 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               ),
             ),
             const SizedBox(height: 22),
-            Text('Popular Services', style: Theme.of(context).textTheme.titleLarge),
+            Text('Popular Services',
+                style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 12),
             GridView.builder(
               shrinkWrap: true,
@@ -253,7 +259,8 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   },
                   child: Card(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 10),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -317,9 +324,10 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                               children: [
                                 CircleAvatar(
                                   radius: 24,
-                                  backgroundImage: (pro.avatarUrl?.isNotEmpty ?? false)
-                                      ? NetworkImage(pro.avatarUrl!)
-                                      : null,
+                                  backgroundImage:
+                                      (pro.avatarUrl?.isNotEmpty ?? false)
+                                          ? NetworkImage(pro.avatarUrl!)
+                                          : null,
                                   child: (pro.avatarUrl?.isNotEmpty ?? false)
                                       ? null
                                       : Text(
@@ -332,23 +340,30 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
                                           Expanded(
                                             child: Text(
                                               pro.name,
-                                              style: Theme.of(context).textTheme.titleMedium,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium,
                                             ),
                                           ),
                                           if (pro.isVerified)
                                             Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                  horizontal: 8, vertical: 4),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4),
                                               decoration: BoxDecoration(
-                                                color: scheme.primary.withOpacity(0.12),
-                                                borderRadius: BorderRadius.circular(999),
+                                                color: scheme.primary
+                                                    .withOpacity(0.12),
+                                                borderRadius:
+                                                    BorderRadius.circular(999),
                                               ),
                                               child: Text(
                                                 'Verified',
@@ -364,12 +379,14 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                                       const SizedBox(height: 4),
                                       Text(
                                         pro.location,
-                                        style: TextStyle(color: scheme.onSurfaceVariant),
+                                        style: TextStyle(
+                                            color: scheme.onSurfaceVariant),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
                                         '${pro.listingCount} active service${pro.listingCount == 1 ? '' : 's'}',
-                                        style: TextStyle(color: scheme.onSurfaceVariant),
+                                        style: TextStyle(
+                                            color: scheme.onSurfaceVariant),
                                       ),
                                     ],
                                   ),
@@ -391,12 +408,14 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                               children: [
                                 Text(
                                   'From $kCurrencySymbol ${pro.minPrice.toStringAsFixed(2)}',
-                                  style: Theme.of(context).textTheme.titleMedium,
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
                                 ),
                                 const Spacer(),
                                 OutlinedButton.icon(
                                   onPressed: () => _startChat(pro),
-                                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                                  icon: const Icon(Icons.chat_bubble_outline,
+                                      size: 18),
                                   label: const Text('Chat'),
                                 ),
                                 const SizedBox(width: 8),
@@ -416,7 +435,8 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                     ),
                   ),
             const SizedBox(height: 20),
-            Text('Open Service Requests', style: Theme.of(context).textTheme.titleLarge),
+            Text('Open Service Requests',
+                style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             _OpenJobsPreview(userId: user?.id),
           ],
@@ -425,6 +445,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     );
   }
 }
+
 class _CategoryPreview {
   const _CategoryPreview(this.name, this.icon, this.count);
 
@@ -432,6 +453,7 @@ class _CategoryPreview {
   final IconData icon;
   final int count;
 }
+
 class _OpenJobsPreview extends ConsumerWidget {
   const _OpenJobsPreview({required this.userId});
 
@@ -456,16 +478,19 @@ class _OpenJobsPreview extends ConsumerWidget {
           children: jobs.take(3).map((job) {
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
-              child: ListTile(
-                title: Text(job.title),
-                subtitle: Text(
-                  '${job.location} - $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: userId == null
-                    ? () => context.go(RouteNames.auth)
-                    : () => context.go('${RouteNames.jobDetail}/${job.id}'),
-              ),
+              child: job == null
+                  ? const SizedBox.shrink()
+                  : ListTile(
+                      title: Text(job.title),
+                      subtitle: Text(
+                        '${job.location} - $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: userId == null
+                          ? () => context.go(RouteNames.auth)
+                          : () =>
+                              context.go('${RouteNames.jobDetail}/${job.id}'),
+                    ),
             );
           }).toList(growable: false),
         );

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ArtisanVerificationScreen extends ConsumerStatefulWidget {
   const ArtisanVerificationScreen({super.key});
@@ -75,9 +76,9 @@ class _ArtisanVerificationScreenState
     final extension = (file.extension ?? 'bin').toLowerCase();
     final path =
         '$userId/${DateTime.now().microsecondsSinceEpoch}_$label.$extension';
-    await client.storage
-        .from('artisan-verification')
-        .uploadBinary(path, file.bytes!, fileOptions: const FileOptions(upsert: true));
+    await client.storage.from('artisan-verification').uploadBinary(
+        path, file.bytes!,
+        fileOptions: const FileOptions(upsert: true));
     return client.storage.from('artisan-verification').getPublicUrl(path);
   }
 
@@ -125,14 +126,16 @@ class _ArtisanVerificationScreenState
       context.go(RouteNames.artisanHome);
     } catch (_) {
       if (!mounted) return;
-      _showMessage('Could not submit verification. Check Supabase storage setup.');
+      _showMessage(
+          'Could not submit verification. Check Supabase storage setup.');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -140,7 +143,8 @@ class _ArtisanVerificationScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text('Artisan verification'),
-        leading: BackButton(onPressed: () => context.go(RouteNames.artisanHome)),
+        leading:
+            BackButton(onPressed: () => context.go(RouteNames.artisanHome)),
       ),
       body: ListView(
         padding: const EdgeInsets.all(24),
@@ -219,7 +223,8 @@ class _FileTile extends StatelessWidget {
       ),
       leading: const Icon(Icons.attach_file),
       title: Text(required ? '$title *' : title),
-      subtitle: Text(file == null ? 'PDF, JPG, JPEG, PNG. Max 1 MB.' : file!.name),
+      subtitle:
+          Text(file == null ? 'PDF, JPG, JPEG, PNG. Max 1 MB.' : file!.name),
       trailing: const Icon(Icons.upload_file),
       onTap: onTap,
     );

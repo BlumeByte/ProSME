@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/widgets/app_scaffold.dart';
 import '../../routes/route_names.dart';
 import '../chat/chat_list_screen.dart';
-import '../jobs/jobs_screen.dart';
+import '../jobs/presentation/jobs_screen.dart';
 import '../listing/listing_manage_screen.dart';
 import '../profile/profile_screen.dart';
 

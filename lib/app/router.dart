@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:prosme/features/jobs/application/jobs_providers.dart';
 import '../config/constants.dart';
 import '../features/admin/admin_dashboard_screen.dart';
 import '../features/auth/artisan_verification_screen.dart';
@@ -11,7 +12,7 @@ import '../features/chat/chat_thread_screen.dart';
 import '../features/home/artisan_home_screen.dart';
 import '../features/home/user_home_screen.dart';
 import '../features/invoice/invoice_screen.dart';
-import '../features/jobs/job_detail_screen.dart';
+import '../features/jobs/presentation/job_detail_screen.dart';
 import '../features/listing/listing_detail_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/saved/saved_screen.dart';
@@ -36,15 +37,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final fullPath = state.fullPath ?? state.matchedLocation;
       final isOnboarding = fullPath == RouteNames.onboarding;
 
-      if (!isLoggedIn &&
-          !AppLaunchService.hasSeenWelcome &&
-          !isOnboarding) {
+      if (!isLoggedIn && !AppLaunchService.hasSeenWelcome && !isOnboarding) {
         return RouteNames.onboarding;
       }
 
-      if (!isLoggedIn &&
-          AppLaunchService.hasSeenWelcome &&
-          isOnboarding) {
+      if (!isLoggedIn && AppLaunchService.hasSeenWelcome && isOnboarding) {
         return RouteNames.home;
       }
 
@@ -104,14 +101,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.invoice,
         builder: (context, state) {
-          final listing = state.extra is Listing ? state.extra as Listing : null;
+          final listing =
+              state.extra is Listing ? state.extra as Listing : null;
           return InvoiceScreen(listing: listing);
         },
       ),
       GoRoute(
         path: '${RouteNames.jobDetail}/:id',
-        builder: (context, state) =>
-            JobDetailScreen(jobId: state.pathParameters['id']!),
+        builder: (context, state) {
+          final jobId = state.pathParameters['id']!;
+          final job = ref.watch(jobByIdProvider(jobId));
+          return JobDetailScreen(job: job!);
+        },
       ),
       GoRoute(
         path: RouteNames.aiSupport,
