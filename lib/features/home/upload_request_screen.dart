@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:prosme/features/jobs/application/jobs_providers.dart';
+import 'package:prosme/features/marketplace/jobs/applications/jobs_providers.dart';
 
 import '../../config/constants.dart';
 import '../../routes/route_names.dart';
-import '../jobs/domain/jobs_repository.dart' hide jobsRepositoryProvider, jobsStreamProvider;
+import '../marketplace/jobs/domain/jobs_repository.dart' hide jobsRepositoryProvider, jobsStreamProvider;
 import '../../services/service_providers.dart';
 
 class UploadRequestScreen extends ConsumerStatefulWidget {

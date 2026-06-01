@@ -1,6 +1,5 @@
-// TODO Implement this library.
 class JobFeedItem {
-  const JobFeedItem({
+  JobFeedItem({
     required this.id,
     required this.title,
     required this.description,
@@ -8,6 +7,7 @@ class JobFeedItem {
     required this.budget,
     required this.createdBy,
     required this.createdAt,
+    required this.images,
   });
 
   final String id;
@@ -17,4 +17,5 @@ class JobFeedItem {
   final double budget;
   final String createdBy;
   final DateTime createdAt;
+  final List<String> images;
 }

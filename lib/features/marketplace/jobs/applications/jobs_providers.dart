@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../services/service_providers.dart';
+import '../../../../services/service_providers.dart';
 import '../data/supabase_jobs_repository.dart' as data;
 import '../data/mock_jobs_repository.dart';
 import '../domain/jobs_repository.dart';

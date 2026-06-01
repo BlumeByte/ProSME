@@ -6,8 +6,8 @@ import '../../config/constants.dart';
 import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
 import '../../models/listing.dart';
-import '../jobs/domain/jobs_repository.dart' hide jobsStreamProvider;
-import '../jobs/application/jobs_providers.dart';
+import '../marketplace/jobs/domain/jobs_repository.dart' hide jobsStreamProvider;
+import '../marketplace/jobs/applications/jobs_providers.dart';
 
 class ListingFeedScreen extends ConsumerStatefulWidget {
   const ListingFeedScreen({super.key, this.onOpenChatTab});
