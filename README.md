@@ -67,6 +67,10 @@ flutter pub get
      --dart-define=SUPABASE_ANON_KEY=<your-anon-key> \
      --dart-define=GOOGLE_OAUTH_REDIRECT_URL=<your.android.applicationId>://login-callback
    ```
+   Or create a local ignored `supabase.local.json` from `supabase.local.example.json` and run:
+   ```bash
+   flutter run --dart-define-from-file=supabase.local.json
+   ```
 6. Verify realtime feed:
    - Open one signed-in client and keep listings/chat/jobs screens open.
    - Insert/update rows in `listings`, `messages`, or `jobs`.
@@ -110,6 +114,11 @@ flutter build appbundle --release \
 ```
 
 For a signed upload bundle, create `android/key.properties` with `storeFile`, `storePassword`, `keyAlias`, and `keyPassword`. Without that file, local release builds fall back to debug signing and are not Play Store upload-ready.
+
+GitHub repository secrets are only available inside GitHub Actions. Add these secret names for the included Android Release workflow:
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `GOOGLE_OAUTH_REDIRECT_URL`
 
 ## Notes
 - All images are loaded using `Image.network` and online URLs.

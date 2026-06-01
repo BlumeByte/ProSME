@@ -56,6 +56,8 @@ unlinked_spec.ds
 **/android/**/GeneratedPluginRegistrant.java
 **/android/key.properties
 *.jks
+supabase.local.json
+*.env
 
 # iOS/XCode related
 **/ios/**/*.mode1v3
