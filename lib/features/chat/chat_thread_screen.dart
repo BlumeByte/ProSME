@@ -55,6 +55,23 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       appBar: AppBar(title: const Text('Chat')),
       body: Column(
         children: [
+          Material(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: const Padding(
+              padding: EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Confirm artisan verification status before sharing payments or personal details.',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           Expanded(
             child: StreamBuilder(
               stream: chatService.watchMessages(widget.threadId),
@@ -101,11 +118,23 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             child: Row(
               children: [
                 IconButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Location sharing will be added after map permissions are configured.'),
+                      ),
+                    );
+                  },
                   icon: const Icon(Icons.location_on),
                 ),
                 IconButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Open the listing and request invoice from there.'),
+                      ),
+                    );
+                  },
                   icon: const Icon(Icons.receipt_long),
                 ),
                 Expanded(

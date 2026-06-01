@@ -60,25 +60,30 @@ class AdminService {
 
   Future<void> submitArtisanVerification({
     required String userId,
-    required String nationalIdUrl,
+    required String nationalIdFrontUrl,
+    required String nationalIdBackUrl,
+    List<String> businessCertificateUrls = const [],
   }) async {
     final client = _supabase;
     if (client == null) return;
     await client.from('profiles').update({
       'verification_status': VerificationStatus.pending.name,
-      'national_id_url': nationalIdUrl,
+      'national_id_url': nationalIdFrontUrl,
+      'national_id_front_url': nationalIdFrontUrl,
+      'national_id_back_url': nationalIdBackUrl,
+      'business_certificate_urls': businessCertificateUrls,
       'verification_submitted_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', userId);
     await client.from('admin_notifications').insert({
       'type': 'artisan_verification',
       'title': 'New artisan verification',
-      'body': 'An artisan uploaded an ID for review.',
+      'body': 'An artisan uploaded national ID documents for review.',
       'actor_id': userId,
     });
     await client.from('email_outbox').insert({
       'to_email': 'blumebyte@gmail.com',
       'subject': 'New ProSME artisan verification',
-      'body': 'An artisan uploaded an ID for verification. Review it in the admin dashboard.',
+      'body': 'An artisan uploaded front and back ID documents for verification. Review them in the admin dashboard.',
       'related_user_id': userId,
     });
   }

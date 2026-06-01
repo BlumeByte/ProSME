@@ -22,6 +22,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   final _locationController = TextEditingController();
   String _serviceQuery = '';
   String _locationQuery = '';
+  String? _selectedCategory;
   static const _defaultCategories = [
     ('Plumbing', Icons.plumbing, 0),
     ('Electrical', Icons.electrical_services, 0),
@@ -42,7 +43,75 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     setState(() {
       _serviceQuery = _serviceController.text.trim().toLowerCase();
       _locationQuery = _locationController.text.trim().toLowerCase();
+      _selectedCategory = null;
     });
+  }
+
+  void _applyCategory(String category) {
+    setState(() {
+      _selectedCategory = category;
+      _serviceController.text = category;
+      _serviceQuery = category.toLowerCase();
+    });
+  }
+
+  Future<bool> _confirmUnverified(_ProfessionalPreview pro) async {
+    if (pro.isVerified) return true;
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Unverified artisan'),
+            content: Text(
+              '${pro.name} has not been verified by ProSME admin yet. Continue only if you are comfortable engaging this artisan.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _startChat(_ProfessionalPreview pro) async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) {
+      context.go(RouteNames.auth);
+      return;
+    }
+    if (!await _confirmUnverified(pro)) return;
+    try {
+      final thread = await ref.read(chatServiceProvider).createOrOpenThread(
+            userId: user.id,
+            artisanId: pro.artisanId,
+          );
+      if (mounted) {
+        context.go('${RouteNames.chatThread}/${thread.id}');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not start chat. Please try again.')),
+      );
+    }
+  }
+
+  Future<void> _bookProfessional(_ProfessionalPreview pro) async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) {
+      context.go(RouteNames.auth);
+      return;
+    }
+    if (!await _confirmUnverified(pro)) return;
+    if (mounted) {
+      context.go('${RouteNames.listingDetail}/${pro.listingId}');
+    }
   }
 
   @override
@@ -76,9 +145,13 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
           final locationText = listing.location.toLowerCase();
           final serviceMatches =
               _serviceQuery.isEmpty || serviceText.contains(_serviceQuery);
+          final categoryMatches = _selectedCategory == null ||
+              listing.category
+                  .toLowerCase()
+                  .contains(_selectedCategory!.toLowerCase());
           final locationMatches =
               _locationQuery.isEmpty || locationText.contains(_locationQuery);
-          return serviceMatches && locationMatches;
+          return serviceMatches && categoryMatches && locationMatches;
         }).toList(growable: false);
 
         final categoryCounts = <String, int>{};
@@ -131,6 +204,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
           children: [
             TextField(
               controller: _serviceController,
+              onSubmitted: (_) => _applySearch(),
               decoration: const InputDecoration(
                 hintText: 'What service do you need?',
                 prefixIcon: Icon(Icons.search),
@@ -139,6 +213,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             const SizedBox(height: 10),
             TextField(
               controller: _locationController,
+              onSubmitted: (_) => _applySearch(),
               decoration: const InputDecoration(
                 hintText: 'Enter your location',
                 prefixIcon: Icon(Icons.location_on_outlined),
@@ -174,8 +249,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                 return InkWell(
                   borderRadius: BorderRadius.circular(8),
                   onTap: () {
-                    _serviceController.text = item.name;
-                    _applySearch();
+                    _applyCategory(item.name);
                   },
                   child: Card(
                     child: Padding(
@@ -216,7 +290,11 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   onPressed: () {
                     _serviceController.clear();
                     _locationController.clear();
-                    _applySearch();
+                    setState(() {
+                      _serviceQuery = '';
+                      _locationQuery = '';
+                      _selectedCategory = null;
+                    });
                   },
                   child: const Text('View All'),
                 ),
@@ -317,13 +395,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                                 ),
                                 const Spacer(),
                                 OutlinedButton.icon(
-                                  onPressed: () {
-                                    if (user == null) {
-                                      context.go(RouteNames.auth);
-                                      return;
-                                    }
-                                    widget.onOpenChatTab?.call();
-                                  },
+                                  onPressed: () => _startChat(pro),
                                   icon: const Icon(Icons.chat_bubble_outline, size: 18),
                                   label: const Text('Chat'),
                                 ),
@@ -333,13 +405,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                                     backgroundColor: scheme.primary,
                                     foregroundColor: scheme.onPrimary,
                                   ),
-                                  onPressed: () {
-                                    if (user == null) {
-                                      context.go(RouteNames.auth);
-                                      return;
-                                    }
-                                    context.go('${RouteNames.listingDetail}/${pro.listingId}');
-                                  },
+                                  onPressed: () => _bookProfessional(pro),
                                   child: const Text('Book Now'),
                                 ),
                               ],

@@ -51,9 +51,7 @@ class ListingManageScreen extends ConsumerWidget {
                   ),
                 ),
                 FilledButton.icon(
-                  onPressed: user.verificationStatus == VerificationStatus.verified
-                      ? () => _openCreateListingSheet(context, ref)
-                      : () => _showVerificationRequired(context),
+                  onPressed: () => _openCreateListingSheet(context, ref),
                   icon: const Icon(Icons.add),
                   label: const Text('Create'),
                 ),
@@ -87,24 +85,6 @@ class ListingManageScreen extends ConsumerWidget {
       },
     );
   }
-}
-
-void _showVerificationRequired(BuildContext context) {
-  showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Verification required'),
-      content: const Text(
-        'Only admin-verified artisans can publish services. Submit your ID for review first.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('OK'),
-        ),
-      ],
-    ),
-  );
 }
 
 Future<void> _openCreateListingSheet(BuildContext context, WidgetRef ref) async {
@@ -224,7 +204,8 @@ Future<void> _openCreateListingSheet(BuildContext context, WidgetRef ref) async 
                         priceMax: maxPrice,
                         images: imageUrl.isEmpty ? const [] : [imageUrl],
                         location: locationController.text.trim(),
-                        verifiedOnly: true,
+                        verifiedOnly:
+                            user.verificationStatus == VerificationStatus.verified,
                         createdAt: DateTime.now(),
                       );
 

@@ -16,22 +16,17 @@ class JobsScreen extends ConsumerWidget {
     if (user == null) {
       return const Center(child: Text('Please sign in to view jobs.'));
     }
-    final canCreateJob = user.role == UserRole.customer ||
-        (user.role == UserRole.artisan &&
-            user.verificationStatus == VerificationStatus.verified);
-    final isBlockedArtisan = user.role == UserRole.artisan &&
-        user.verificationStatus != VerificationStatus.verified;
+    final canCreateJob =
+        user.role == UserRole.customer || user.role == UserRole.artisan;
 
     final jobsAsync = ref.watch(jobsStreamProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Bookings'),
         actions: [
-          if (canCreateJob || isBlockedArtisan)
+          if (canCreateJob)
             IconButton(
-              onPressed: canCreateJob
-                  ? () => _openCreateJobSheet(context, ref)
-                  : () => _showVerificationRequired(context),
+              onPressed: () => _openCreateJobSheet(context, ref),
               icon: const Icon(Icons.add),
               tooltip: 'Create job',
             ),
@@ -75,35 +70,15 @@ class JobsScreen extends ConsumerWidget {
           );
         },
       ),
-      floatingActionButton: canCreateJob || isBlockedArtisan
+      floatingActionButton: canCreateJob
           ? FloatingActionButton.extended(
-              onPressed: canCreateJob
-                  ? () => _openCreateJobSheet(context, ref)
-                  : () => _showVerificationRequired(context),
+              onPressed: () => _openCreateJobSheet(context, ref),
               icon: const Icon(Icons.add),
               label: const Text('Create'),
             )
           : null,
     );
   }
-}
-
-void _showVerificationRequired(BuildContext context) {
-  showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Verification required'),
-      content: const Text(
-        'Only admin-verified artisans can publish jobs. Submit your ID and wait for admin approval.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('OK'),
-        ),
-      ],
-    ),
-  );
 }
 
 Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {

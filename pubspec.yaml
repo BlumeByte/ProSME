@@ -25,6 +25,7 @@ dependencies:
   supabase_flutter: ^2.9.1
   uuid: ^4.4.0
   shared_preferences: ^2.3.2
+  file_picker: ^8.1.7
 
 
 dev_dependencies:

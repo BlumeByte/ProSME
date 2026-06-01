@@ -58,8 +58,12 @@ class ChatListScreen extends ConsumerWidget {
             final thread = threads[index];
             return ListTile(
               leading: const CircleAvatar(child: Icon(Icons.person)),
-              title: Text('Thread ${thread.id}'),
-              subtitle: Text(thread.lastMessage),
+              title: const Text('Conversation'),
+              subtitle: Text(
+                thread.lastMessage.isEmpty
+                    ? 'No messages yet'
+                    : thread.lastMessage,
+              ),
               onTap: () =>
                   context.go('${RouteNames.chatThread}/${thread.id}'),
             );

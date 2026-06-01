@@ -413,61 +413,107 @@ Future<void> _showInfoSheet(
 }
 
 Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
-  final isDarkMode = ref.read(themeModeControllerProvider) == ThemeMode.dark;
+  final prefs = await SharedPreferences.getInstance();
+  var isDarkMode = ref.read(themeModeControllerProvider) == ThemeMode.dark;
+  var emailNotifications =
+      prefs.getBool('settings_email_notifications') ?? true;
+  var smsNotifications = prefs.getBool('settings_sms_notifications') ?? true;
+  var language = prefs.getString('settings_language') ?? 'English';
+  const languages = ['English', 'Twi', 'Ewe', 'Ga', 'French', 'Spanish'];
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
-    builder: (context) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Settings',
-                style: Theme.of(context).textTheme.titleLarge,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setSheetState) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Settings',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Close',
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 8),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              secondary: const Icon(Icons.dark_mode_outlined),
-              title: const Text('Dark mode'),
-              value: isDarkMode,
-              onChanged: (value) {
-                ref.read(themeModeControllerProvider.notifier).setDarkMode(value);
-                Navigator.of(context).pop();
-              },
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.language_outlined),
-              title: const Text('Language'),
-              subtitle: const Text('English'),
-              onTap: () {
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('English is active.')),
-                );
-              },
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.security_outlined),
-              title: const Text('Account security'),
-              subtitle: const Text('Email and phone verification are managed by Supabase.'),
-              onTap: () {
-                Navigator.of(context).pop();
-                _showInfoSheet(
-                  context,
-                  'Account security',
-                  'Use verified email and phone sign-in for account security. Google sign-in uses Supabase OAuth.',
-                );
-              },
-            ),
-          ],
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.dark_mode_outlined),
+                title: const Text('Dark mode'),
+                value: isDarkMode,
+                onChanged: (value) {
+                  setSheetState(() => isDarkMode = value);
+                  ref.read(themeModeControllerProvider.notifier).setDarkMode(value);
+                },
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.email_outlined),
+                title: const Text('Email notifications'),
+                value: emailNotifications,
+                onChanged: (value) async {
+                  setSheetState(() => emailNotifications = value);
+                  await prefs.setBool('settings_email_notifications', value);
+                },
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.sms_outlined),
+                title: const Text('SMS notifications'),
+                value: smsNotifications,
+                onChanged: (value) async {
+                  setSheetState(() => smsNotifications = value);
+                  await prefs.setBool('settings_sms_notifications', value);
+                },
+              ),
+              DropdownButtonFormField<String>(
+                value: language,
+                decoration: const InputDecoration(
+                  labelText: 'Language',
+                  prefixIcon: Icon(Icons.language_outlined),
+                ),
+                items: languages
+                    .map(
+                      (item) => DropdownMenuItem(
+                        value: item,
+                        child: Text(item),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) async {
+                  if (value == null) return;
+                  setSheetState(() => language = value);
+                  await prefs.setString('settings_language', value);
+                },
+              ),
+              const SizedBox(height: 10),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.security_outlined),
+                title: const Text('Account security'),
+                subtitle: const Text(
+                  'Email, SMS, and Google verification are handled by Supabase.',
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showInfoSheet(
+                    context,
+                    'Account security',
+                    'Use verified email and phone sign-in for account security. Google sign-in uses Supabase OAuth.',
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     ),
