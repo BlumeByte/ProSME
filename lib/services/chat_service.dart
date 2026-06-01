@@ -21,26 +21,24 @@ class MockChatService implements ChatService {
   final Map<String, Set<String>> _threadWatchers = {};
 
   @override
-  Stream<List<ChatThread>> watchThreads(String userId) {
+  Stream<List<ChatThread>> watchThreads(String userId) async* {
     final controller = _threadControllers.putIfAbsent(
       userId,
       () => StreamController<List<ChatThread>>.broadcast(),
     );
-    controller.add(List<ChatThread>.from(_threadsByUser[userId] ?? const []));
-    return controller.stream;
+    yield List<ChatThread>.from(_threadsByUser[userId] ?? const []);
+    yield* controller.stream;
   }
 
   @override
-  Stream<List<ChatMessage>> watchMessages(String threadId) {
+  Stream<List<ChatMessage>> watchMessages(String threadId) async* {
     final controller = _messageControllers.putIfAbsent(
       threadId,
       () => StreamController<List<ChatMessage>>.broadcast(),
     );
     _threadWatchers.putIfAbsent(threadId, () => <String>{});
-    controller.add(
-      List<ChatMessage>.from(_messagesByThread[threadId] ?? const []),
-    );
-    return controller.stream;
+    yield List<ChatMessage>.from(_messagesByThread[threadId] ?? const []);
+    yield* controller.stream;
   }
 
   @override
@@ -117,7 +115,9 @@ class SupabaseChatService implements ChatService {
           (rows) => rows
               .where(
                 (row) =>
-                    (row['user_id'] ?? row['userId'])?.toString() == userId,
+                    (row['user_id'] ?? row['userId'])?.toString() == userId ||
+                    (row['artisan_id'] ?? row['artisanId'])?.toString() ==
+                        userId,
               )
               .map((row) => ChatThread.fromJson(row))
               .toList(),
@@ -149,7 +149,7 @@ class SupabaseChatService implements ChatService {
         .eq('user_id', userId)
         .eq('artisan_id', artisanId)
         .limit(1);
-    if (existingRows is List && existingRows.isNotEmpty) {
+    if (existingRows.isNotEmpty) {
       return ChatThread.fromJson(
         Map<String, dynamic>.from(existingRows.first as Map),
       );

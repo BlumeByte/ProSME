@@ -25,9 +25,9 @@ class ChatListScreen extends ConsumerWidget {
       stream: chatService.watchThreads(user.id),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Center(
+          return const Center(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16),
               child: Text(
                 'Could not load chats. Check your Supabase setup and try again.',
                 textAlign: TextAlign.center,

@@ -15,12 +15,11 @@ class MockListingService implements ListingService {
       StreamController<List<Listing>>.broadcast();
   final List<Listing> _listings = [];
 
-  MockListingService() {
-    _controller.add(const []);
-  }
-
   @override
-  Stream<List<Listing>> watchListings() => _controller.stream;
+  Stream<List<Listing>> watchListings() async* {
+    yield List<Listing>.from(_listings);
+    yield* _controller.stream;
+  }
 
   @override
   Future<List<Listing>> fetchListings() async => List<Listing>.from(_listings);
@@ -53,7 +52,7 @@ class SupabaseListingService implements ListingService {
       try {
         final List<dynamic> profiles = await _supabase
             .from('profiles')
-            .select('id,full_name,avatar_url')
+            .select('id,full_name,avatar_url,verification_status')
             .inFilter('id', artisanIds);
 
         artisanNames = {
@@ -66,6 +65,18 @@ class SupabaseListingService implements ListingService {
             (profile['id'] ?? '').toString():
                 ((profile['avatar_url'] ?? '') as String),
         };
+        final artisanVerified = {
+          for (final profile in profiles)
+            (profile['id'] ?? '').toString():
+                (profile['verification_status'] ?? '').toString() ==
+                    VerificationStatus.verified.name,
+        };
+        for (final row in rows) {
+          final artisanId = (row['artisan_id'] ?? row['artisanId'])?.toString();
+          if (artisanId != null && artisanVerified.containsKey(artisanId)) {
+            row['verified_only'] = artisanVerified[artisanId] ?? false;
+          }
+        }
       } catch (error, stackTrace) {
         debugPrint('Failed to load artisan profiles for listings: $error');
         debugPrintStack(stackTrace: stackTrace);

@@ -8,6 +8,7 @@ class AppUser {
     required this.phone,
     required this.email,
     required this.photoUrl,
+    this.verificationStatus = VerificationStatus.pending,
     required this.createdAt,
   });
 
@@ -17,6 +18,7 @@ class AppUser {
   final String phone;
   final String email;
   final String photoUrl;
+  final VerificationStatus verificationStatus;
   final DateTime createdAt;
 
   AppUser copyWith({
@@ -25,6 +27,7 @@ class AppUser {
     String? phone,
     String? email,
     String? photoUrl,
+    VerificationStatus? verificationStatus,
   }) {
     return AppUser(
       id: id,
@@ -33,6 +36,7 @@ class AppUser {
       phone: phone ?? this.phone,
       email: email ?? this.email,
       photoUrl: photoUrl ?? this.photoUrl,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
       createdAt: createdAt,
     );
   }
@@ -48,6 +52,10 @@ class AppUser {
       phone: json['phone'] as String,
       email: json['email'] as String,
       photoUrl: json['photoUrl'] as String,
+      verificationStatus: VerificationStatus.values.firstWhere(
+        (status) => status.name == json['verificationStatus'],
+        orElse: () => VerificationStatus.pending,
+      ),
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
   }
@@ -60,6 +68,7 @@ class AppUser {
       'phone': phone,
       'email': email,
       'photoUrl': photoUrl,
+      'verificationStatus': verificationStatus.name,
       'createdAt': createdAt.toIso8601String(),
     };
   }

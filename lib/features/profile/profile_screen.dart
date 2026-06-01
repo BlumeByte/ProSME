@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../config/constants.dart';
 import '../../routes/route_names.dart';
 import '../../services/auth_service.dart';
 import '../../services/service_providers.dart';
@@ -95,10 +96,39 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           onTap: () => _showPaymentMethodDialog(context),
         ),
         const Divider(),
-        const _SettingsTile(icon: Icons.account_balance_wallet_outlined, title: 'ProSME Balance'),
+        _SettingsTile(
+          icon: Icons.account_balance_wallet_outlined,
+          title: 'ProSME Balance',
+          subtitle: 'GHS 0.00',
+          onTap: () => _showInfoSheet(
+            context,
+            'ProSME Balance',
+            'Your wallet balance is GHS 0.00. Payments and refunds will appear here.',
+          ),
+        ),
         const SizedBox(height: 26),
         const _SectionTitle(title: 'Profile'),
         const SizedBox(height: 8),
+        if (user.role == UserRole.artisan) ...[
+          _SettingsTile(
+            icon: user.verificationStatus == VerificationStatus.verified
+                ? Icons.verified
+                : Icons.pending_actions_outlined,
+            title: user.verificationStatus == VerificationStatus.verified
+                ? 'Verified artisan'
+                : 'Verification ${user.verificationStatus.name}',
+            subtitle: user.verificationStatus == VerificationStatus.verified
+                ? 'Your profile shows a public verified checkmark.'
+                : 'Submit or update your ID for admin review.',
+            trailingText: user.verificationStatus == VerificationStatus.verified
+                ? null
+                : 'Upload',
+            onTap: user.verificationStatus == VerificationStatus.verified
+                ? null
+                : () => context.go(RouteNames.artisanVerification),
+          ),
+          const Divider(),
+        ],
         _SettingsTile(
           icon: Icons.person_outline,
           title: user.name,
@@ -131,7 +161,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         _SettingsTile(
           icon: Icons.settings_outlined,
           title: 'Settings',
-          onTap: () => _showInfoSheet(context, 'Settings', 'Settings are managed in this tab.'),
+          onTap: () => _showSettingsSheet(context, ref),
         ),
         const Divider(),
         _SettingsTile(

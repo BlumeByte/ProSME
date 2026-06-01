@@ -32,10 +32,10 @@ class JobsScreen extends ConsumerWidget {
       ),
       body: jobsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(
+        error: (error, _) => const Center(
           child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: const Text(
+            padding: EdgeInsets.all(16),
+            child: Text(
               'Could not load jobs. Check Supabase credentials and try again.',
               textAlign: TextAlign.center,
             ),

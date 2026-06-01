@@ -88,15 +88,14 @@ class SupabaseJobsRepository implements JobsRepository {
 }
 
 class MockJobsRepository implements JobsRepository {
-  MockJobsRepository() {
-    _controller.add(const []);
-  }
-
   final _controller = StreamController<List<JobFeedItem>>.broadcast();
   final List<JobFeedItem> _jobs = [];
 
   @override
-  Stream<List<JobFeedItem>> watchJobs() => _controller.stream;
+  Stream<List<JobFeedItem>> watchJobs() async* {
+    yield List<JobFeedItem>.unmodifiable(_jobs);
+    yield* _controller.stream;
+  }
 
   @override
   Future<JobFeedItem> createJob({

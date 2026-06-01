@@ -64,6 +64,7 @@ class MockAuthService implements AuthService {
           phone: '',
           email: normalizedEmail,
           photoUrl: '',
+          verificationStatus: VerificationStatus.pending,
           createdAt: DateTime.now(),
         );
     _accountsByEmail[normalizedEmail] = _currentUser!;
@@ -98,6 +99,9 @@ class MockAuthService implements AuthService {
       phone: '',
       email: email.trim(),
       photoUrl: '',
+      verificationStatus: role == UserRole.artisan
+          ? VerificationStatus.pending
+          : VerificationStatus.verified,
       createdAt: DateTime.now(),
     );
     _accountsByEmail[normalizedEmail] = _currentUser!;
@@ -117,6 +121,7 @@ class MockAuthService implements AuthService {
       phone: '',
       email: email,
       photoUrl: '',
+      verificationStatus: VerificationStatus.verified,
       createdAt: DateTime.now(),
     );
     _accountsByEmail[email] = _currentUser!;
@@ -134,6 +139,7 @@ class MockAuthService implements AuthService {
       phone: phone.trim(),
       email: 'phone_user_$now@example.com',
       photoUrl: '',
+      verificationStatus: VerificationStatus.verified,
       createdAt: DateTime.now(),
     );
     _accountsByEmail[_currentUser!.email.toLowerCase()] = _currentUser!;
@@ -250,7 +256,7 @@ class SupabaseAuthService implements AuthService {
       final response = await _supabase
           .from('profiles')
           .select(
-            'id,username,full_name,phone,email,avatar_url,role,created_at',
+            'id,username,full_name,phone,email,avatar_url,role,verification_status,created_at',
           )
           .eq('id', userId)
           .maybeSingle();
@@ -264,6 +270,7 @@ class SupabaseAuthService implements AuthService {
 
   Future<void> _upsertProfile(User user) async {
     final metadata = user.userMetadata ?? const <String, dynamic>{};
+    final existingProfile = await _fetchProfile(user.id);
     final fullName =
         (metadata['full_name'] ?? metadata['name'] ?? _defaultDisplayName)
             .toString();
@@ -278,6 +285,11 @@ class SupabaseAuthService implements AuthService {
       'phone': user.phone ?? '',
       'avatar_url': avatarUrl,
       'role': role,
+      'verification_status': (existingProfile?['verification_status'] ??
+              (role == UserRole.artisan.name
+                  ? VerificationStatus.pending.name
+                  : VerificationStatus.verified.name))
+          .toString(),
     };
     if (username != null && username.isNotEmpty) {
       payload['username'] = username;
@@ -326,6 +338,19 @@ class SupabaseAuthService implements AuthService {
       email: (source['email'] ?? user.email ?? '').toString(),
       photoUrl:
           (source['avatar_url'] ?? metadata['avatar_url'] ?? '').toString(),
+      verificationStatus: VerificationStatus.values.firstWhere(
+        (status) =>
+            status.name ==
+            (source['verification_status'] ??
+                    source['verificationStatus'] ??
+                    metadata['verification_status'] ??
+                    metadata['verificationStatus'] ??
+                    (roleName == UserRole.artisan.name
+                        ? VerificationStatus.pending.name
+                        : VerificationStatus.verified.name))
+                .toString(),
+        orElse: () => VerificationStatus.pending,
+      ),
       createdAt: DateTime.tryParse(
             (source['created_at'] ?? user.createdAt).toString(),
           ) ??
@@ -453,10 +478,15 @@ class SupabaseAuthService implements AuthService {
 
   @override
   Future<AppUser> signInWithGoogle() async {
-    await _supabase.auth.signInWithOAuth(
+    final launched = await _supabase.auth.signInWithOAuth(
       OAuthProvider.google,
       redirectTo: kIsWeb ? null : kGoogleOAuthRedirectUrl,
     );
+    if (!launched) {
+      throw StateError(
+        'Google sign-in could not open. Confirm Google provider and redirect URL are configured in Supabase.',
+      );
+    }
     return _waitForActiveUser();
   }
 
@@ -488,6 +518,9 @@ class SupabaseAuthService implements AuthService {
           'phone': user.phone ?? '',
           'avatar_url': (user.userMetadata?['avatar_url'] ?? '').toString(),
           'role': role.name,
+          'verification_status': role == UserRole.artisan
+              ? VerificationStatus.pending.name
+              : VerificationStatus.verified.name,
         };
         final username = user.userMetadata?['username']?.toString().trim();
         if (username != null && username.isNotEmpty) {

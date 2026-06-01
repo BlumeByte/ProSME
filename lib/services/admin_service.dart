@@ -9,6 +9,17 @@ class AdminService {
 
   final SupabaseClient? _supabase;
 
+  Stream<List<ArtisanProfile>> watchVerificationQueue() async* {
+    yield await fetchVerificationQueue();
+    final client = _supabase;
+    if (client == null) return;
+    yield* client
+        .from('profiles')
+        .stream(primaryKey: ['id'])
+        .eq('role', 'artisan')
+        .asyncMap((_) => fetchVerificationQueue());
+  }
+
   Future<List<ArtisanProfile>> fetchVerificationQueue() async {
     if (_supabase == null) return const [];
     try {
@@ -45,6 +56,57 @@ class AdminService {
     } catch (_) {
       return const [];
     }
+  }
+
+  Future<void> submitArtisanVerification({
+    required String userId,
+    required String nationalIdUrl,
+  }) async {
+    final client = _supabase;
+    if (client == null) return;
+    await client.from('profiles').update({
+      'verification_status': VerificationStatus.pending.name,
+      'national_id_url': nationalIdUrl,
+      'verification_submitted_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', userId);
+    await client.from('admin_notifications').insert({
+      'type': 'artisan_verification',
+      'title': 'New artisan verification',
+      'body': 'An artisan uploaded an ID for review.',
+      'actor_id': userId,
+    });
+    await client.from('email_outbox').insert({
+      'to_email': 'blumebyte@gmail.com',
+      'subject': 'New ProSME artisan verification',
+      'body': 'An artisan uploaded an ID for verification. Review it in the admin dashboard.',
+      'related_user_id': userId,
+    });
+  }
+
+  Future<void> reviewArtisan({
+    required String userId,
+    required bool approved,
+    String notes = '',
+  }) async {
+    final client = _supabase;
+    if (client == null) return;
+    final status =
+        approved ? VerificationStatus.verified : VerificationStatus.rejected;
+    await client.from('profiles').update({
+      'verification_status': status.name,
+      'verification_notes': notes,
+      'verification_reviewed_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', userId);
+    await client.from('email_outbox').insert({
+      'to_email': null,
+      'subject': approved
+          ? 'Your ProSME artisan account is verified'
+          : 'Your ProSME artisan verification needs attention',
+      'body': approved
+          ? 'Your artisan account has been verified and can now publish services.'
+          : 'Your artisan verification was rejected. Notes: $notes',
+      'related_user_id': userId,
+    });
   }
 
   Future<List<DiscountOffer>> fetchDiscounts() async {
