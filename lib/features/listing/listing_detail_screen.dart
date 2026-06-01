@@ -67,7 +67,7 @@ class ListingDetailScreen extends ConsumerWidget {
             children: [
               SizedBox(
                 height: 220,
-                child: listing.images.isEmpty
+                child: listingData.images.isEmpty
                     ? Container(
                         decoration: BoxDecoration(
                           color: Colors.grey.shade200,
@@ -77,7 +77,7 @@ class ListingDetailScreen extends ConsumerWidget {
                         child: const Icon(Icons.image_outlined, size: 48),
                       )
                     : PageView(
-                        children: listing.images
+                        children: listingData.images
                             .map((url) => ClipRRect(
                                   borderRadius: BorderRadius.circular(16),
                                   child: Image.network(
@@ -95,13 +95,13 @@ class ListingDetailScreen extends ConsumerWidget {
                       ),
               ),
               const SizedBox(height: 16),
-              Text(listing.title,
+              Text(listingData.title,
                   style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),
-              Text(listing.description),
+              Text(listingData.description),
               const SizedBox(height: 16),
               Text(
-                '${formatCurrency(listing.priceMin)} - ${formatCurrency(listing.priceMax)}',
+                '${formatCurrency(listingData.priceMin)} - ${formatCurrency(listingData.priceMax)}',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 16),
@@ -109,7 +109,7 @@ class ListingDetailScreen extends ConsumerWidget {
                 children: [
                   const Icon(Icons.location_on),
                   const SizedBox(width: 8),
-                  Text(listing.location),
+                  Text(listingData.location),
                 ],
               ),
               const SizedBox(height: 16),
@@ -141,7 +141,7 @@ class ListingDetailScreen extends ConsumerWidget {
                     final thread =
                         await ref.read(chatServiceProvider).createOrOpenThread(
                               userId: user.id,
-                              artisanId: listing.artisanId,
+                              artisanId: listingData.artisanId,
                             );
                     if (context.mounted) {
                       context.go('${RouteNames.chatThread}/${thread.id}');
@@ -162,7 +162,8 @@ class ListingDetailScreen extends ConsumerWidget {
               PrimaryButton(
                 label: 'Request Invoice',
                 icon: Icons.receipt_long,
-                onPressed: () => context.go(RouteNames.invoice, extra: listing),
+                onPressed: () =>
+                    context.go(RouteNames.invoice, extra: listingData),
               ),
               const SizedBox(height: 12),
               PrimaryButton(
