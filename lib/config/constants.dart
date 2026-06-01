@@ -17,7 +17,7 @@ const String kSupabaseAnonKey = String.fromEnvironment(
 const String kGoogleOAuthRedirectUrl = String.fromEnvironment(
   'GOOGLE_OAUTH_REDIRECT_URL',
   // Override with your Android applicationId, e.g. com.yourcompany.prosme://login-callback
-  defaultValue: 'com.example.prosme://login-callback',
+  defaultValue: 'com.prosme.app://login-callback',
 );
 
 // OAuth 2.1 / OIDC endpoints – derived from kSupabaseUrl.

@@ -6,6 +6,10 @@ import '../models/chat_models.dart';
 abstract class ChatService {
   Stream<List<ChatThread>> watchThreads(String userId);
   Stream<List<ChatMessage>> watchMessages(String threadId);
+  Future<ChatThread> createOrOpenThread({
+    required String userId,
+    required String artisanId,
+  });
   Future<void> sendMessage(ChatMessage message);
 }
 
@@ -37,6 +41,34 @@ class MockChatService implements ChatService {
       List<ChatMessage>.from(_messagesByThread[threadId] ?? const []),
     );
     return controller.stream;
+  }
+
+  @override
+  Future<ChatThread> createOrOpenThread({
+    required String userId,
+    required String artisanId,
+  }) async {
+    final pair = [userId, artisanId]..sort();
+    final threadId = 'mock_${pair.join('_')}';
+    final userThreads = _threadsByUser[userId] ?? const <ChatThread>[];
+    for (final thread in userThreads) {
+      if (thread.id == threadId) return thread;
+    }
+
+    final thread = ChatThread(
+      id: threadId,
+      userId: userId,
+      artisanId: artisanId,
+      lastMessage: '',
+      updatedAt: DateTime.now(),
+    );
+    for (final ownerId in {userId, artisanId}) {
+      final threads = _threadsByUser.putIfAbsent(ownerId, () => <ChatThread>[]);
+      threads.insert(0, thread);
+      _threadControllers[ownerId]?.add(List<ChatThread>.from(threads));
+    }
+    _threadWatchers[threadId] = {userId, artisanId};
+    return thread;
   }
 
   @override
@@ -107,8 +139,41 @@ class SupabaseChatService implements ChatService {
   }
 
   @override
+  Future<ChatThread> createOrOpenThread({
+    required String userId,
+    required String artisanId,
+  }) async {
+    final existingRows = await _supabase
+        .from('threads')
+        .select()
+        .eq('user_id', userId)
+        .eq('artisan_id', artisanId)
+        .limit(1);
+    if (existingRows is List && existingRows.isNotEmpty) {
+      return ChatThread.fromJson(
+        Map<String, dynamic>.from(existingRows.first as Map),
+      );
+    }
+
+    final row = await _supabase
+        .from('threads')
+        .insert({
+          'user_id': userId,
+          'artisan_id': artisanId,
+          'last_message': '',
+        })
+        .select()
+        .single();
+    return ChatThread.fromJson(Map<String, dynamic>.from(row));
+  }
+
+  @override
   Future<void> sendMessage(ChatMessage message) async {
     await _supabase.from('messages').insert(message.toJson());
+    await _supabase.from('threads').update({
+      'last_message': message.content,
+      'updated_at': message.createdAt.toIso8601String(),
+    }).eq('id', message.threadId);
   }
 }
 

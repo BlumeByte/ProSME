@@ -13,15 +13,43 @@ class ChatListScreen extends ConsumerWidget {
     final chatService = ref.watch(chatServiceProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     if (user == null) {
-      return const LoadingState(label: 'Loading chats...');
+      return Center(
+        child: FilledButton.icon(
+          onPressed: () => context.go(RouteNames.auth),
+          icon: const Icon(Icons.login),
+          label: const Text('Sign in to view chats'),
+        ),
+      );
     }
     return StreamBuilder(
       stream: chatService.watchThreads(user.id),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Could not load chats. Check your Supabase setup and try again.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
         if (!snapshot.hasData) {
           return const LoadingState(label: 'Loading chats...');
         }
         final threads = snapshot.data!;
+        if (threads.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'No chats yet. Open a professional listing and tap Chat to start.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
         return ListView.separated(
           padding: const EdgeInsets.all(16),
           itemCount: threads.length,

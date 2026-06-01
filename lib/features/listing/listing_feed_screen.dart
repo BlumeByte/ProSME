@@ -6,6 +6,7 @@ import '../../config/constants.dart';
 import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
 import '../../models/listing.dart';
+import '../jobs/jobs_repository.dart';
 
 class ListingFeedScreen extends ConsumerStatefulWidget {
   const ListingFeedScreen({super.key, this.onOpenChatTab});
@@ -45,6 +46,17 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     return StreamBuilder<List<Listing>>(
       stream: listingService.watchListings(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Could not load professionals. Check Supabase credentials and try again.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -321,7 +333,53 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                       ),
                     ),
                   ),
+            const SizedBox(height: 20),
+            Text('Open Service Requests', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            _OpenJobsPreview(userId: user?.id),
           ],
+        );
+      },
+    );
+  }
+}
+
+class _OpenJobsPreview extends ConsumerWidget {
+  const _OpenJobsPreview({required this.userId});
+
+  final String? userId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final jobsAsync = ref.watch(jobsStreamProvider);
+    return jobsAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 18),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (_, __) => const Text(
+        'Could not load service requests. Check Supabase credentials and try again.',
+      ),
+      data: (jobs) {
+        if (jobs.isEmpty) {
+          return const Text('No service requests posted yet.');
+        }
+        return Column(
+          children: jobs.take(3).map((job) {
+            return Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              child: ListTile(
+                title: Text(job.title),
+                subtitle: Text(
+                  '${job.location} - $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: userId == null
+                    ? () => context.go(RouteNames.auth)
+                    : () => context.go('${RouteNames.jobDetail}/${job.id}'),
+              ),
+            );
+          }).toList(growable: false),
         );
       },
     );
@@ -374,12 +432,12 @@ class _ProfessionalPreview {
 
 String _categoryEmoji(String category) {
   final normalized = category.toLowerCase();
-  if (normalized.contains('plumb')) return '🔧';
-  if (normalized.contains('elect')) return '⚡';
-  if (normalized.contains('clean')) return '🧽';
-  if (normalized.contains('paint')) return '🎨';
-  if (normalized.contains('garden')) return '🌱';
-  if (normalized.contains('carpen') || normalized.contains('wood')) return '🪚';
-  if (normalized.contains('repair')) return '🛠️';
-  return '🧰';
+  if (normalized.contains('plumb')) return 'PL';
+  if (normalized.contains('elect')) return 'EL';
+  if (normalized.contains('clean')) return 'CL';
+  if (normalized.contains('paint')) return 'PA';
+  if (normalized.contains('garden')) return 'GA';
+  if (normalized.contains('carpen') || normalized.contains('wood')) return 'CA';
+  if (normalized.contains('repair')) return 'RE';
+  return 'PR';
 }

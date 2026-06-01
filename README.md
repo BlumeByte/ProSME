@@ -57,7 +57,7 @@ flutter pub get
 1. Create a Supabase project.
 2. Enable Authentication providers you need (Email, Google, Phone/OTP if implemented).
 3. Apply migration SQL:
-   - `supabase/migrations/20260530220000_init_profiles_and_realtime.sql`
+   - Run every file in `supabase/migrations/` in timestamp order.
 4. For Google OAuth on Android, add this redirect URL in Supabase Auth settings:
    - `<your.android.applicationId>://login-callback`
 5. Add runtime defines when running the app:
@@ -99,6 +99,17 @@ flutter run
 ```bash
 flutter test
 ```
+
+## Play Store release
+Set the real Supabase values when building:
+```bash
+flutter build appbundle --release \
+  --dart-define=SUPABASE_URL=https://<your-project>.supabase.co \
+  --dart-define=SUPABASE_ANON_KEY=<your-anon-key> \
+  --dart-define=GOOGLE_OAUTH_REDIRECT_URL=com.prosme.app://login-callback
+```
+
+For a signed upload bundle, create `android/key.properties` with `storeFile`, `storePassword`, `keyAlias`, and `keyPassword`. Without that file, local release builds fall back to debug signing and are not Play Store upload-ready.
 
 ## Notes
 - All images are loaded using `Image.network` and online URLs.

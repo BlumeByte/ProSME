@@ -122,11 +122,10 @@ class MockJobsRepository implements JobsRepository {
 }
 
 final jobsRepositoryProvider = Provider<JobsRepository>((ref) {
-  try {
-    return SupabaseJobsRepository(ref.watch(supabaseClientProvider));
-  } catch (_) {
+  if (!shouldUseSupabase()) {
     return MockJobsRepository();
   }
+  return SupabaseJobsRepository(ref.watch(supabaseClientProvider));
 });
 
 final jobsStreamProvider = StreamProvider<List<JobFeedItem>>((ref) {

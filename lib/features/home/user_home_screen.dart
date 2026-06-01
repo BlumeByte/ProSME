@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/widgets/app_scaffold.dart';
 import '../../routes/route_names.dart';
@@ -32,27 +33,61 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     ];
     final currentIndex = user == null && _currentIndex > 0 ? 0 : _currentIndex;
 
-    return AppScaffold(
-      title: currentIndex == 0 ? 'Find Professionals' : 'Pro SME',
-      body: pages[currentIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: currentIndex,
-        onTap: (index) {
-          if (user == null && index > 0) {
-            context.go(RouteNames.auth);
-            return;
-          }
-          setState(() => _currentIndex = index);
-        },
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.upload_outlined), label: 'Upload'),
-          BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), label: 'Chat'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_month_outlined), label: 'Bookings'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-        ],
+    return WillPopScope(
+      onWillPop: () async {
+        if (currentIndex != 0) {
+          setState(() => _currentIndex = 0);
+          return false;
+        }
+        final shouldExit = await _confirmExit(context);
+        if (shouldExit) {
+          SystemNavigator.pop();
+        }
+        return false;
+      },
+      child: AppScaffold(
+        title: currentIndex == 0 ? 'Find Professionals' : 'Pro SME',
+        body: pages[currentIndex],
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: currentIndex,
+          onTap: (index) {
+            if (user == null && index > 0) {
+              context.go(RouteNames.auth);
+              return;
+            }
+            setState(() => _currentIndex = index);
+          },
+          type: BottomNavigationBarType.fixed,
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+            BottomNavigationBarItem(icon: Icon(Icons.upload_outlined), label: 'Upload'),
+            BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), label: 'Chat'),
+            BottomNavigationBarItem(icon: Icon(Icons.calendar_month_outlined), label: 'Bookings'),
+            BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+          ],
+        ),
       ),
     );
   }
+}
+
+Future<bool> _confirmExit(BuildContext context) async {
+  return await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Exit Pro SME?'),
+          content: const Text('Press Exit to close the app.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Stay'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Exit'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
 }

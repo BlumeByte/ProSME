@@ -15,7 +15,7 @@ final supabaseClientProvider = Provider<SupabaseClient>((ref) {
   return supabaseClient;
 });
 
-bool _isSupabaseInitialized() {
+bool isSupabaseInitialized() {
   try {
     Supabase.instance.client;
     return true;
@@ -24,16 +24,16 @@ bool _isSupabaseInitialized() {
   }
 }
 
-bool _hasSupabaseCredentials() {
+bool hasSupabaseCredentials() {
   return kSupabaseUrl.trim().isNotEmpty &&
       kSupabaseAnonKey.trim().isNotEmpty &&
       kSupabaseAnonKey != kSupabaseAnonKeyPlaceholder;
 }
 
-bool _shouldUseSupabase() => _isSupabaseInitialized() && _hasSupabaseCredentials();
+bool shouldUseSupabase() => isSupabaseInitialized() && hasSupabaseCredentials();
 
 final authServiceProvider = Provider<AuthService>((ref) {
-  if (!_shouldUseSupabase()) {
+  if (!shouldUseSupabase()) {
     return MockAuthService();
   }
   return SupabaseAuthService(Supabase.instance.client);
@@ -50,14 +50,14 @@ final authStateProvider = StreamProvider((ref) {
 });
 
 final listingServiceProvider = Provider<ListingService>((ref) {
-  if (!_shouldUseSupabase()) {
+  if (!shouldUseSupabase()) {
     return MockListingService();
   }
   return SupabaseListingService(Supabase.instance.client);
 });
 
 final chatServiceProvider = Provider<ChatService>((ref) {
-  if (!_shouldUseSupabase()) {
+  if (!shouldUseSupabase()) {
     return MockChatService();
   }
   return SupabaseChatService(Supabase.instance.client);
@@ -66,7 +66,7 @@ final chatServiceProvider = Provider<ChatService>((ref) {
 final paymentServiceProvider = Provider((ref) => PaymentService());
 
 final adminServiceProvider = Provider((ref) {
-  if (_shouldUseSupabase()) {
+  if (shouldUseSupabase()) {
     return AdminService(Supabase.instance.client);
   }
   return const AdminService();
@@ -75,7 +75,7 @@ final adminServiceProvider = Provider((ref) {
 final localDbProvider = Provider((ref) => LocalDbService());
 
 final savedServiceProvider = Provider<SavedService>((ref) {
-  if (!_shouldUseSupabase()) {
+  if (!shouldUseSupabase()) {
     return MockSavedService();
   }
   return SupabaseSavedService(Supabase.instance.client);

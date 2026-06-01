@@ -24,6 +24,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _phoneController = TextEditingController();
   bool _isLoading = false;
   bool _isCreateAccountMode = false;
+  UserRole _selectedRole = UserRole.customer;
 
   String get _username => _usernameController.text.trim();
   String get _email => _emailController.text.trim();
@@ -98,7 +99,13 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     try {
       final user = await action();
       if (mounted) {
-        context.go(forceRoleSelection ? RouteNames.role : _routeForUser(user));
+        if (forceRoleSelection) {
+          context.go(RouteNames.role);
+        } else if (user.role == UserRole.artisan && _isCreateAccountMode) {
+          context.go(RouteNames.artisanVerification);
+        } else {
+          context.go(_routeForUser(user));
+        }
       }
     } catch (error) {
       if (!mounted) return;
@@ -152,6 +159,27 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             ),
             const SizedBox(height: 16),
             if (_isCreateAccountMode) ...[
+              SegmentedButton<UserRole>(
+                segments: const [
+                  ButtonSegment<UserRole>(
+                    value: UserRole.customer,
+                    icon: Icon(Icons.person_outline),
+                    label: Text('User'),
+                  ),
+                  ButtonSegment<UserRole>(
+                    value: UserRole.artisan,
+                    icon: Icon(Icons.handyman_outlined),
+                    label: Text('Artisan'),
+                  ),
+                ],
+                selected: {_selectedRole},
+                onSelectionChanged: _isLoading
+                    ? null
+                    : (selection) {
+                        setState(() => _selectedRole = selection.first);
+                      },
+              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: _usernameController,
                 decoration: const InputDecoration(labelText: 'Username'),
@@ -193,8 +221,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                             _email,
                             _password,
                             username: _username,
+                            role: _selectedRole,
                           ),
-                          forceRoleSelection: true,
                         );
                         return;
                       }

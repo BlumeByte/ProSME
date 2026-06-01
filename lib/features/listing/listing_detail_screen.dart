@@ -29,13 +29,34 @@ class ListingDetailScreen extends ConsumerWidget {
       body: FutureBuilder<List<Listing>>(
         future: listingService.fetchListings(),
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Could not load this listing. Check your connection and try again.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
           if (!snapshot.hasData) {
             return const LoadingState(label: 'Loading listing...');
           }
-          final listing = snapshot.data!.firstWhere(
-            (item) => item.id == listingId,
-            orElse: () => snapshot.data!.first,
-          );
+          final listings = snapshot.data!;
+          if (listings.isEmpty) {
+            return const Center(child: Text('This listing is no longer available.'));
+          }
+          Listing? listing;
+          for (final item in listings) {
+            if (item.id == listingId) {
+              listing = item;
+              break;
+            }
+          }
+          if (listing == null) {
+            return const Center(child: Text('This listing is no longer available.'));
+          }
           final previewImageUrl =
               listing.images.isNotEmpty ? listing.images.first : null;
           return ListView(
@@ -43,22 +64,31 @@ class ListingDetailScreen extends ConsumerWidget {
             children: [
               SizedBox(
                 height: 220,
-                child: PageView(
-                  children: listing.images
-                      .map((url) => ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: Image.network(
-                              url,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                color: Colors.grey.shade200,
-                                alignment: Alignment.center,
-                                child: const Icon(Icons.image_not_supported_outlined),
-                              ),
-                            ),
-                          ))
-                      .toList(),
-                ),
+                child: listing.images.isEmpty
+                    ? Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.image_outlined, size: 48),
+                      )
+                    : PageView(
+                        children: listing.images
+                            .map((url) => ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Image.network(
+                                    url,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      color: Colors.grey.shade200,
+                                      alignment: Alignment.center,
+                                      child: const Icon(Icons.image_not_supported_outlined),
+                                    ),
+                                  ),
+                                ))
+                            .toList(),
+                      ),
               ),
               const SizedBox(height: 16),
               Text(listing.title,
@@ -98,13 +128,28 @@ class ListingDetailScreen extends ConsumerWidget {
               PrimaryButton(
                 label: 'Chat',
                 icon: Icons.chat,
-                onPressed: () {
+                onPressed: () async {
                   if (user == null) {
                     context.go(RouteNames.auth);
                     return;
                   }
-                  final threadId = _buildThreadId(user.id, listing.artisanId);
-                  context.go('${RouteNames.chatThread}/$threadId');
+                  try {
+                    final thread = await ref.read(chatServiceProvider).createOrOpenThread(
+                          userId: user.id,
+                          artisanId: listing.artisanId,
+                        );
+                    if (context.mounted) {
+                      context.go('${RouteNames.chatThread}/${thread.id}');
+                    }
+                  } catch (_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not start chat. Please try again.'),
+                        ),
+                      );
+                    }
+                  }
                 },
               ),
               const SizedBox(height: 12),
@@ -136,9 +181,4 @@ class ListingDetailScreen extends ConsumerWidget {
       ),
     );
   }
-}
-
-String _buildThreadId(String userId, String artisanId) {
-  final pair = [userId, artisanId]..sort();
-  return 'thread_${pair.join('_')}';
 }

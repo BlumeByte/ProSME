@@ -19,6 +19,7 @@ abstract class AuthService {
     String email,
     String password, {
     String? username,
+    UserRole role = UserRole.customer,
   });
   Future<AppUser> signInWithGoogle();
   Future<AppUser> signInWithPhone(String phone);
@@ -75,6 +76,7 @@ class MockAuthService implements AuthService {
     String email,
     String password, {
     String? username,
+    UserRole role = UserRole.customer,
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
     final normalizedUsername = (username ?? '').trim().toLowerCase();
@@ -91,7 +93,7 @@ class MockAuthService implements AuthService {
 
     _currentUser = AppUser(
       id: 'mock_${DateTime.now().microsecondsSinceEpoch}',
-      role: UserRole.customer,
+      role: role,
       name: username!.trim(),
       phone: '',
       email: email.trim(),
@@ -382,8 +384,15 @@ class SupabaseAuthService implements AuthService {
   }
 
   @override
-  Stream<AppUser?> authStateChanges() {
-    return _supabase.auth.onAuthStateChange.asyncMap((authState) async {
+  Stream<AppUser?> authStateChanges() async* {
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) {
+      yield null;
+    } else {
+      yield await _resolveUser(currentUser);
+    }
+
+    yield* _supabase.auth.onAuthStateChange.asyncMap((authState) async {
       final user = authState.session?.user ?? _supabase.auth.currentUser;
       if (user == null) {
         _resolvedCurrentUser = null;
@@ -415,6 +424,7 @@ class SupabaseAuthService implements AuthService {
     String email,
     String password, {
     String? username,
+    UserRole role = UserRole.customer,
   }) async {
     final normalizedUsername =
         (username ?? email.split('@').first).trim();
@@ -424,6 +434,7 @@ class SupabaseAuthService implements AuthService {
       data: {
         'full_name': normalizedUsername,
         'username': normalizedUsername,
+        'role': role.name,
       },
     );
 

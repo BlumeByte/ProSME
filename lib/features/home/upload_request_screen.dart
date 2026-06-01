@@ -57,10 +57,12 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Request uploaded successfully.')),
       );
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not upload request: $error')),
+        const SnackBar(
+          content: Text('Could not upload request. Check Supabase setup.'),
+        ),
       );
     } finally {
       if (mounted) {
@@ -82,7 +84,8 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
       );
     }
 
-    final jobs = ref.watch(jobsStreamProvider).valueOrNull ?? const <JobFeedItem>[];
+    final jobsAsync = ref.watch(jobsStreamProvider);
+    final jobs = jobsAsync.valueOrNull ?? const <JobFeedItem>[];
     final myUploads = jobs.where((job) => job.createdBy == user.id).toList(growable: false);
 
     return ListView(
@@ -144,7 +147,9 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
         const SizedBox(height: 20),
         Text('My uploaded requests', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
-        if (myUploads.isEmpty)
+        if (jobsAsync.hasError)
+          const Text('Could not load uploads. Check Supabase credentials and try again.')
+        else if (myUploads.isEmpty)
           const Text('No uploads yet.')
         else
           ...myUploads.map(

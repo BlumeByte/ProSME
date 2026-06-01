@@ -35,8 +35,8 @@ class JobsScreen extends ConsumerWidget {
         error: (error, _) => Center(
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Text(
-              'Could not load jobs: $error',
+            child: const Text(
+              'Could not load jobs. Check Supabase credentials and try again.',
               textAlign: TextAlign.center,
             ),
           ),
@@ -168,10 +168,12 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
                             const SnackBar(content: Text('Job created successfully.')),
                           );
                         }
-                      } catch (error) {
+                      } catch (_) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Failed to create job: $error')),
+                            const SnackBar(
+                              content: Text('Failed to create job. Check Supabase setup.'),
+                            ),
                           );
                         }
                       }
@@ -186,4 +188,8 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
       );
     },
   );
+  titleController.dispose();
+  descriptionController.dispose();
+  locationController.dispose();
+  budgetController.dispose();
 }

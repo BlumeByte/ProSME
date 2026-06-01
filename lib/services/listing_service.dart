@@ -7,6 +7,7 @@ import '../models/listing.dart';
 abstract class ListingService {
   Stream<List<Listing>> watchListings();
   Future<List<Listing>> fetchListings();
+  Future<Listing> createListing(Listing listing);
 }
 
 class MockListingService implements ListingService {
@@ -23,6 +24,13 @@ class MockListingService implements ListingService {
 
   @override
   Future<List<Listing>> fetchListings() async => List<Listing>.from(_listings);
+
+  @override
+  Future<Listing> createListing(Listing listing) async {
+    _listings.insert(0, listing);
+    _controller.add(List<Listing>.unmodifiable(_listings));
+    return listing;
+  }
 }
 
 class SupabaseListingService implements ListingService {
@@ -81,14 +89,11 @@ class SupabaseListingService implements ListingService {
 
   @override
   Stream<List<Listing>> watchListings() {
-    return _supabase
-        .from('listings')
-        .stream(primaryKey: ['id'])
-        .asyncMap(
-          (rows) => _hydrateListings(
-            rows.map((row) => Map<String, dynamic>.from(row)).toList(),
-          ),
-        );
+    return _supabase.from('listings').stream(primaryKey: ['id']).asyncMap(
+      (rows) => _hydrateListings(
+        rows.map((row) => Map<String, dynamic>.from(row)).toList(),
+      ),
+    );
   }
 
   @override
@@ -99,6 +104,27 @@ class SupabaseListingService implements ListingService {
           .map((row) => Map<String, dynamic>.from(row as Map<String, dynamic>))
           .toList(),
     );
+  }
+
+  @override
+  Future<Listing> createListing(Listing listing) async {
+    final row = await _supabase
+        .from('listings')
+        .insert({
+          'artisan_id': listing.artisanId,
+          'title': listing.title,
+          'description': listing.description,
+          'category': listing.category,
+          'price_min': listing.priceMin,
+          'price_max': listing.priceMax,
+          'images': listing.images,
+          'location': listing.location,
+          'verified_only': listing.verifiedOnly,
+        })
+        .select()
+        .single();
+    final hydrated = await _hydrateListings([Map<String, dynamic>.from(row)]);
+    return hydrated.first;
   }
 }
 
