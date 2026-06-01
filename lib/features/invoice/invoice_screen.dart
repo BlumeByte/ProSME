@@ -18,6 +18,37 @@ class InvoiceScreen extends ConsumerStatefulWidget {
 class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
   PaymentMethod _selected = PaymentMethod.cash;
 
+  Future<void> _handlePayment() async {
+    if (_selected == PaymentMethod.cash) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cash payment selected. Confirm payment with the artisan.'),
+        ),
+      );
+      return;
+    }
+
+    if (kPaystackCheckoutUrl.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Paystack checkout URL is not configured yet.'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await ref.read(paymentServiceProvider).launchPaystackCheckout(
+            kPaystackCheckoutUrl,
+          );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open Paystack checkout.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final listing = widget.listing;
@@ -72,17 +103,24 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
           const SizedBox(height: 16),
           Text('Payment method',
               style: Theme.of(context).textTheme.titleMedium),
-          RadioListTile(
-            title: const Text('Cash in person'),
-            value: PaymentMethod.cash,
-            groupValue: _selected,
-            onChanged: (value) => setState(() => _selected = value!),
-          ),
-          RadioListTile(
-            title: const Text('Paystack MoMo'),
-            value: PaymentMethod.paystack,
-            groupValue: _selected,
-            onChanged: (value) => setState(() => _selected = value!),
+          const SizedBox(height: 8),
+          SegmentedButton<PaymentMethod>(
+            segments: const [
+              ButtonSegment(
+                value: PaymentMethod.cash,
+                icon: Icon(Icons.payments_outlined),
+                label: Text('Cash'),
+              ),
+              ButtonSegment(
+                value: PaymentMethod.paystack,
+                icon: Icon(Icons.phone_android_outlined),
+                label: Text('MoMo'),
+              ),
+            ],
+            selected: {_selected},
+            onSelectionChanged: (selection) {
+              setState(() => _selected = selection.first);
+            },
           ),
           const SizedBox(height: 16),
           PrimaryButton(
@@ -90,7 +128,7 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                 ? 'Confirm cash payment'
                 : 'Pay with Paystack',
             icon: Icons.payment,
-            onPressed: () {},
+            onPressed: _handlePayment,
           ),
         ],
       ),

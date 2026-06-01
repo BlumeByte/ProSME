@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:prosme/features/marketplace/jobs/applications/jobs_providers.dart';
 import '../config/constants.dart';
 import '../features/admin/admin_dashboard_screen.dart';
 import '../features/auth/artisan_verification_screen.dart';
@@ -12,7 +11,8 @@ import '../features/chat/chat_thread_screen.dart';
 import '../features/home/artisan_home_screen.dart';
 import '../features/home/user_home_screen.dart';
 import '../features/invoice/invoice_screen.dart';
-import '../features/marketplace/jobs/presentation/job_detail_screen.dart';
+import '../features/jobs/job_detail_screen.dart';
+import '../features/legal/legal_screen.dart';
 import '../features/listing/listing_detail_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/saved/saved_screen.dart';
@@ -24,7 +24,7 @@ import '../services/app_launch_service.dart';
 import '../services/service_providers.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authStream = ref.watch(authStateProvider.stream);
+  final authStream = ref.watch(authServiceProvider).authStateChanges();
   final refreshListenable = StreamRouterRefresh(authStream);
   ref.onDispose(refreshListenable.dispose);
 
@@ -108,11 +108,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '${RouteNames.jobDetail}/:id',
-        builder: (context, state) {
-          final jobId = state.pathParameters['id']!;
-          final job = ref.watch(jobByIdProvider(jobId));
-          return JobDetailScreen(job: job!);
-        },
+        builder: (context, state) =>
+            JobDetailScreen(jobId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: RouteNames.aiSupport,
@@ -121,6 +118,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.saved,
         builder: (context, state) => const SavedScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.privacy,
+        builder: (context, state) =>
+            const LegalScreen(kind: LegalPageKind.privacy),
+      ),
+      GoRoute(
+        path: RouteNames.terms,
+        builder: (context, state) =>
+            const LegalScreen(kind: LegalPageKind.terms),
+      ),
+      GoRoute(
+        path: RouteNames.security,
+        builder: (context, state) =>
+            const LegalScreen(kind: LegalPageKind.security),
       ),
     ],
   );

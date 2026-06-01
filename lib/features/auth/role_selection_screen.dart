@@ -16,6 +16,7 @@ class RoleSelectionScreen extends ConsumerWidget {
   ) async {
     final authService = ref.read(authServiceProvider);
     await authService.updateRole(role);
+    if (!context.mounted) return;
     if (role == UserRole.artisan) {
       context.go(RouteNames.artisanVerification);
     } else if (role == UserRole.admin) {

@@ -7,7 +7,7 @@ import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
 import '../chat/chat_list_screen.dart';
 import '../listing/listing_feed_screen.dart';
-import '../marketplace/jobs/presentation/jobs_screen.dart';
+import '../jobs/jobs_screen.dart';
 import '../profile/profile_screen.dart';
 import 'upload_request_screen.dart';
 
@@ -33,17 +33,18 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     ];
     final currentIndex = user == null && _currentIndex > 0 ? 0 : _currentIndex;
 
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
         if (currentIndex != 0) {
           setState(() => _currentIndex = 0);
-          return false;
+          return;
         }
         final shouldExit = await _confirmExit(context);
         if (shouldExit) {
           SystemNavigator.pop();
         }
-        return false;
       },
       child: AppScaffold(
         title: currentIndex == 0 ? 'ProSME   Find Professionals' : 'Pro SME',

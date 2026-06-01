@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:prosme/features/marketplace/jobs/applications/jobs_providers.dart';
 
 import '../../config/constants.dart';
 import '../../routes/route_names.dart';
-import '../marketplace/jobs/domain/jobs_repository.dart' hide jobsRepositoryProvider, jobsStreamProvider;
 import '../../services/service_providers.dart';
+import '../jobs/jobs_repository.dart';
 
 class UploadRequestScreen extends ConsumerStatefulWidget {
   const UploadRequestScreen({super.key});
@@ -49,6 +48,7 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
             description: _descriptionController.text.trim(),
             location: _locationController.text.trim(),
             budget: double.parse(_budgetController.text.trim()),
+            createdBy: user.id,
           );
       if (!mounted) return;
       _titleController.clear();
@@ -136,8 +136,9 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
                     const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
                   final budget = double.tryParse((value ?? '').trim());
-                  if (budget == null || budget <= 0)
+                  if (budget == null || budget <= 0) {
                     return 'Enter a valid budget';
+                  }
                   return null;
                 },
               ),
@@ -167,7 +168,7 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
               child: ListTile(
                 title: Text(job.title),
                 subtitle: Text(
-                  '${job.location} • $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
+                  '${job.location} - $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
                 ),
               ),
             ),

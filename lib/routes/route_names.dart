@@ -12,4 +12,7 @@ class RouteNames {
   static const jobDetail = '/job';
   static const aiSupport = '/support';
   static const saved = '/saved';
+  static const privacy = '/privacy';
+  static const terms = '/terms';
+  static const security = '/security';
 }

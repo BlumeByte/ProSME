@@ -167,11 +167,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         _SettingsTile(
           icon: Icons.shield_outlined,
           title: 'Privacy',
-          onTap: () => _showInfoSheet(
-            context,
-            'Privacy',
-            'Your account data is stored securely in Supabase and only visible to you.',
-          ),
+          onTap: () => context.go(RouteNames.privacy),
         ),
         const Divider(),
         _SettingsTile(
@@ -188,6 +184,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           icon: Icons.support_agent_outlined,
           title: 'Support',
           onTap: () => context.go(RouteNames.aiSupport),
+        ),
+        const Divider(),
+        _SettingsTile(
+          icon: Icons.description_outlined,
+          title: 'Terms of Service',
+          onTap: () => context.go(RouteNames.terms),
+        ),
+        const Divider(),
+        _SettingsTile(
+          icon: Icons.security_outlined,
+          title: 'Security',
+          onTap: () => context.go(RouteNames.security),
         ),
         const SizedBox(height: 6),
         SwitchListTile(
@@ -420,6 +428,7 @@ Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
   var smsNotifications = prefs.getBool('settings_sms_notifications') ?? true;
   var language = prefs.getString('settings_language') ?? 'English';
   const languages = ['English', 'Twi', 'Ewe', 'Ga', 'French', 'Spanish'];
+  if (!context.mounted) return;
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,

@@ -6,8 +6,7 @@ import '../../config/constants.dart';
 import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
 import '../../models/listing.dart';
-import '../marketplace/jobs/domain/jobs_repository.dart' hide jobsStreamProvider;
-import '../marketplace/jobs/applications/jobs_providers.dart';
+import '../jobs/jobs_repository.dart';
 
 class ListingFeedScreen extends ConsumerStatefulWidget {
   const ListingFeedScreen({super.key, this.onOpenChatTab});
@@ -361,7 +360,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                                                       vertical: 4),
                                               decoration: BoxDecoration(
                                                 color: scheme.primary
-                                                    .withOpacity(0.12),
+                                                    .withValues(alpha: 0.12),
                                                 borderRadius:
                                                     BorderRadius.circular(999),
                                               ),
@@ -478,19 +477,16 @@ class _OpenJobsPreview extends ConsumerWidget {
           children: jobs.take(3).map((job) {
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
-              child: job == null
-                  ? const SizedBox.shrink()
-                  : ListTile(
-                      title: Text(job.title),
-                      subtitle: Text(
-                        '${job.location} - $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: userId == null
-                          ? () => context.go(RouteNames.auth)
-                          : () =>
-                              context.go('${RouteNames.jobDetail}/${job.id}'),
-                    ),
+              child: ListTile(
+                title: Text(job.title),
+                subtitle: Text(
+                  '${job.location} - $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: userId == null
+                    ? () => context.go(RouteNames.auth)
+                    : () => context.go('${RouteNames.jobDetail}/${job.id}'),
+              ),
             );
           }).toList(growable: false),
         );

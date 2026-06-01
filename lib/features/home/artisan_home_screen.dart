@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/widgets/app_scaffold.dart';
 import '../../routes/route_names.dart';
 import '../chat/chat_list_screen.dart';
-import '../marketplace/jobs/presentation/jobs_screen.dart';
+import '../jobs/jobs_screen.dart';
 import '../listing/listing_manage_screen.dart';
 import '../profile/profile_screen.dart';
 
@@ -27,17 +27,18 @@ class _ArtisanHomeScreenState extends State<ArtisanHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
         if (_currentIndex != 0) {
           setState(() => _currentIndex = 0);
-          return false;
+          return;
         }
         final shouldExit = await _confirmExit(context);
         if (shouldExit) {
           SystemNavigator.pop();
         }
-        return false;
       },
       child: AppScaffold(
         title: 'Artisan Dashboard',

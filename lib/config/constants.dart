@@ -20,6 +20,10 @@ const String kGoogleOAuthRedirectUrl = String.fromEnvironment(
   // Override with your Android applicationId, e.g. com.yourcompany.prosme://login-callback
   defaultValue: 'com.prosme.app://login-callback',
 );
+const String kPaystackCheckoutUrl = String.fromEnvironment(
+  'PAYSTACK_CHECKOUT_URL',
+  defaultValue: '',
+);
 
 // OAuth 2.1 / OIDC endpoints – derived from kSupabaseUrl.
 // Share these with third-party applications that integrate with this server.
