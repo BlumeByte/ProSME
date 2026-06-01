@@ -45,7 +45,8 @@ class ListingDetailScreen extends ConsumerWidget {
           }
           final listings = snapshot.data!;
           if (listings.isEmpty) {
-            return const Center(child: Text('This listing is no longer available.'));
+            return const Center(
+                child: Text('This listing is no longer available.'));
           }
           Listing? listing;
           for (final item in listings) {
@@ -55,10 +56,12 @@ class ListingDetailScreen extends ConsumerWidget {
             }
           }
           if (listing == null) {
-            return const Center(child: Text('This listing is no longer available.'));
+            return const Center(
+                child: Text('This listing is no longer available.'));
           }
+          final listingData = listing;
           final previewImageUrl =
-              listing.images.isNotEmpty ? listing.images.first : null;
+              listingData.images.isNotEmpty ? listingData.images.first : null;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -83,7 +86,8 @@ class ListingDetailScreen extends ConsumerWidget {
                                     errorBuilder: (_, __, ___) => Container(
                                       color: Colors.grey.shade200,
                                       alignment: Alignment.center,
-                                      child: const Icon(Icons.image_not_supported_outlined),
+                                      child: const Icon(
+                                          Icons.image_not_supported_outlined),
                                     ),
                                   ),
                                 ))
@@ -134,10 +138,11 @@ class ListingDetailScreen extends ConsumerWidget {
                     return;
                   }
                   try {
-                    final thread = await ref.read(chatServiceProvider).createOrOpenThread(
-                          userId: user.id,
-                          artisanId: listing.artisanId,
-                        );
+                    final thread =
+                        await ref.read(chatServiceProvider).createOrOpenThread(
+                              userId: user.id,
+                              artisanId: listing.artisanId,
+                            );
                     if (context.mounted) {
                       context.go('${RouteNames.chatThread}/${thread.id}');
                     }
@@ -145,7 +150,8 @@ class ListingDetailScreen extends ConsumerWidget {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Could not start chat. Please try again.'),
+                          content:
+                              Text('Could not start chat. Please try again.'),
                         ),
                       );
                     }
