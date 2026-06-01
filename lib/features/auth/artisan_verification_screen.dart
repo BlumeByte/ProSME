@@ -32,7 +32,10 @@ class _ArtisanVerificationScreenState
       context.go(RouteNames.auth);
       return;
     }
-    if (nationalIdUrl.isEmpty || !Uri.parse(nationalIdUrl).hasAbsolutePath) {
+    final nationalIdUri = Uri.tryParse(nationalIdUrl);
+    if (nationalIdUrl.isEmpty ||
+        nationalIdUri == null ||
+        !nationalIdUri.hasScheme) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Paste a valid National ID file URL.')),
       );

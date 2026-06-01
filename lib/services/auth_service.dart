@@ -64,7 +64,7 @@ class MockAuthService implements AuthService {
           phone: '',
           email: normalizedEmail,
           photoUrl: '',
-          verificationStatus: VerificationStatus.pending,
+          verificationStatus: VerificationStatus.verified,
           createdAt: DateTime.now(),
         );
     _accountsByEmail[normalizedEmail] = _currentUser!;
@@ -492,7 +492,12 @@ class SupabaseAuthService implements AuthService {
 
   @override
   Future<AppUser> signInWithPhone(String phone) async {
-    throw UnimplementedError('Phone OTP should be implemented with Supabase.');
+    final normalized = phone.trim();
+    if (normalized.isEmpty) {
+      throw StateError('Enter a phone number for OTP sign-in.');
+    }
+    await _supabase.auth.signInWithOtp(phone: normalized);
+    throw StateError('OTP sent. Enter the code from SMS to complete sign-in.');
   }
 
   @override

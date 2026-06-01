@@ -412,6 +412,68 @@ Future<void> _showInfoSheet(
   );
 }
 
+Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
+  final isDarkMode = ref.read(themeModeControllerProvider) == ThemeMode.dark;
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Settings',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.dark_mode_outlined),
+              title: const Text('Dark mode'),
+              value: isDarkMode,
+              onChanged: (value) {
+                ref.read(themeModeControllerProvider.notifier).setDarkMode(value);
+                Navigator.of(context).pop();
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.language_outlined),
+              title: const Text('Language'),
+              subtitle: const Text('English'),
+              onTap: () {
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('English is active.')),
+                );
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.security_outlined),
+              title: const Text('Account security'),
+              subtitle: const Text('Email and phone verification are managed by Supabase.'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _showInfoSheet(
+                  context,
+                  'Account security',
+                  'Use verified email and phone sign-in for account security. Google sign-in uses Supabase OAuth.',
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 Future<void> _confirmDeleteAccount(
   BuildContext context,
   AuthService authService,

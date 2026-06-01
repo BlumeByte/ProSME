@@ -46,7 +46,22 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
         return false;
       },
       child: AppScaffold(
-        title: currentIndex == 0 ? 'Find Professionals' : 'Pro SME',
+        title: currentIndex == 0 ? 'ProSME   Find Professionals' : 'Pro SME',
+        actions: currentIndex == 0
+            ? [
+                IconButton(
+                  onPressed: () {
+                    if (user == null) {
+                      context.go(RouteNames.auth);
+                      return;
+                    }
+                    setState(() => _currentIndex = 4);
+                  },
+                  icon: const Icon(Icons.person_outline),
+                  tooltip: 'Profile',
+                ),
+              ]
+            : null,
         body: pages[currentIndex],
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: currentIndex,

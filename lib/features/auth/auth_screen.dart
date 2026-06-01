@@ -60,6 +60,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         message.contains('oauth')) {
       return 'Google sign-in is not configured yet. Check Supabase Google provider and redirect URL.';
     }
+    if (message.contains('otp sent')) {
+      return 'OTP sent. Check your SMS messages.';
+    }
     return 'Something went wrong. Please try again.';
   }
 

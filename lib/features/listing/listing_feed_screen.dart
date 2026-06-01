@@ -22,6 +22,14 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   final _locationController = TextEditingController();
   String _serviceQuery = '';
   String _locationQuery = '';
+  static const _defaultCategories = [
+    ('Plumbing', Icons.plumbing, 0),
+    ('Electrical', Icons.electrical_services, 0),
+    ('Cleaning', Icons.cleaning_services, 0),
+    ('Painting', Icons.format_paint, 0),
+    ('Gardening', Icons.yard, 0),
+    ('Carpentry', Icons.handyman, 0),
+  ];
 
   @override
   void dispose() {
@@ -80,8 +88,10 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               : listing.category.trim();
           categoryCounts.update(category, (value) => value + 1, ifAbsent: () => 1);
         }
-        final popular = categoryCounts.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
+        final categoryCards = _defaultCategories.map((item) {
+          final count = categoryCounts[item.$1] ?? item.$3;
+          return _CategoryPreview(item.$1, item.$2, count);
+        }).toList(growable: false);
 
         final professionalsById = <String, _ProfessionalPreview>{};
         for (final listing in filtered) {
@@ -117,7 +127,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
           ..sort((a, b) => b.listingCount.compareTo(a.listingCount));
 
         return ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
           children: [
             TextField(
               controller: _serviceController,
@@ -149,44 +159,50 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             const SizedBox(height: 22),
             Text('Popular Services', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 12),
-            if (popular.isEmpty)
-              const Text('No services available yet.')
-            else
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: popular.length > 6 ? 6 : popular.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 0.9,
-                ),
-                itemBuilder: (context, index) {
-                  final item = popular[index];
-                  return Card(
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: categoryCards.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 0.9,
+              ),
+              itemBuilder: (context, index) {
+                final item = categoryCards[index];
+                return InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () {
+                    _serviceController.text = item.name;
+                    _applySearch();
+                  },
+                  child: Card(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(_categoryEmoji(item.key), style: const TextStyle(fontSize: 20)),
+                          Icon(item.icon, color: scheme.primary),
                           const SizedBox(height: 8),
                           Text(
-                            item.key,
+                            item.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 4),
-                          Text('${item.value} pros',
-                              style: TextStyle(color: scheme.onSurfaceVariant)),
+                          Text(
+                            '${item.count} pros',
+                            style: TextStyle(color: scheme.onSurfaceVariant),
+                          ),
                         ],
                       ),
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
+            ),
             const SizedBox(height: 20),
             Row(
               children: [
@@ -308,8 +324,8 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                                     }
                                     widget.onOpenChatTab?.call();
                                   },
-                                  icon: const Icon(Icons.chat_bubble_outline),
-                                  label: const Text('Chats'),
+                                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                                  label: const Text('Chat'),
                                 ),
                                 const SizedBox(width: 8),
                                 FilledButton(
@@ -343,7 +359,13 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     );
   }
 }
+class _CategoryPreview {
+  const _CategoryPreview(this.name, this.icon, this.count);
 
+  final String name;
+  final IconData icon;
+  final int count;
+}
 class _OpenJobsPreview extends ConsumerWidget {
   const _OpenJobsPreview({required this.userId});
 
@@ -428,16 +450,4 @@ class _ProfessionalPreview {
       listingCount: listingCount ?? this.listingCount,
     );
   }
-}
-
-String _categoryEmoji(String category) {
-  final normalized = category.toLowerCase();
-  if (normalized.contains('plumb')) return 'PL';
-  if (normalized.contains('elect')) return 'EL';
-  if (normalized.contains('clean')) return 'CL';
-  if (normalized.contains('paint')) return 'PA';
-  if (normalized.contains('garden')) return 'GA';
-  if (normalized.contains('carpen') || normalized.contains('wood')) return 'CA';
-  if (normalized.contains('repair')) return 'RE';
-  return 'PR';
 }
