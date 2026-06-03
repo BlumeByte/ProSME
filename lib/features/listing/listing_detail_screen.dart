@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/widgets/safe_back_button.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../core/widgets/loading_state.dart';
 import '../../routes/route_names.dart';
@@ -25,7 +26,10 @@ class ListingDetailScreen extends ConsumerWidget {
     final isSaved = savedIds.contains(listingId);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Listing')),
+      appBar: AppBar(
+        leading: const SafeBackButton(),
+        title: const Text('Listing'),
+      ),
       body: FutureBuilder<List<Listing>>(
         future: listingService.fetchListings(),
         builder: (context, snapshot) {
@@ -144,7 +148,7 @@ class ListingDetailScreen extends ConsumerWidget {
                               artisanId: listingData.artisanId,
                             );
                     if (context.mounted) {
-                      context.go('${RouteNames.chatThread}/${thread.id}');
+                      context.push('${RouteNames.chatThread}/${thread.id}');
                     }
                   } catch (_) {
                     if (context.mounted) {
@@ -163,7 +167,7 @@ class ListingDetailScreen extends ConsumerWidget {
                 label: 'Request Invoice',
                 icon: Icons.receipt_long,
                 onPressed: () =>
-                    context.go(RouteNames.invoice, extra: listingData),
+                    context.push(RouteNames.invoice, extra: listingData),
               ),
               const SizedBox(height: 12),
               PrimaryButton(

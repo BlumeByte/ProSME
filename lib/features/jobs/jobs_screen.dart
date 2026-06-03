@@ -8,7 +8,9 @@ import '../../services/service_providers.dart';
 import 'jobs_repository.dart';
 
 class JobsScreen extends ConsumerWidget {
-  const JobsScreen({super.key});
+  const JobsScreen({super.key, this.showAppBar = true});
+
+  final bool showAppBar;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -21,24 +23,26 @@ class JobsScreen extends ConsumerWidget {
         user.role == UserRole.customer || user.role == UserRole.artisan;
     final jobsAsync = ref.watch(jobsStreamProvider);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Bookings'),
-        actions: [
-          if (canCreateJob)
-            IconButton(
-              onPressed: () => _openCreateJobSheet(context, ref),
-              icon: const Icon(Icons.add),
-              tooltip: 'Create job',
-            ),
-        ],
-      ),
+      appBar: showAppBar
+          ? AppBar(
+              title: const Text('Bookings'),
+              actions: [
+                if (canCreateJob)
+                  IconButton(
+                    onPressed: () => _openCreateJobSheet(context, ref),
+                    icon: const Icon(Icons.add),
+                    tooltip: 'Create job',
+                  ),
+              ],
+            )
+          : null,
       body: jobsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => const Center(
+        error: (error, _) => Center(
           child: Padding(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             child: Text(
-              'Could not load jobs. Check Supabase credentials and try again.',
+              'Could not load jobs: $error',
               textAlign: TextAlign.center,
             ),
           ),
@@ -64,7 +68,8 @@ class JobsScreen extends ConsumerWidget {
                       '${job.location} - $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
                     ),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.go('${RouteNames.jobDetail}/${job.id}'),
+                    onTap: () =>
+                        context.push('${RouteNames.jobDetail}/${job.id}'),
                   ),
                 );
               },
@@ -187,12 +192,12 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
                             ),
                           );
                         }
-                      } catch (_) {
+                      } catch (error) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
+                            SnackBar(
                               content: Text(
-                                'Failed to create job. Check Supabase setup.',
+                                'Failed to create job: $error',
                               ),
                             ),
                           );

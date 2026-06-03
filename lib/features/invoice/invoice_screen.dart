@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/primary_button.dart';
+import '../../core/widgets/safe_back_button.dart';
 import '../../config/constants.dart';
 import '../../models/listing.dart';
 import '../../services/service_providers.dart';
@@ -22,7 +23,8 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
     if (_selected == PaymentMethod.cash) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Cash payment selected. Confirm payment with the artisan.'),
+          content:
+              Text('Cash payment selected. Confirm payment with the artisan.'),
         ),
       );
       return;
@@ -54,7 +56,10 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
     final listing = widget.listing;
     if (listing == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Invoice')),
+        appBar: AppBar(
+          leading: const SafeBackButton(),
+          title: const Text('Invoice'),
+        ),
         body: const Center(
           child: Text('No listing selected. Open invoice from a listing.'),
         ),
@@ -68,7 +73,10 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
     final invoiceId = '${listing.id}-${user?.id ?? 'guest'}';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Invoice')),
+      appBar: AppBar(
+        leading: const SafeBackButton(),
+        title: const Text('Invoice'),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

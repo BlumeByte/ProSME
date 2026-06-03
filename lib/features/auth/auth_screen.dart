@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/widgets/safe_back_button.dart';
 import '../../config/constants.dart';
 import '../../models/app_user.dart';
 import '../../core/widgets/primary_button.dart';
@@ -141,7 +142,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     final authService = ref.watch(authServiceProvider);
     final title = _isCreateAccountMode ? 'Create account' : 'Sign in';
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(
+        leading: const SafeBackButton(),
+        title: Text(title),
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),
@@ -207,16 +211,17 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             const SizedBox(height: 16),
             PrimaryButton(
               label: _isLoading
-                  ? (_isCreateAccountMode ? 'Creating account...' : 'Signing in...')
+                  ? (_isCreateAccountMode
+                      ? 'Creating account...'
+                      : 'Signing in...')
                   : (_isCreateAccountMode ? 'Create account' : 'Email Sign in'),
               icon: Icons.email,
               onPressed: _isLoading
                   ? null
                   : () {
-                      final validation =
-                          _isCreateAccountMode
-                              ? _validateSignUp()
-                              : _validateEmailPassword();
+                      final validation = _isCreateAccountMode
+                          ? _validateSignUp()
+                          : _validateEmailPassword();
                       if (validation != null) {
                         ScaffoldMessenger.of(
                           context,

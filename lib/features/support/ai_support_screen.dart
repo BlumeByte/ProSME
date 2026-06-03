@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/widgets/safe_back_button.dart';
 
 class AiSupportScreen extends StatefulWidget {
   const AiSupportScreen({super.key});
@@ -12,19 +13,23 @@ class _AiSupportScreenState extends State<AiSupportScreen> {
   final List<_SupportMessage> _messages = const [
     _SupportMessage(
       question: 'How do I create a service request?',
-      answer: 'Open Upload, add the service title, description, location, and budget, then tap Upload.',
+      answer:
+          'Open Upload, add the service title, description, location, and budget, then tap Upload.',
     ),
     _SupportMessage(
       question: 'How do I find an artisan?',
-      answer: 'Use Home to search by service or location, open a listing, then start a chat or request an invoice.',
+      answer:
+          'Use Home to search by service or location, open a listing, then start a chat or request an invoice.',
     ),
     _SupportMessage(
       question: 'How do artisans create listings?',
-      answer: 'Create or sign in to an artisan account, open Listings, and tap Create.',
+      answer:
+          'Create or sign in to an artisan account, open Listings, and tap Create.',
     ),
     _SupportMessage(
       question: 'Why is Supabase not loading?',
-      answer: 'The app needs the correct Supabase URL, anon key, and migrated tables before live data can load.',
+      answer:
+          'The app needs the correct Supabase URL, anon key, and migrated tables before live data can load.',
     ),
   ];
   String? _answer;
@@ -56,7 +61,10 @@ class _AiSupportScreenState extends State<AiSupportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('AI Support')),
+      appBar: AppBar(
+        leading: const SafeBackButton(),
+        title: const Text('AI Support'),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

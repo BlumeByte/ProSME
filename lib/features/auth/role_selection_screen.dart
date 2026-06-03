@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/constants.dart';
 import '../../core/widgets/primary_button.dart';
+import '../../core/widgets/safe_back_button.dart';
 import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
 
@@ -29,7 +30,10 @@ class RoleSelectionScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Choose role')),
+      appBar: AppBar(
+        leading: const SafeBackButton(),
+        title: const Text('Choose role'),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(

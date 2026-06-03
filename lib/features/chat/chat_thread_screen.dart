@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import '../../core/widgets/safe_back_button.dart';
 import '../../core/widgets/loading_state.dart';
 import '../../services/service_providers.dart';
 import '../../models/chat_models.dart';
@@ -43,7 +44,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not send message. Please try again.')),
+        const SnackBar(
+            content: Text('Could not send message. Please try again.')),
       );
     }
   }
@@ -52,7 +54,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   Widget build(BuildContext context) {
     final chatService = ref.watch(chatServiceProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Chat')),
+      appBar: AppBar(
+        leading: const SafeBackButton(),
+        title: const Text('Chat'),
+      ),
       body: Column(
         children: [
           Material(
@@ -121,7 +126,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Location sharing will be added after map permissions are configured.'),
+                        content: Text(
+                            'Location sharing will be added after map permissions are configured.'),
                       ),
                     );
                   },
@@ -131,7 +137,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Open the listing and request invoice from there.'),
+                        content: Text(
+                            'Open the listing and request invoice from there.'),
                       ),
                     );
                   },

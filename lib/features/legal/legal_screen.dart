@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/safe_back_button.dart';
+
 enum LegalPageKind { privacy, terms, security }
 
 class LegalScreen extends StatelessWidget {
@@ -11,7 +13,10 @@ class LegalScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final content = _contentFor(kind);
     return Scaffold(
-      appBar: AppBar(title: Text(content.title)),
+      appBar: AppBar(
+        leading: const SafeBackButton(),
+        title: Text(content.title),
+      ),
       body: ListView.separated(
         padding: const EdgeInsets.all(20),
         itemCount: content.sections.length,

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/widgets/app_scaffold.dart';
 import '../../routes/route_names.dart';
 import '../chat/chat_list_screen.dart';
+import 'artisan_dashboard_screen.dart';
 import '../jobs/jobs_screen.dart';
 import '../listing/listing_manage_screen.dart';
 import '../profile/profile_screen.dart';
@@ -18,15 +19,21 @@ class ArtisanHomeScreen extends StatefulWidget {
 class _ArtisanHomeScreenState extends State<ArtisanHomeScreen> {
   int _currentIndex = 0;
 
-  final _pages = const [
-    ListingManageScreen(),
-    JobsScreen(),
-    ChatListScreen(),
-    ProfileScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final pages = [
+      ArtisanDashboardScreen(
+        onOpenListings: () => setState(() => _currentIndex = 1),
+        onOpenJobs: () => setState(() => _currentIndex = 2),
+        onOpenChats: () => setState(() => _currentIndex = 3),
+        onOpenSettings: () => setState(() => _currentIndex = 4),
+      ),
+      const ListingManageScreen(),
+      const JobsScreen(showAppBar: false),
+      const ChatListScreen(),
+      const ProfileScreen(),
+    ];
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -49,16 +56,19 @@ class _ArtisanHomeScreenState extends State<ArtisanHomeScreen> {
             tooltip: 'View marketplace',
           ),
         ],
-        body: _pages[_currentIndex],
+        body: pages[_currentIndex],
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: _currentIndex,
           onTap: (index) => setState(() => _currentIndex = index),
           type: BottomNavigationBarType.fixed,
           items: const [
+            BottomNavigationBarItem(
+                icon: Icon(Icons.dashboard), label: 'Artisan'),
             BottomNavigationBarItem(icon: Icon(Icons.store), label: 'Listings'),
             BottomNavigationBarItem(icon: Icon(Icons.work), label: 'Jobs'),
             BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chats'),
-            BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.settings), label: 'Settings'),
           ],
         ),
       ),

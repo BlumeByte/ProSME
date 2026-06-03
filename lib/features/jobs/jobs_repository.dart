@@ -25,8 +25,30 @@ class JobFeedItem {
   final DateTime createdAt;
 }
 
+class JobBid {
+  const JobBid({
+    required this.id,
+    required this.jobId,
+    required this.artisanId,
+    required this.amount,
+    required this.message,
+    required this.status,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String jobId;
+  final String artisanId;
+  final double amount;
+  final String message;
+  final String status;
+  final DateTime createdAt;
+}
+
 abstract class JobsRepository {
   Stream<List<JobFeedItem>> watchJobs();
+
+  Stream<List<JobBid>> watchBids(String jobId);
 
   Future<JobFeedItem> createJob({
     required String title,
@@ -35,6 +57,15 @@ abstract class JobsRepository {
     required double budget,
     required String createdBy,
   });
+
+  Future<JobBid> createBid({
+    required String jobId,
+    required String artisanId,
+    required double amount,
+    required String message,
+  });
+
+  Future<void> acceptBid(String bidId);
 }
 
 class SupabaseJobsRepository implements JobsRepository {
@@ -49,6 +80,16 @@ class SupabaseJobsRepository implements JobsRepository {
         .stream(primaryKey: ['id'])
         .order('created_at', ascending: false)
         .map((rows) => rows.map(_mapJob).toList(growable: false));
+  }
+
+  @override
+  Stream<List<JobBid>> watchBids(String jobId) {
+    return _client
+        .from('job_bids')
+        .stream(primaryKey: ['id'])
+        .eq('job_id', jobId)
+        .order('created_at', ascending: false)
+        .map((rows) => rows.map(_mapBid).toList(growable: false));
   }
 
   @override
@@ -74,6 +115,38 @@ class SupabaseJobsRepository implements JobsRepository {
     return _mapJob(row);
   }
 
+  @override
+  Future<JobBid> createBid({
+    required String jobId,
+    required String artisanId,
+    required double amount,
+    required String message,
+  }) async {
+    final row = await _client
+        .from('job_bids')
+        .upsert(
+          {
+            'job_id': jobId,
+            'artisan_id': artisanId,
+            'amount': amount,
+            'message': message,
+            'status': 'pending',
+          },
+          onConflict: 'job_id,artisan_id',
+        )
+        .select()
+        .single();
+
+    return _mapBid(row);
+  }
+
+  @override
+  Future<void> acceptBid(String bidId) async {
+    await _client
+        .from('job_bids')
+        .update({'status': 'accepted'}).eq('id', bidId);
+  }
+
   JobFeedItem _mapJob(Map<String, dynamic> row) {
     return JobFeedItem(
       id: row['id'].toString(),
@@ -86,16 +159,41 @@ class SupabaseJobsRepository implements JobsRepository {
           DateTime.now(),
     );
   }
+
+  JobBid _mapBid(Map<String, dynamic> row) {
+    return JobBid(
+      id: row['id'].toString(),
+      jobId: (row['job_id'] as String?) ?? '',
+      artisanId: (row['artisan_id'] as String?) ?? '',
+      amount: (row['amount'] as num?)?.toDouble() ?? 0,
+      message: (row['message'] as String?) ?? '',
+      status: (row['status'] as String?) ?? 'pending',
+      createdAt: DateTime.tryParse((row['created_at'] as String?) ?? '') ??
+          DateTime.now(),
+    );
+  }
 }
 
 class MockJobsRepository implements JobsRepository {
   final _controller = StreamController<List<JobFeedItem>>.broadcast();
+  final Map<String, StreamController<List<JobBid>>> _bidControllers = {};
   final List<JobFeedItem> _jobs = [];
+  final Map<String, List<JobBid>> _bidsByJobId = {};
 
   @override
   Stream<List<JobFeedItem>> watchJobs() async* {
     yield List<JobFeedItem>.unmodifiable(_jobs);
     yield* _controller.stream;
+  }
+
+  @override
+  Stream<List<JobBid>> watchBids(String jobId) async* {
+    final controller = _bidControllers.putIfAbsent(
+      jobId,
+      () => StreamController<List<JobBid>>.broadcast(),
+    );
+    yield List<JobBid>.unmodifiable(_bidsByJobId[jobId] ?? const []);
+    yield* controller.stream;
   }
 
   @override
@@ -119,6 +217,57 @@ class MockJobsRepository implements JobsRepository {
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
     return job;
   }
+
+  @override
+  Future<JobBid> createBid({
+    required String jobId,
+    required String artisanId,
+    required double amount,
+    required String message,
+  }) async {
+    final bids = _bidsByJobId.putIfAbsent(jobId, () => <JobBid>[]);
+    final existingIndex = bids.indexWhere((bid) => bid.artisanId == artisanId);
+    final bid = JobBid(
+      id: existingIndex == -1
+          ? DateTime.now().microsecondsSinceEpoch.toString()
+          : bids[existingIndex].id,
+      jobId: jobId,
+      artisanId: artisanId,
+      amount: amount,
+      message: message,
+      status: 'pending',
+      createdAt: DateTime.now(),
+    );
+    if (existingIndex == -1) {
+      bids.insert(0, bid);
+    } else {
+      bids
+        ..removeAt(existingIndex)
+        ..insert(0, bid);
+    }
+    _bidControllers[jobId]?.add(List<JobBid>.unmodifiable(bids));
+    return bid;
+  }
+
+  @override
+  Future<void> acceptBid(String bidId) async {
+    for (final entry in _bidsByJobId.entries) {
+      final index = entry.value.indexWhere((bid) => bid.id == bidId);
+      if (index == -1) continue;
+      final bid = entry.value[index];
+      entry.value[index] = JobBid(
+        id: bid.id,
+        jobId: bid.jobId,
+        artisanId: bid.artisanId,
+        amount: bid.amount,
+        message: bid.message,
+        status: 'accepted',
+        createdAt: bid.createdAt,
+      );
+      _bidControllers[entry.key]?.add(List<JobBid>.unmodifiable(entry.value));
+      return;
+    }
+  }
 }
 
 final jobsRepositoryProvider = Provider<JobsRepository>((ref) {
@@ -130,4 +279,9 @@ final jobsRepositoryProvider = Provider<JobsRepository>((ref) {
 
 final jobsStreamProvider = StreamProvider<List<JobFeedItem>>((ref) {
   return ref.watch(jobsRepositoryProvider).watchJobs();
+});
+
+final jobBidsProvider =
+    StreamProvider.family<List<JobBid>, String>((ref, jobId) {
+  return ref.watch(jobsRepositoryProvider).watchBids(jobId);
 });

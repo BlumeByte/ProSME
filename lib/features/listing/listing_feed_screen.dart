@@ -92,7 +92,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             artisanId: pro.artisanId,
           );
       if (mounted) {
-        context.go('${RouteNames.chatThread}/${thread.id}');
+        context.push('${RouteNames.chatThread}/${thread.id}');
       }
     } catch (_) {
       if (!mounted) return;
@@ -111,7 +111,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     }
     if (!await _confirmUnverified(pro)) return;
     if (mounted) {
-      context.go('${RouteNames.listingDetail}/${pro.listingId}');
+      context.push('${RouteNames.listingDetail}/${pro.listingId}');
     }
   }
 
@@ -485,7 +485,7 @@ class _OpenJobsPreview extends ConsumerWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: userId == null
                     ? () => context.go(RouteNames.auth)
-                    : () => context.go('${RouteNames.jobDetail}/${job.id}'),
+                    : () => context.push('${RouteNames.jobDetail}/${job.id}'),
               ),
             );
           }).toList(growable: false),

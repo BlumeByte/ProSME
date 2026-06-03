@@ -28,7 +28,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
       ListingFeedScreen(onOpenChatTab: () => setState(() => _currentIndex = 2)),
       const UploadRequestScreen(),
       const ChatListScreen(),
-      const JobsScreen(),
+      const JobsScreen(showAppBar: false),
       const ProfileScreen(),
     ];
     final currentIndex = user == null && _currentIndex > 0 ? 0 : _currentIndex;
@@ -76,9 +76,12 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
           type: BottomNavigationBarType.fixed,
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-            BottomNavigationBarItem(icon: Icon(Icons.upload_outlined), label: 'Upload'),
-            BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), label: 'Chat'),
-            BottomNavigationBarItem(icon: Icon(Icons.calendar_month_outlined), label: 'Bookings'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.upload_outlined), label: 'Upload'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.chat_bubble_outline), label: 'Chat'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.calendar_month_outlined), label: 'Bookings'),
             BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
           ],
         ),

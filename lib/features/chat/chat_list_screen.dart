@@ -65,7 +65,7 @@ class ChatListScreen extends ConsumerWidget {
                     : thread.lastMessage,
               ),
               onTap: () =>
-                  context.go('${RouteNames.chatThread}/${thread.id}'),
+                  context.push('${RouteNames.chatThread}/${thread.id}'),
             );
           },
         );

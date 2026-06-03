@@ -54,7 +54,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ListTile(
             leading: const Icon(Icons.login),
             title: const Text('Sign in to continue'),
-            subtitle: const Text('Manage your profile, payments, and settings.'),
+            subtitle:
+                const Text('Manage your profile, payments, and settings.'),
             onTap: () => context.go(RouteNames.auth),
           ),
         ],
@@ -133,7 +134,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           icon: Icons.person_outline,
           title: user.name,
           trailingText: 'Edit',
-          onTap: () => _showChangeUsernameDialog(context, authService, user.name),
+          onTap: () =>
+              _showChangeUsernameDialog(context, authService, user.name),
         ),
         const Divider(),
         _SettingsTile(
@@ -167,7 +169,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         _SettingsTile(
           icon: Icons.shield_outlined,
           title: 'Privacy',
-          onTap: () => context.go(RouteNames.privacy),
+          onTap: () => context.push(RouteNames.privacy),
         ),
         const Divider(),
         _SettingsTile(
@@ -183,19 +185,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         _SettingsTile(
           icon: Icons.support_agent_outlined,
           title: 'Support',
-          onTap: () => context.go(RouteNames.aiSupport),
+          onTap: () => context.push(RouteNames.aiSupport),
         ),
         const Divider(),
         _SettingsTile(
           icon: Icons.description_outlined,
           title: 'Terms of Service',
-          onTap: () => context.go(RouteNames.terms),
+          onTap: () => context.push(RouteNames.terms),
         ),
         const Divider(),
         _SettingsTile(
           icon: Icons.security_outlined,
           title: 'Security',
-          onTap: () => context.go(RouteNames.security),
+          onTap: () => context.push(RouteNames.security),
         ),
         const SizedBox(height: 6),
         SwitchListTile(
@@ -461,7 +463,9 @@ Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
                 value: isDarkMode,
                 onChanged: (value) {
                   setSheetState(() => isDarkMode = value);
-                  ref.read(themeModeControllerProvider.notifier).setDarkMode(value);
+                  ref
+                      .read(themeModeControllerProvider.notifier)
+                      .setDarkMode(value);
                 },
               ),
               SwitchListTile(
@@ -641,7 +645,7 @@ class _FavouritesBlock extends ConsumerWidget {
     final hasAny = count > 0;
 
     return GestureDetector(
-      onTap: () => context.go(RouteNames.saved),
+      onTap: () => context.push(RouteNames.saved),
       child: Container(
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHighest,

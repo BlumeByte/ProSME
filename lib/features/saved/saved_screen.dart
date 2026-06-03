@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/listing_card.dart';
 import '../../core/widgets/loading_state.dart';
+import '../../core/widgets/safe_back_button.dart';
 import '../../models/listing.dart';
 import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
@@ -16,7 +17,10 @@ class SavedScreen extends ConsumerWidget {
     final user = ref.watch(authStateProvider).valueOrNull;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Saved listings')),
+      appBar: AppBar(
+        leading: const SafeBackButton(),
+        title: const Text('Saved listings'),
+      ),
       body: user == null
           ? const EmptyState(
               title: 'Saved items',
@@ -74,7 +78,7 @@ class _SavedBody extends ConsumerWidget {
                 return ListingCard(
                   listing: listing,
                   onTap: () =>
-                      context.go('${RouteNames.listingDetail}/${listing.id}'),
+                      context.push('${RouteNames.listingDetail}/${listing.id}'),
                 );
               },
             );
