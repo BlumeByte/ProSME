@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../config/constants.dart';
 import '../../models/artisan_profile.dart';
 import '../../services/service_providers.dart';
+import 'developer_dashboard_screen.dart';
 
 class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -17,16 +19,23 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(authStateProvider).valueOrNull;
+    if (user?.role == UserRole.developer) {
+      return const DeveloperDashboardScreen();
+    }
+
     final sections = [
       const _VerificationQueue(),
       const _AdminInfoPanel(
         title: 'Job Moderation',
-        body: 'Review posted jobs from the Bookings tab and remove anything that violates ProSME rules.',
+        body:
+            'Review posted jobs from the Bookings tab and remove anything that violates ProSME rules.',
         icon: Icons.work_outline,
       ),
       const _AdminInfoPanel(
         title: 'Reports',
-        body: 'Verification decisions and email tasks are recorded in Supabase for audit review.',
+        body:
+            'Verification decisions and email tasks are recorded in Supabase for audit review.',
         icon: Icons.analytics_outlined,
       ),
     ];
@@ -122,7 +131,8 @@ class _VerificationQueue extends ConsumerWidget {
                     ),
                     const SizedBox(height: 8),
                     Text('ID: ${profile.nationalIdUrl}'),
-                    if (profile.location.isNotEmpty) Text('Location: ${profile.location}'),
+                    if (profile.location.isNotEmpty)
+                      Text('Location: ${profile.location}'),
                     if (profile.categories.isNotEmpty)
                       Text('Categories: ${profile.categories.join(', ')}'),
                     const SizedBox(height: 12),

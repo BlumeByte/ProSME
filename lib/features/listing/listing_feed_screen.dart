@@ -9,9 +9,11 @@ import '../../models/listing.dart';
 import '../jobs/jobs_repository.dart';
 
 class ListingFeedScreen extends ConsumerStatefulWidget {
-  const ListingFeedScreen({super.key, this.onOpenChatTab});
+  const ListingFeedScreen(
+      {super.key, this.onOpenChatTab, this.onOpenUploadTab});
 
   final VoidCallback? onOpenChatTab;
+  final VoidCallback? onOpenUploadTab;
 
   @override
   ConsumerState<ListingFeedScreen> createState() => _ListingFeedScreenState();
@@ -288,6 +290,53 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               children: [
                 Expanded(
                   child: Text(
+                    'Open Service Requests',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: user == null
+                      ? () => context.go(RouteNames.auth)
+                      : widget.onOpenUploadTab,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Post'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _OpenJobsPreview(userId: user?.id),
+            const SizedBox(height: 20),
+            Text(
+              'Latest Artisan Updates',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            if (listings.isEmpty)
+              const Text('No artisan updates yet.')
+            else
+              ...listings.take(3).map(
+                    (listing) => Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: ListTile(
+                        leading: const Icon(Icons.campaign_outlined),
+                        title: Text(listing.title),
+                        subtitle: Text(
+                          '${listing.category} • ${listing.location}',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: user == null
+                            ? () => context.go(RouteNames.auth)
+                            : () => context.push(
+                                  '${RouteNames.listingDetail}/${listing.id}',
+                                ),
+                      ),
+                    ),
+                  ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
                     'Featured Professionals',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
@@ -434,10 +483,6 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                     ),
                   ),
             const SizedBox(height: 20),
-            Text('Open Service Requests',
-                style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            _OpenJobsPreview(userId: user?.id),
           ],
         );
       },

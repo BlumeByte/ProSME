@@ -4,6 +4,50 @@ import '../config/constants.dart';
 import '../models/artisan_profile.dart';
 import '../models/discount_offer.dart';
 
+class PlatformAccount {
+  const PlatformAccount({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.phone,
+    required this.role,
+    required this.verificationStatus,
+    required this.tenantId,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String name;
+  final String email;
+  final String phone;
+  final UserRole role;
+  final VerificationStatus verificationStatus;
+  final String tenantId;
+  final DateTime createdAt;
+}
+
+class PlatformModuleCounts {
+  const PlatformModuleCounts({
+    required this.accounts,
+    required this.tenants,
+    required this.listings,
+    required this.jobs,
+    required this.bids,
+    required this.threads,
+    required this.messages,
+    required this.notifications,
+  });
+
+  final int accounts;
+  final int tenants;
+  final int listings;
+  final int jobs;
+  final int bids;
+  final int threads;
+  final int messages;
+  final int notifications;
+}
+
 class AdminService {
   const AdminService([this._supabase]);
 
@@ -43,19 +87,86 @@ class AdminService {
                 momoNumber:
                     (row['momo_number'] ?? row['momoNumber'] ?? '').toString(),
                 location: (row['location'] ?? '').toString(),
-                categories:
-                    _listFromAny(row['categories']).whereType<String>().toList(),
+                categories: _listFromAny(row['categories'])
+                    .whereType<String>()
+                    .toList(),
                 bio: (row['bio'] ?? '').toString(),
                 ratingSummary:
                     ((row['rating_summary'] ?? row['ratingSummary']) as num?)
                             ?.toDouble() ??
                         0,
               ))
-          .where((profile) => profile.verifiedStatus == VerificationStatus.pending)
+          .where(
+              (profile) => profile.verifiedStatus == VerificationStatus.pending)
           .toList(growable: false);
     } catch (_) {
       return const [];
     }
+  }
+
+  Stream<List<PlatformAccount>> watchAccounts() async* {
+    yield await fetchAccounts();
+    final client = _supabase;
+    if (client == null) return;
+    yield* client
+        .from('profiles')
+        .stream(primaryKey: ['id']).asyncMap((_) => fetchAccounts());
+  }
+
+  Future<List<PlatformAccount>> fetchAccounts() async {
+    if (_supabase == null) return const [];
+    final rows = await _supabase
+        .from('profiles')
+        .select(
+          'id,username,full_name,email,phone,role,verification_status,tenant_id,created_at',
+        )
+        .order('created_at', ascending: false);
+    return (rows as List<dynamic>)
+        .map((row) => _accountFromRow(Map<String, dynamic>.from(row as Map)))
+        .toList(growable: false);
+  }
+
+  Future<PlatformModuleCounts> fetchModuleCounts() async {
+    if (_supabase == null) {
+      return const PlatformModuleCounts(
+        accounts: 0,
+        tenants: 0,
+        listings: 0,
+        jobs: 0,
+        bids: 0,
+        threads: 0,
+        messages: 0,
+        notifications: 0,
+      );
+    }
+
+    final accounts = await fetchAccounts();
+    final listingRows = await _supabase.from('listings').select('id');
+    final jobRows = await _supabase.from('jobs').select('id');
+    final bidRows = await _supabase.from('job_bids').select('id');
+    final threadRows = await _supabase.from('threads').select('id');
+    final messageRows = await _supabase.from('messages').select('id');
+    final notificationRows =
+        await _supabase.from('admin_notifications').select('id');
+    return PlatformModuleCounts(
+      accounts: accounts.length,
+      tenants: accounts.map((account) => account.tenantId).toSet().length,
+      listings: (listingRows as List<dynamic>).length,
+      jobs: (jobRows as List<dynamic>).length,
+      bids: (bidRows as List<dynamic>).length,
+      threads: (threadRows as List<dynamic>).length,
+      messages: (messageRows as List<dynamic>).length,
+      notifications: (notificationRows as List<dynamic>).length,
+    );
+  }
+
+  Future<void> updateAccountRole({
+    required String userId,
+    required UserRole role,
+  }) async {
+    final client = _supabase;
+    if (client == null) return;
+    await client.from('profiles').update({'role': role.name}).eq('id', userId);
   }
 
   Future<void> submitArtisanVerification({
@@ -83,7 +194,8 @@ class AdminService {
     await client.from('email_outbox').insert({
       'to_email': 'blumebyte@gmail.com',
       'subject': 'New ProSME artisan verification',
-      'body': 'An artisan uploaded front and back ID documents for verification. Review them in the admin dashboard.',
+      'body':
+          'An artisan uploaded front and back ID documents for verification. Review them in the admin dashboard.',
       'related_user_id': userId,
     });
   }
@@ -121,12 +233,35 @@ class AdminService {
           .from('discount_offers')
           .select('id,title,description,percent,active,start,end');
       return (rows as List<dynamic>)
-          .map((row) => DiscountOffer.fromJson(Map<String, dynamic>.from(row as Map)))
+          .map((row) =>
+              DiscountOffer.fromJson(Map<String, dynamic>.from(row as Map)))
           .toList(growable: false);
     } catch (_) {
       return const [];
     }
   }
+}
+
+PlatformAccount _accountFromRow(Map<String, dynamic> row) {
+  final roleName = (row['role'] ?? '').toString();
+  final statusName = (row['verification_status'] ?? '').toString();
+  return PlatformAccount(
+    id: (row['id'] ?? '').toString(),
+    name: (row['username'] ?? row['full_name'] ?? 'Unnamed').toString(),
+    email: (row['email'] ?? '').toString(),
+    phone: (row['phone'] ?? '').toString(),
+    role: UserRole.values.firstWhere(
+      (role) => role.name == roleName,
+      orElse: () => UserRole.customer,
+    ),
+    verificationStatus: VerificationStatus.values.firstWhere(
+      (status) => status.name == statusName,
+      orElse: () => VerificationStatus.pending,
+    ),
+    tenantId: (row['tenant_id'] ?? 'default').toString(),
+    createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()) ??
+        DateTime.now(),
+  );
 }
 
 VerificationStatus _verificationFrom(String? raw) {

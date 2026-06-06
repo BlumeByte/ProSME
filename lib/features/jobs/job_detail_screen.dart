@@ -311,6 +311,12 @@ class _BidTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authStateProvider).valueOrNull;
+    final ratings = ref.watch(jobRatingsProvider(job.id)).valueOrNull ??
+        const <JobRating>[];
+    final existingRating = ratings
+        .where((rating) => rating.artisanId == bid.artisanId)
+        .firstOrNull;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -331,6 +337,12 @@ class _BidTile extends ConsumerWidget {
             if (bid.message.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(bid.message),
+            ],
+            if (existingRating != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Rated ${existingRating.stars}/5${existingRating.comment.isEmpty ? '' : ': ${existingRating.comment}'}',
+              ),
             ],
             const SizedBox(height: 12),
             Row(
@@ -353,6 +365,19 @@ class _BidTile extends ConsumerWidget {
                 ),
               ],
             ),
+            if (bid.status == 'accepted' && user != null) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _rateArtisan(context, ref, user.id),
+                  icon: const Icon(Icons.star_outline),
+                  label: Text(
+                    existingRating == null ? 'Rate artisan' : 'Update rating',
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -386,6 +411,89 @@ class _BidTile extends ConsumerWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Could not accept bid: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _rateArtisan(
+    BuildContext context,
+    WidgetRef ref,
+    String userId,
+  ) async {
+    var stars = 5;
+    final commentController = TextEditingController();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('Rate artisan'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SegmentedButton<int>(
+                  segments: const [
+                    ButtonSegment(value: 1, label: Text('1')),
+                    ButtonSegment(value: 2, label: Text('2')),
+                    ButtonSegment(value: 3, label: Text('3')),
+                    ButtonSegment(value: 4, label: Text('4')),
+                    ButtonSegment(value: 5, label: Text('5')),
+                  ],
+                  selected: {stars},
+                  onSelectionChanged: (selection) {
+                    setDialogState(() => stars = selection.first);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: commentController,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Comment',
+                    hintText: 'Describe the completed job.',
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Save rating'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (submitted != true) {
+      commentController.dispose();
+      return;
+    }
+    final comment = commentController.text.trim();
+    commentController.dispose();
+    try {
+      await ref.read(jobsRepositoryProvider).rateJob(
+            jobId: job.id,
+            artisanId: bid.artisanId,
+            userId: userId,
+            stars: stars,
+            comment: comment,
+          );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Rating saved.')),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save rating: $error')),
         );
       }
     }

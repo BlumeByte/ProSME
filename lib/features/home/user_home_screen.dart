@@ -25,7 +25,10 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
     final pages = [
-      ListingFeedScreen(onOpenChatTab: () => setState(() => _currentIndex = 2)),
+      ListingFeedScreen(
+        onOpenChatTab: () => setState(() => _currentIndex = 2),
+        onOpenUploadTab: () => setState(() => _currentIndex = 1),
+      ),
       const UploadRequestScreen(),
       const ChatListScreen(),
       const JobsScreen(showAppBar: false),

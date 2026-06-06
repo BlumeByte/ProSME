@@ -37,7 +37,7 @@ const String kOAuthOidcDiscoveryEndpoint =
 const Color kPrimaryGreen = Color(0xFF1E7F3E);
 const List<String> kSupportedLanguages = ['English', 'Twi', 'Ewe'];
 
-enum UserRole { customer, artisan, admin }
+enum UserRole { customer, artisan, admin, developer }
 
 enum VerificationStatus { pending, verified, rejected }
 
