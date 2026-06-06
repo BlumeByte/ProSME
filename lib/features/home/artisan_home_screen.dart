@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 import '../../core/widgets/app_scaffold.dart';
-import '../../routes/route_names.dart';
 import '../chat/chat_list_screen.dart';
 import 'artisan_dashboard_screen.dart';
 import '../jobs/jobs_screen.dart';
@@ -51,9 +49,9 @@ class _ArtisanHomeScreenState extends State<ArtisanHomeScreen> {
         title: 'Artisan Dashboard',
         actions: [
           IconButton(
-            onPressed: () => context.go(RouteNames.home),
-            icon: const Icon(Icons.home_outlined),
-            tooltip: 'View marketplace',
+            onPressed: () => setState(() => _currentIndex = 2),
+            icon: const Icon(Icons.search),
+            tooltip: 'Search requests',
           ),
         ],
         body: pages[_currentIndex],

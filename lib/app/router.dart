@@ -57,6 +57,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return _homeForRole(authState);
       }
 
+      if (isLoggedIn &&
+          authState.role == UserRole.artisan &&
+          fullPath == RouteNames.home) {
+        return RouteNames.artisanHome;
+      }
+
       return null;
     },
     routes: [

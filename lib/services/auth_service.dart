@@ -27,6 +27,8 @@ abstract class AuthService {
   Future<void> updateRole(UserRole role);
   Future<void> updateUsername(String username);
   Future<void> updatePhone(String phone);
+  Future<void> updateCountry(String country, String countryCode);
+  Future<void> updateDescription(String description);
   Future<void> updateEmail(String email);
   Future<void> deleteAccount();
 }
@@ -203,6 +205,29 @@ class MockAuthService implements AuthService {
   }
 
   @override
+  Future<void> updateCountry(String country, String countryCode) async {
+    if (_currentUser == null) {
+      throw StateError('No signed-in user.');
+    }
+    _currentUser = _currentUser!.copyWith(
+      country: country,
+      countryCode: countryCode,
+    );
+    _accountsByEmail[_currentUser!.email.toLowerCase()] = _currentUser!;
+    _controller.add(_currentUser);
+  }
+
+  @override
+  Future<void> updateDescription(String description) async {
+    if (_currentUser == null) {
+      throw StateError('No signed-in user.');
+    }
+    _currentUser = _currentUser!.copyWith(description: description.trim());
+    _accountsByEmail[_currentUser!.email.toLowerCase()] = _currentUser!;
+    _controller.add(_currentUser);
+  }
+
+  @override
   Future<void> updateEmail(String email) async {
     final user = _currentUser;
     if (user == null) {
@@ -256,7 +281,7 @@ class SupabaseAuthService implements AuthService {
       final response = await _supabase
           .from('profiles')
           .select(
-            'id,username,full_name,phone,email,avatar_url,role,verification_status,created_at',
+            'id,username,full_name,phone,email,avatar_url,role,verification_status,country,country_code,description,created_at',
           )
           .eq('id', userId)
           .maybeSingle();
@@ -284,6 +309,9 @@ class SupabaseAuthService implements AuthService {
       'email': user.email ?? '',
       'phone': user.phone ?? '',
       'avatar_url': avatarUrl,
+      'country': existingProfile?['country'] ?? 'Ghana',
+      'country_code': existingProfile?['country_code'] ?? '+233',
+      'description': existingProfile?['description'] ?? '',
       'role': role,
       'verification_status': (existingProfile?['verification_status'] ??
               (role == UserRole.artisan.name
@@ -327,17 +355,23 @@ class SupabaseAuthService implements AuthService {
         orElse: () => UserRole.customer,
       ),
       name: (source['username'] ??
-                  source['full_name'] ??
-                  source['name'] ??
-                  metadata['username'] ??
-                  metadata['full_name'] ??
-                  metadata['name'] ??
-                  _defaultDisplayName)
-              .toString(),
+              source['full_name'] ??
+              source['name'] ??
+              metadata['username'] ??
+              metadata['full_name'] ??
+              metadata['name'] ??
+              _defaultDisplayName)
+          .toString(),
       phone: (source['phone'] ?? user.phone ?? '').toString(),
       email: (source['email'] ?? user.email ?? '').toString(),
       photoUrl:
           (source['avatar_url'] ?? metadata['avatar_url'] ?? '').toString(),
+      country: (source['country'] ?? metadata['country'] ?? 'Ghana').toString(),
+      countryCode:
+          (source['country_code'] ?? metadata['country_code'] ?? '+233')
+              .toString(),
+      description:
+          (source['description'] ?? metadata['description'] ?? '').toString(),
       verificationStatus: VerificationStatus.values.firstWhere(
         (status) =>
             status.name ==
@@ -451,8 +485,7 @@ class SupabaseAuthService implements AuthService {
     String? username,
     UserRole role = UserRole.customer,
   }) async {
-    final normalizedUsername =
-        (username ?? email.split('@').first).trim();
+    final normalizedUsername = (username ?? email.split('@').first).trim();
     final response = await _supabase.auth.signUp(
       email: email.trim(),
       password: password,
@@ -513,12 +546,11 @@ class SupabaseAuthService implements AuthService {
       try {
         final payload = <String, dynamic>{
           'id': user.id,
-          'full_name':
-              (user.userMetadata?['full_name'] ??
-                      user.userMetadata?['username'] ??
-                      user.userMetadata?['name'] ??
-                      _defaultDisplayName)
-                  .toString(),
+          'full_name': (user.userMetadata?['full_name'] ??
+                  user.userMetadata?['username'] ??
+                  user.userMetadata?['name'] ??
+                  _defaultDisplayName)
+              .toString(),
           'email': user.email ?? '',
           'phone': user.phone ?? '',
           'avatar_url': (user.userMetadata?['avatar_url'] ?? '').toString(),
@@ -590,15 +622,43 @@ class SupabaseAuthService implements AuthService {
       throw StateError('Phone cannot be empty.');
     }
 
-    await _updateProfile(user.id, {'phone': normalized});
-    await _supabase.auth.updateUser(
-      UserAttributes(
-        data: {'phone': normalized},
-      ),
-    );
+    await _updateProfile(
+        user.id, {'phone': normalized, 'phone_verified': false});
 
     if (_resolvedCurrentUser != null) {
       _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(phone: normalized);
+    }
+  }
+
+  @override
+  Future<void> updateCountry(String country, String countryCode) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      throw StateError('No signed-in user.');
+    }
+    await _updateProfile(user.id, {
+      'country': country,
+      'country_code': countryCode,
+    });
+    if (_resolvedCurrentUser != null) {
+      _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(
+        country: country,
+        countryCode: countryCode,
+      );
+    }
+  }
+
+  @override
+  Future<void> updateDescription(String description) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      throw StateError('No signed-in user.');
+    }
+    final normalized = description.trim();
+    await _updateProfile(user.id, {'description': normalized});
+    if (_resolvedCurrentUser != null) {
+      _resolvedCurrentUser =
+          _resolvedCurrentUser!.copyWith(description: normalized);
     }
   }
 

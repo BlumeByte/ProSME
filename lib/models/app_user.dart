@@ -8,6 +8,9 @@ class AppUser {
     required this.phone,
     required this.email,
     required this.photoUrl,
+    this.country = 'Ghana',
+    this.countryCode = '+233',
+    this.description = '',
     this.verificationStatus = VerificationStatus.pending,
     required this.createdAt,
   });
@@ -18,6 +21,9 @@ class AppUser {
   final String phone;
   final String email;
   final String photoUrl;
+  final String country;
+  final String countryCode;
+  final String description;
   final VerificationStatus verificationStatus;
   final DateTime createdAt;
 
@@ -27,6 +33,9 @@ class AppUser {
     String? phone,
     String? email,
     String? photoUrl,
+    String? country,
+    String? countryCode,
+    String? description,
     VerificationStatus? verificationStatus,
   }) {
     return AppUser(
@@ -36,6 +45,9 @@ class AppUser {
       phone: phone ?? this.phone,
       email: email ?? this.email,
       photoUrl: photoUrl ?? this.photoUrl,
+      country: country ?? this.country,
+      countryCode: countryCode ?? this.countryCode,
+      description: description ?? this.description,
       verificationStatus: verificationStatus ?? this.verificationStatus,
       createdAt: createdAt,
     );
@@ -52,6 +64,9 @@ class AppUser {
       phone: json['phone'] as String,
       email: json['email'] as String,
       photoUrl: json['photoUrl'] as String,
+      country: (json['country'] as String?) ?? 'Ghana',
+      countryCode: (json['countryCode'] as String?) ?? '+233',
+      description: (json['description'] as String?) ?? '',
       verificationStatus: VerificationStatus.values.firstWhere(
         (status) => status.name == json['verificationStatus'],
         orElse: () => VerificationStatus.pending,
@@ -68,6 +83,9 @@ class AppUser {
       'phone': phone,
       'email': email,
       'photoUrl': photoUrl,
+      'country': country,
+      'countryCode': countryCode,
+      'description': description,
       'verificationStatus': verificationStatus.name,
       'createdAt': createdAt.toIso8601String(),
     };

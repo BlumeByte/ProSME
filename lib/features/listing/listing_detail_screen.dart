@@ -141,6 +141,14 @@ class ListingDetailScreen extends ConsumerWidget {
                     context.go(RouteNames.auth);
                     return;
                   }
+                  if (user.id == listingData.artisanId) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('You cannot chat with yourself.'),
+                      ),
+                    );
+                    return;
+                  }
                   try {
                     final thread =
                         await ref.read(chatServiceProvider).createOrOpenThread(
@@ -164,10 +172,16 @@ class ListingDetailScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               PrimaryButton(
-                label: 'Request Invoice',
-                icon: Icons.receipt_long,
-                onPressed: () =>
-                    context.push(RouteNames.invoice, extra: listingData),
+                label: 'Payments disabled',
+                icon: Icons.money_off,
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                          'Payments are disabled for now. Use chat to agree on service details.'),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               PrimaryButton(

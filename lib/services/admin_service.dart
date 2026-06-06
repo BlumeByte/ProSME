@@ -213,6 +213,12 @@ class AdminService {
       'verification_status': status.name,
       'verification_notes': notes,
       'verification_reviewed_at': DateTime.now().toUtc().toIso8601String(),
+      'verification_retry_after': approved
+          ? null
+          : DateTime.now()
+              .toUtc()
+              .add(const Duration(days: 30))
+              .toIso8601String(),
     }).eq('id', userId);
     await client.from('email_outbox').insert({
       'to_email': null,

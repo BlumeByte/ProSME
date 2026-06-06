@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/constants.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
@@ -23,6 +24,45 @@ class _ArtisanVerificationScreenState
   PlatformFile? _backId;
   final List<PlatformFile> _certificates = [];
   bool _isSubmitting = false;
+  bool _isLoadingStatus = true;
+  bool _hasSubmittedDocuments = false;
+  DateTime? _retryAfter;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVerificationStatus();
+  }
+
+  Future<void> _loadVerificationStatus() async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null || !shouldUseSupabase()) {
+      setState(() => _isLoadingStatus = false);
+      return;
+    }
+    try {
+      final row = await ref
+          .read(supabaseClientProvider)
+          .from('profiles')
+          .select(
+            'national_id_front_url,national_id_back_url,verification_retry_after',
+          )
+          .eq('id', user.id)
+          .maybeSingle();
+      if (!mounted) return;
+      setState(() {
+        _hasSubmittedDocuments =
+            ((row?['national_id_front_url'] ?? '') as String).isNotEmpty ||
+                ((row?['national_id_back_url'] ?? '') as String).isNotEmpty;
+        _retryAfter = DateTime.tryParse(
+          (row?['verification_retry_after'] ?? '').toString(),
+        );
+        _isLoadingStatus = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingStatus = false);
+    }
+  }
 
   Future<void> _pickRequired({required bool front}) async {
     final file = await _pickFile();
@@ -122,6 +162,7 @@ class _ArtisanVerificationScreenState
             businessCertificateUrls: certificateUrls,
           );
       if (!mounted) return;
+      setState(() => _hasSubmittedDocuments = true);
       _showMessage('Verification sent to admin for review.');
       context.go(RouteNames.artisanHome);
     } catch (_) {
@@ -140,6 +181,12 @@ class _ArtisanVerificationScreenState
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(authStateProvider).valueOrNull;
+    final retryAfter = _retryAfter;
+    final isRetryLocked =
+        retryAfter != null && retryAfter.isAfter(DateTime.now());
+    final remainingDays =
+        isRetryLocked ? retryAfter.difference(DateTime.now()).inDays + 1 : 0;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Artisan verification'),
@@ -149,53 +196,111 @@ class _ArtisanVerificationScreenState
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          Text(
-            'Upload verification documents',
-            style: Theme.of(context).textTheme.titleLarge,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'PDF or image only. Each file must be 1 MB or smaller.',
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          _FileTile(
-            title: 'National ID front',
-            required: true,
-            file: _frontId,
-            onTap: () => _pickRequired(front: true),
-          ),
-          const SizedBox(height: 10),
-          _FileTile(
-            title: 'National ID back',
-            required: true,
-            file: _backId,
-            onTap: () => _pickRequired(front: false),
-          ),
-          const SizedBox(height: 10),
-          ..._certificates.map(
-            (file) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _FileTile(
-                title: 'Business certificate',
-                file: file,
-                onTap: () {},
+          if (_isLoadingStatus)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (user?.verificationStatus == VerificationStatus.verified)
+            const _StatusPanel(
+              icon: Icons.verified,
+              title: 'Verification approved',
+              message: 'Your artisan profile now shows a verified checkmark.',
+            )
+          else if (_hasSubmittedDocuments &&
+              user?.verificationStatus == VerificationStatus.pending)
+            const _StatusPanel(
+              icon: Icons.pending_actions,
+              title: 'Submitted and under review',
+              message:
+                  'Your documents are with admin. You cannot submit again until review is complete.',
+            )
+          else if (isRetryLocked)
+            _StatusPanel(
+              icon: Icons.lock_clock,
+              title: 'Verification paused',
+              message:
+                  'Your documents were not accepted. You can upload again in $remainingDays day(s). Use clear front/back National ID images and valid business certificates where available.',
+            )
+          else ...[
+            Text(
+              'Upload verification documents',
+              style: Theme.of(context).textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'PDF or image only. Each file must be 1 MB or smaller.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            _FileTile(
+              title: 'National ID front',
+              required: true,
+              file: _frontId,
+              onTap: () => _pickRequired(front: true),
+            ),
+            const SizedBox(height: 10),
+            _FileTile(
+              title: 'National ID back',
+              required: true,
+              file: _backId,
+              onTap: () => _pickRequired(front: false),
+            ),
+            const SizedBox(height: 10),
+            ..._certificates.map(
+              (file) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _FileTile(
+                  title: 'Business certificate',
+                  file: file,
+                  onTap: () {},
+                ),
               ),
             ),
-          ),
-          OutlinedButton.icon(
-            onPressed: _pickCertificate,
-            icon: const Icon(Icons.add),
-            label: const Text('Add business certificate'),
-          ),
-          const SizedBox(height: 16),
-          PrimaryButton(
-            label: _isSubmitting ? 'Submitting...' : 'Submit for review',
-            icon: Icons.upload_file,
-            onPressed: _isSubmitting ? null : _submit,
-          ),
+            OutlinedButton.icon(
+              onPressed: _pickCertificate,
+              icon: const Icon(Icons.add),
+              label: const Text('Add business certificate'),
+            ),
+            const SizedBox(height: 16),
+            PrimaryButton(
+              label: _isSubmitting ? 'Submitting...' : 'Submit for review',
+              icon: Icons.upload_file,
+              onPressed: _isSubmitting ? null : _submit,
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _StatusPanel extends StatelessWidget {
+  const _StatusPanel({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          children: [
+            Icon(icon, size: 48, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(height: 12),
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text(message, textAlign: TextAlign.center),
+          ],
+        ),
       ),
     );
   }

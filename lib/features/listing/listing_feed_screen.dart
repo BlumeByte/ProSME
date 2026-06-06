@@ -1,12 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/constants.dart';
+import '../../core/utils/location_data.dart';
 import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
 import '../../models/listing.dart';
 import '../jobs/jobs_repository.dart';
+
+bool _matchesLocation(String target, String query) {
+  final tokens = query
+      .toLowerCase()
+      .split(RegExp(r'[\s,]+'))
+      .where((token) => token.length > 2)
+      .toList(growable: false);
+  if (tokens.isEmpty) return true;
+  return tokens.any(target.contains);
+}
 
 class ListingFeedScreen extends ConsumerStatefulWidget {
   const ListingFeedScreen(
@@ -25,6 +38,13 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   String _serviceQuery = '';
   String _locationQuery = '';
   String? _selectedCategory;
+  CountryOption _selectedCountry = kCountries.first;
+  RegionOption? _selectedRegion;
+  CityOption? _selectedCity;
+  String? _selectedTown;
+  bool _showSearchResults = false;
+  bool _locating = false;
+  List<String> _recentSearches = const [];
   static const _defaultCategories = [
     ('Plumbing', Icons.plumbing, 0),
     ('Electrical', Icons.electrical_services, 0),
@@ -35,6 +55,12 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadRecentSearches();
+  }
+
+  @override
   void dispose() {
     _serviceController.dispose();
     _locationController.dispose();
@@ -42,11 +68,21 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   }
 
   void _applySearch() {
+    final parts = [
+      _locationController.text.trim(),
+      _selectedTown,
+      _selectedCity?.name,
+      _selectedRegion?.name,
+      _selectedCountry.name,
+    ].whereType<String>().where((item) => item.trim().isNotEmpty).toList();
     setState(() {
       _serviceQuery = _serviceController.text.trim().toLowerCase();
-      _locationQuery = _locationController.text.trim().toLowerCase();
+      _locationQuery = parts.join(' ').toLowerCase();
       _selectedCategory = null;
+      _showSearchResults =
+          _serviceQuery.isNotEmpty || _locationQuery.isNotEmpty;
     });
+    _saveRecentSearch();
   }
 
   void _applyCategory(String category) {
@@ -54,6 +90,82 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
       _selectedCategory = category;
       _serviceController.text = category;
       _serviceQuery = category.toLowerCase();
+      _showSearchResults = true;
+    });
+    _saveRecentSearch();
+  }
+
+  Future<void> _loadRecentSearches() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _recentSearches = prefs.getStringList('recent_searches') ?? const [];
+    });
+  }
+
+  Future<void> _saveRecentSearch() async {
+    final query = [
+      _serviceController.text.trim(),
+      _selectedTown ??
+          _selectedCity?.name ??
+          _selectedRegion?.name ??
+          _selectedCountry.name,
+    ].where((item) => item.isNotEmpty).join(' in ');
+    if (query.trim().isEmpty) return;
+    final next = [query, ..._recentSearches.where((item) => item != query)]
+        .take(8)
+        .toList(growable: false);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('recent_searches', next);
+    if (mounted) setState(() => _recentSearches = next);
+  }
+
+  Future<void> _usePhoneLocation() async {
+    setState(() => _locating = true);
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permission is required.')),
+          );
+        }
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _locationController.text =
+            '${position.latitude.toStringAsFixed(3)}, ${position.longitude.toStringAsFixed(3)}';
+      });
+      _applySearch();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not access phone location: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  void _clearSearchResults() {
+    setState(() {
+      _showSearchResults = false;
+      _serviceQuery = '';
+      _locationQuery = '';
+      _selectedCategory = null;
+      _serviceController.clear();
+      _locationController.clear();
     });
   }
 
@@ -87,6 +199,12 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
       context.go(RouteNames.auth);
       return;
     }
+    if (user.id == pro.artisanId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You cannot chat with yourself.')),
+      );
+      return;
+    }
     if (!await _confirmUnverified(pro)) return;
     try {
       final thread = await ref.read(chatServiceProvider).createOrOpenThread(
@@ -109,6 +227,12 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) {
       context.go(RouteNames.auth);
+      return;
+    }
+    if (user.id == pro.artisanId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You cannot book your own listing.')),
+      );
       return;
     }
     if (!await _confirmUnverified(pro)) return;
@@ -152,8 +276,8 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               listing.category
                   .toLowerCase()
                   .contains(_selectedCategory!.toLowerCase());
-          final locationMatches =
-              _locationQuery.isEmpty || locationText.contains(_locationQuery);
+          final locationMatches = _locationQuery.isEmpty ||
+              _matchesLocation(locationText, _locationQuery);
           return serviceMatches && categoryMatches && locationMatches;
         }).toList(growable: false);
 
@@ -205,38 +329,134 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
         final featured = professionalsById.values.toList()
           ..sort((a, b) => b.listingCount.compareTo(a.listingCount));
 
+        if (_showSearchResults) {
+          return PopScope(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, _) {
+              if (didPop) return;
+              _clearSearchResults();
+            },
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: _clearSearchResults,
+                      icon: const Icon(Icons.arrow_back),
+                      tooltip: 'Back',
+                    ),
+                    Expanded(
+                      child: Text(
+                        'Search results',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                  ],
+                ),
+                _SearchControls(
+                  serviceController: _serviceController,
+                  locationController: _locationController,
+                  selectedCountry: _selectedCountry,
+                  selectedRegion: _selectedRegion,
+                  selectedCity: _selectedCity,
+                  selectedTown: _selectedTown,
+                  locating: _locating,
+                  onCountryChanged: (country) => setState(() {
+                    _selectedCountry = country;
+                    _selectedRegion = null;
+                    _selectedCity = null;
+                    _selectedTown = null;
+                  }),
+                  onRegionChanged: (region) => setState(() {
+                    _selectedRegion = region;
+                    _selectedCity = null;
+                    _selectedTown = null;
+                  }),
+                  onCityChanged: (city) => setState(() {
+                    _selectedCity = city;
+                    _selectedTown = null;
+                  }),
+                  onTownChanged: (town) => setState(() => _selectedTown = town),
+                  onSearch: _applySearch,
+                  onUseLocation: _usePhoneLocation,
+                ),
+                const SizedBox(height: 16),
+                if (_recentSearches.isNotEmpty) ...[
+                  _RecentSearches(
+                    searches: _recentSearches,
+                    onTap: (value) {
+                      _serviceController.text = value;
+                      _applySearch();
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                Text('Matching requests',
+                    style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 8),
+                _OpenJobsPreview(
+                  userId: user?.id,
+                  query: _serviceQuery,
+                  locationQuery: _locationQuery,
+                ),
+                const SizedBox(height: 18),
+                Text('Matching professionals',
+                    style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 8),
+                if (featured.isEmpty)
+                  const Text('No professionals found.')
+                else
+                  ...featured.map((pro) => _ProfessionalCard(
+                        pro: pro,
+                        onChat: () => _startChat(pro),
+                        onBook: () => _bookProfessional(pro),
+                      )),
+              ],
+            ),
+          );
+        }
+
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
           children: [
-            TextField(
-              controller: _serviceController,
-              onSubmitted: (_) => _applySearch(),
-              decoration: const InputDecoration(
-                hintText: 'What service do you need?',
-                prefixIcon: Icon(Icons.search),
-              ),
+            _SearchControls(
+              serviceController: _serviceController,
+              locationController: _locationController,
+              selectedCountry: _selectedCountry,
+              selectedRegion: _selectedRegion,
+              selectedCity: _selectedCity,
+              selectedTown: _selectedTown,
+              locating: _locating,
+              onCountryChanged: (country) => setState(() {
+                _selectedCountry = country;
+                _selectedRegion = null;
+                _selectedCity = null;
+                _selectedTown = null;
+              }),
+              onRegionChanged: (region) => setState(() {
+                _selectedRegion = region;
+                _selectedCity = null;
+                _selectedTown = null;
+              }),
+              onCityChanged: (city) => setState(() {
+                _selectedCity = city;
+                _selectedTown = null;
+              }),
+              onTownChanged: (town) => setState(() => _selectedTown = town),
+              onSearch: _applySearch,
+              onUseLocation: _usePhoneLocation,
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _locationController,
-              onSubmitted: (_) => _applySearch(),
-              decoration: const InputDecoration(
-                hintText: 'Enter your location',
-                prefixIcon: Icon(Icons.location_on_outlined),
+            if (_recentSearches.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _RecentSearches(
+                searches: _recentSearches,
+                onTap: (value) {
+                  _serviceController.text = value;
+                  _applySearch();
+                },
               ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: scheme.primary,
-                  foregroundColor: scheme.onPrimary,
-                ),
-                onPressed: _applySearch,
-                child: const Text('Search'),
-              ),
-            ),
+            ],
             const SizedBox(height: 22),
             Text('Popular Services',
                 style: Theme.of(context).textTheme.titleLarge),
@@ -360,126 +580,10 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               const Text('No professionals found for this search.')
             else
               ...featured.take(5).map(
-                    (pro) => Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                CircleAvatar(
-                                  radius: 24,
-                                  backgroundImage:
-                                      (pro.avatarUrl?.isNotEmpty ?? false)
-                                          ? NetworkImage(pro.avatarUrl!)
-                                          : null,
-                                  child: (pro.avatarUrl?.isNotEmpty ?? false)
-                                      ? null
-                                      : Text(
-                                          (pro.name.trim().isNotEmpty
-                                                  ? pro.name.trim()[0]
-                                                  : 'P')
-                                              .toUpperCase(),
-                                        ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              pro.name,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleMedium,
-                                            ),
-                                          ),
-                                          if (pro.isVerified)
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: scheme.primary
-                                                    .withValues(alpha: 0.12),
-                                                borderRadius:
-                                                    BorderRadius.circular(999),
-                                              ),
-                                              child: Text(
-                                                'Verified',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: scheme.primary,
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        pro.location,
-                                        style: TextStyle(
-                                            color: scheme.onSurfaceVariant),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '${pro.listingCount} active service${pro.listingCount == 1 ? '' : 's'}',
-                                        style: TextStyle(
-                                            color: scheme.onSurfaceVariant),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: pro.categories
-                                  .where((item) => item.trim().isNotEmpty)
-                                  .take(3)
-                                  .map((item) => Chip(label: Text(item)))
-                                  .toList(growable: false),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Text(
-                                  'From $kCurrencySymbol ${pro.minPrice.toStringAsFixed(2)}',
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium,
-                                ),
-                                const Spacer(),
-                                OutlinedButton.icon(
-                                  onPressed: () => _startChat(pro),
-                                  icon: const Icon(Icons.chat_bubble_outline,
-                                      size: 18),
-                                  label: const Text('Chat'),
-                                ),
-                                const SizedBox(width: 8),
-                                FilledButton(
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: scheme.primary,
-                                    foregroundColor: scheme.onPrimary,
-                                  ),
-                                  onPressed: () => _bookProfessional(pro),
-                                  child: const Text('Book Now'),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
+                    (pro) => _ProfessionalCard(
+                      pro: pro,
+                      onChat: () => _startChat(pro),
+                      onBook: () => _bookProfessional(pro),
                     ),
                   ),
             const SizedBox(height: 20),
@@ -498,10 +602,213 @@ class _CategoryPreview {
   final int count;
 }
 
+class _SearchControls extends StatelessWidget {
+  const _SearchControls({
+    required this.serviceController,
+    required this.locationController,
+    required this.selectedCountry,
+    required this.selectedRegion,
+    required this.selectedCity,
+    required this.selectedTown,
+    required this.locating,
+    required this.onCountryChanged,
+    required this.onRegionChanged,
+    required this.onCityChanged,
+    required this.onTownChanged,
+    required this.onSearch,
+    required this.onUseLocation,
+  });
+
+  final TextEditingController serviceController;
+  final TextEditingController locationController;
+  final CountryOption selectedCountry;
+  final RegionOption? selectedRegion;
+  final CityOption? selectedCity;
+  final String? selectedTown;
+  final bool locating;
+  final ValueChanged<CountryOption> onCountryChanged;
+  final ValueChanged<RegionOption?> onRegionChanged;
+  final ValueChanged<CityOption?> onCityChanged;
+  final ValueChanged<String?> onTownChanged;
+  final VoidCallback onSearch;
+  final VoidCallback onUseLocation;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final cities = selectedRegion?.cities ?? const <CityOption>[];
+    final towns = selectedCity?.towns ?? const <String>[];
+    return Column(
+      children: [
+        TextField(
+          controller: serviceController,
+          onSubmitted: (_) => onSearch(),
+          decoration: const InputDecoration(
+            hintText: 'What service or job do you need?',
+            prefixIcon: Icon(Icons.search),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: locationController,
+          onSubmitted: (_) => onSearch(),
+          decoration: InputDecoration(
+            hintText: 'Type location, street, or area',
+            prefixIcon: const Icon(Icons.location_on_outlined),
+            suffixIcon: IconButton(
+              onPressed: locating ? null : onUseLocation,
+              icon: locating
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.my_location),
+              tooltip: 'Use phone location',
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<CountryOption>(
+                initialValue: selectedCountry,
+                decoration: const InputDecoration(labelText: 'Country'),
+                items: kCountries
+                    .map((country) => DropdownMenuItem(
+                          value: country,
+                          child: Text(country.name),
+                        ))
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value != null) onCountryChanged(value);
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: DropdownButtonFormField<RegionOption?>(
+                initialValue: selectedRegion,
+                decoration: const InputDecoration(labelText: 'Region'),
+                items: [
+                  const DropdownMenuItem<RegionOption?>(
+                    value: null,
+                    child: Text('Any'),
+                  ),
+                  ...selectedCountry.regions.map(
+                    (region) => DropdownMenuItem<RegionOption?>(
+                      value: region,
+                      child: Text(region.name),
+                    ),
+                  ),
+                ],
+                onChanged: onRegionChanged,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<CityOption?>(
+                initialValue: selectedCity,
+                decoration: const InputDecoration(labelText: 'City'),
+                items: [
+                  const DropdownMenuItem<CityOption?>(
+                    value: null,
+                    child: Text('Any'),
+                  ),
+                  ...cities.map(
+                    (city) => DropdownMenuItem<CityOption?>(
+                      value: city,
+                      child: Text(city.name),
+                    ),
+                  ),
+                ],
+                onChanged: onCityChanged,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: DropdownButtonFormField<String?>(
+                initialValue: selectedTown,
+                decoration: const InputDecoration(labelText: 'Town'),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Any'),
+                  ),
+                  ...towns.map(
+                    (town) => DropdownMenuItem<String?>(
+                      value: town,
+                      child: Text(town),
+                    ),
+                  ),
+                ],
+                onChanged: onTownChanged,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: scheme.primary,
+              foregroundColor: scheme.onPrimary,
+            ),
+            onPressed: onSearch,
+            child: const Text('Search'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecentSearches extends StatelessWidget {
+  const _RecentSearches({required this.searches, required this.onTap});
+
+  final List<String> searches;
+  final ValueChanged<String> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Recent searches', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: searches
+              .map(
+                (search) => ActionChip(
+                  avatar: const Icon(Icons.history, size: 16),
+                  label: Text(search),
+                  onPressed: () => onTap(search),
+                ),
+              )
+              .toList(growable: false),
+        ),
+      ],
+    );
+  }
+}
+
 class _OpenJobsPreview extends ConsumerWidget {
-  const _OpenJobsPreview({required this.userId});
+  const _OpenJobsPreview({
+    required this.userId,
+    this.query = '',
+    this.locationQuery = '',
+  });
 
   final String? userId;
+  final String query;
+  final String locationQuery;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -515,11 +822,19 @@ class _OpenJobsPreview extends ConsumerWidget {
         'Could not load service requests. Check Supabase credentials and try again.',
       ),
       data: (jobs) {
-        if (jobs.isEmpty) {
+        final filtered = jobs.where((job) {
+          final jobText = '${job.title} ${job.description}'.toLowerCase();
+          final locationText = job.location.toLowerCase();
+          final queryMatches = query.isEmpty || jobText.contains(query);
+          final locationMatches = locationQuery.isEmpty ||
+              _matchesLocation(locationText, locationQuery);
+          return queryMatches && locationMatches;
+        }).toList(growable: false);
+        if (filtered.isEmpty) {
           return const Text('No service requests posted yet.');
         }
         return Column(
-          children: jobs.take(3).map((job) {
+          children: filtered.take(8).map((job) {
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
               child: ListTile(
@@ -536,6 +851,138 @@ class _OpenJobsPreview extends ConsumerWidget {
           }).toList(growable: false),
         );
       },
+    );
+  }
+}
+
+class _ProfessionalCard extends StatelessWidget {
+  const _ProfessionalCard({
+    required this.pro,
+    required this.onChat,
+    required this.onBook,
+  });
+
+  final _ProfessionalPreview pro;
+  final VoidCallback onChat;
+  final VoidCallback onBook;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundImage: (pro.avatarUrl?.isNotEmpty ?? false)
+                      ? NetworkImage(pro.avatarUrl!)
+                      : null,
+                  child: (pro.avatarUrl?.isNotEmpty ?? false)
+                      ? null
+                      : Text(
+                          (pro.name.trim().isNotEmpty
+                                  ? pro.name.trim()[0]
+                                  : 'P')
+                              .toUpperCase(),
+                        ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              pro.name,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                          if (pro.isVerified)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.verified,
+                                      size: 14, color: Colors.blue),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Verified',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        pro.location,
+                        style: TextStyle(color: scheme.onSurfaceVariant),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${pro.listingCount} active service${pro.listingCount == 1 ? '' : 's'}',
+                        style: TextStyle(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: pro.categories
+                  .where((item) => item.trim().isNotEmpty)
+                  .take(3)
+                  .map((item) => Chip(label: Text(item)))
+                  .toList(growable: false),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Text(
+                  'From $kCurrencySymbol ${pro.minPrice.toStringAsFixed(2)}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const Spacer(),
+                OutlinedButton.icon(
+                  onPressed: onChat,
+                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                  label: const Text('Chat'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: onBook,
+                  child: const Text('Book Now'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

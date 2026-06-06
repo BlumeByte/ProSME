@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/constants.dart';
+import '../../core/utils/location_data.dart';
 import '../../routes/route_names.dart';
 import '../../services/auth_service.dart';
 import '../../services/service_providers.dart';
@@ -16,27 +17,6 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  static const _paymentMethodKey = 'profile_payment_method';
-  String _paymentMethod = 'Cash';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPaymentMethod();
-  }
-
-  Future<void> _loadPaymentMethod() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getString(_paymentMethodKey);
-    if (!mounted || stored == null || stored.isEmpty) return;
-    setState(() => _paymentMethod = stored);
-  }
-
-  Future<void> _persistPaymentMethod(String value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_paymentMethodKey, value);
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
@@ -54,8 +34,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ListTile(
             leading: const Icon(Icons.login),
             title: const Text('Sign in to continue'),
-            subtitle:
-                const Text('Manage your profile, payments, and settings.'),
+            subtitle: const Text('Manage your profile and settings.'),
             onTap: () => context.go(RouteNames.auth),
           ),
         ],
@@ -80,33 +59,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         const _SectionTitle(title: 'Favourites'),
         const SizedBox(height: 12),
         _FavouritesBlock(userId: user.id),
-        const SizedBox(height: 26),
-        Row(
-          children: [
-            const Expanded(child: _SectionTitle(title: 'Payment')),
-            TextButton(
-              onPressed: () => _showPaymentMethodDialog(context),
-              child: const Text('Edit'),
-            ),
-          ],
-        ),
-        _SettingsTile(
-          icon: Icons.payments_outlined,
-          title: _paymentMethod,
-          subtitle: 'Change',
-          onTap: () => _showPaymentMethodDialog(context),
-        ),
-        const Divider(),
-        _SettingsTile(
-          icon: Icons.account_balance_wallet_outlined,
-          title: 'ProSME Balance',
-          subtitle: 'GHS 0.00',
-          onTap: () => _showInfoSheet(
-            context,
-            'ProSME Balance',
-            'Your wallet balance is GHS 0.00. Payments and refunds will appear here.',
-          ),
-        ),
         const SizedBox(height: 26),
         const _SectionTitle(title: 'Profile'),
         const SizedBox(height: 8),
@@ -141,8 +93,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         _SettingsTile(
           icon: Icons.phone_outlined,
           title: user.phone.isNotEmpty ? user.phone : 'Add phone',
+          subtitle: 'A verification notification is sent after update.',
           trailingText: 'Edit',
-          onTap: () => _showChangePhoneDialog(context, authService, user.phone),
+          onTap: () => _showChangePhoneDialog(
+            context,
+            authService,
+            user.phone,
+            user.country,
+          ),
+        ),
+        const Divider(),
+        _SettingsTile(
+          icon: Icons.public_outlined,
+          title: user.country,
+          subtitle: 'Country code ${user.countryCode}',
+          trailingText: 'Edit',
+          onTap: () => _showCountryDialog(context, authService, user.country),
+        ),
+        const Divider(),
+        _SettingsTile(
+          icon: Icons.badge_outlined,
+          title: user.description.isEmpty
+              ? 'Add profile description'
+              : user.description,
+          subtitle: 'Tell customers what you do.',
+          trailingText: 'Edit',
+          onTap: () => _showDescriptionDialog(
+            context,
+            authService,
+            user.description,
+          ),
         ),
         const Divider(),
         _SettingsTile(
@@ -225,34 +205,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ],
     );
   }
-
-  Future<void> _showPaymentMethodDialog(BuildContext context) async {
-    final method = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.payments_outlined),
-              title: const Text('Cash'),
-              onTap: () => Navigator.of(context).pop('Cash'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.phone_android_outlined),
-              title: const Text('Mobile Money'),
-              onTap: () => Navigator.of(context).pop('Mobile Money'),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (method == null || !mounted) return;
-    setState(() => _paymentMethod = method);
-    await _persistPaymentMethod(method);
-  }
 }
 
 Future<void> _showChangeUsernameDialog(
@@ -289,28 +241,159 @@ Future<void> _showChangePhoneDialog(
   BuildContext context,
   AuthService authService,
   String currentPhone,
+  String currentCountry,
 ) async {
-  final nextPhone = await _showEditDialog(
+  var selectedCountry = countryByName(currentCountry);
+  final controller = TextEditingController(text: currentPhone);
+  final nextPhone = await showDialog<String>(
     context: context,
-    title: 'Change phone number',
-    hintText: 'Enter phone number',
-    initialValue: currentPhone,
-    keyboardType: TextInputType.phone,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('Change phone number'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<CountryOption>(
+              initialValue: selectedCountry,
+              decoration: const InputDecoration(labelText: 'Country'),
+              items: kCountries
+                  .map(
+                    (country) => DropdownMenuItem(
+                      value: country,
+                      child: Text('${country.name} (${country.dialCode})'),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: (country) {
+                if (country == null) return;
+                setDialogState(() => selectedCountry = country);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(
+                labelText: 'Phone number',
+                prefixText: '${selectedCountry.dialCode} ',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    ),
   );
+  controller.dispose();
 
   if (nextPhone == null || nextPhone.isEmpty) return;
-
-  try {
-    await authService.updatePhone(nextPhone);
+  if (!isValidPhoneForCountry(nextPhone, selectedCountry)) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Phone number updated.')),
+        SnackBar(
+          content: Text('Enter a valid ${selectedCountry.name} phone number.'),
+        ),
+      );
+    }
+    return;
+  }
+
+  try {
+    await authService.updateCountry(
+        selectedCountry.name, selectedCountry.dialCode);
+    await authService
+        .updatePhone(formatPhoneForCountry(nextPhone, selectedCountry));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Phone number updated. Verification notification sent.'),
+        ),
       );
     }
   } catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not update phone number: $error')),
+      );
+    }
+  }
+}
+
+Future<void> _showCountryDialog(
+  BuildContext context,
+  AuthService authService,
+  String currentCountry,
+) async {
+  final selected = await showModalBottomSheet<CountryOption>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: kCountries
+            .map(
+              (country) => ListTile(
+                leading: const Icon(Icons.public_outlined),
+                title: Text(country.name),
+                subtitle: Text(country.dialCode),
+                selected: country.name == currentCountry,
+                onTap: () => Navigator.of(context).pop(country),
+              ),
+            )
+            .toList(growable: false),
+      ),
+    ),
+  );
+  if (selected == null) return;
+  try {
+    await authService.updateCountry(selected.name, selected.dialCode);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Country updated.')),
+      );
+    }
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update country: $error')),
+      );
+    }
+  }
+}
+
+Future<void> _showDescriptionDialog(
+  BuildContext context,
+  AuthService authService,
+  String currentDescription,
+) async {
+  final description = await _showEditDialog(
+    context: context,
+    title: 'Profile description',
+    hintText: 'What do you do?',
+    initialValue: currentDescription,
+  );
+  if (description == null) return;
+  try {
+    await authService.updateDescription(description);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile description updated.')),
+      );
+    }
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update description: $error')),
       );
     }
   }
@@ -429,6 +512,7 @@ Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
       prefs.getBool('settings_email_notifications') ?? true;
   var smsNotifications = prefs.getBool('settings_sms_notifications') ?? true;
   var language = prefs.getString('settings_language') ?? 'English';
+  var country = countryByName(prefs.getString('settings_country') ?? 'Ghana');
   const languages = ['English', 'Twi', 'Ewe', 'Ga', 'French', 'Spanish'];
   if (!context.mounted) return;
   await showModalBottomSheet<void>(
@@ -506,6 +590,27 @@ Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
                   if (value == null) return;
                   setSheetState(() => language = value);
                   await prefs.setString('settings_language', value);
+                },
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<CountryOption>(
+                initialValue: country,
+                decoration: const InputDecoration(
+                  labelText: 'Country',
+                  prefixIcon: Icon(Icons.public_outlined),
+                ),
+                items: kCountries
+                    .map(
+                      (item) => DropdownMenuItem(
+                        value: item,
+                        child: Text('${item.name} (${item.dialCode})'),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) async {
+                  if (value == null) return;
+                  setSheetState(() => country = value);
+                  await prefs.setString('settings_country', value.name);
                 },
               ),
               const SizedBox(height: 10),

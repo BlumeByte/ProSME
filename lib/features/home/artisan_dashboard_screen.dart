@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../config/constants.dart';
-import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
 import '../jobs/jobs_repository.dart';
 
@@ -56,10 +54,7 @@ class ArtisanDashboardScreen extends ConsumerWidget {
                   ? 'Customers can see your verified badge.'
                   : 'Upload ID documents so admin can verify your profile.',
             ),
-            trailing: isVerified ? null : const Icon(Icons.chevron_right),
-            onTap: isVerified
-                ? null
-                : () => context.push(RouteNames.artisanVerification),
+            trailing: isVerified ? null : const Icon(Icons.info_outline),
           ),
         ),
         const SizedBox(height: 12),
@@ -135,8 +130,7 @@ class ArtisanDashboardScreen extends ConsumerWidget {
                         '${job.location} - $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
                       ),
                       trailing: const Icon(Icons.chevron_right),
-                      onTap: () =>
-                          context.push('${RouteNames.jobDetail}/${job.id}'),
+                      onTap: onOpenJobs,
                     ),
                   ),
                 ),
@@ -150,12 +144,6 @@ class ArtisanDashboardScreen extends ConsumerWidget {
               ],
             );
           },
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () => context.go(RouteNames.home),
-          icon: const Icon(Icons.home_outlined),
-          label: const Text('View customer marketplace'),
         ),
       ],
     );

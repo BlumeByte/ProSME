@@ -19,8 +19,7 @@ class JobsScreen extends ConsumerWidget {
       return const Center(child: Text('Please sign in to view jobs.'));
     }
 
-    final canCreateJob =
-        user.role == UserRole.customer || user.role == UserRole.artisan;
+    final canCreateJob = user.role == UserRole.customer;
     final jobsAsync = ref.watch(jobsStreamProvider);
     return Scaffold(
       appBar: showAppBar
