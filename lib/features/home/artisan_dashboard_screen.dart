@@ -23,6 +23,7 @@ class ArtisanDashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authStateProvider).valueOrNull;
     final jobsAsync = ref.watch(jobsStreamProvider);
+    final listingsAsync = ref.watch(listingServiceProvider).watchListings();
     final status = user?.verificationStatus ?? VerificationStatus.pending;
     final isVerified = status == VerificationStatus.verified;
 
@@ -41,6 +42,32 @@ class ArtisanDashboardScreen extends ConsumerWidget {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 16),
+        StreamBuilder(
+          stream: listingsAsync,
+          builder: (context, snapshot) {
+            final myListings = (snapshot.data ?? const [])
+                .where((listing) => listing.artisanId == user?.id)
+                .toList(growable: false);
+            return jobsAsync.when(
+              loading: () => _StatRow(
+                listings: myListings.length,
+                openRequests: 0,
+                pending: 0,
+              ),
+              error: (_, __) => _StatRow(
+                listings: myListings.length,
+                openRequests: 0,
+                pending: 0,
+              ),
+              data: (jobs) => _StatRow(
+                listings: myListings.length,
+                openRequests: jobs.length,
+                pending: jobs.take(3).length,
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
         Card(
           child: ListTile(
             leading: Icon(
@@ -98,7 +125,17 @@ class ArtisanDashboardScreen extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 20),
-        Text('Open requests', style: Theme.of(context).textTheme.titleLarge),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'New Job Requests',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            TextButton(onPressed: onOpenJobs, child: const Text('View All')),
+          ],
+        ),
         const SizedBox(height: 8),
         jobsAsync.when(
           loading: () => const Center(
@@ -129,16 +166,12 @@ class ArtisanDashboardScreen extends ConsumerWidget {
                       subtitle: Text(
                         '${job.location} - $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
                       ),
-                      trailing: const Icon(Icons.chevron_right),
+                      trailing: FilledButton(
+                        onPressed: onOpenJobs,
+                        child: const Text('Bid'),
+                      ),
                       onTap: onOpenJobs,
                     ),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: onOpenJobs,
-                    child: const Text('View all'),
                   ),
                 ),
               ],
@@ -146,6 +179,89 @@ class ArtisanDashboardScreen extends ConsumerWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+class _StatRow extends StatelessWidget {
+  const _StatRow({
+    required this.listings,
+    required this.openRequests,
+    required this.pending,
+  });
+
+  final int listings;
+  final int openRequests;
+  final int pending;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _StatTile(
+            value: listings.toString(),
+            label: 'Services',
+            icon: Icons.storefront_outlined,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _StatTile(
+            value: openRequests.toString(),
+            label: 'Requests',
+            icon: Icons.work_outline,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _StatTile(
+            value: pending.toString(),
+            label: 'Pending',
+            icon: Icons.pending_actions_outlined,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  const _StatTile({
+    required this.value,
+    required this.label,
+    required this.icon,
+  });
+
+  final String value;
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        child: Column(
+          children: [
+            Icon(icon, color: scheme.primary),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

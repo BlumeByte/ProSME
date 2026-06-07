@@ -50,7 +50,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
         }
       },
       child: AppScaffold(
-        title: currentIndex == 0 ? 'ProSME   Find Professionals' : 'Pro SME',
+        title: currentIndex == 0 ? 'ProSME   Find Professionals' : 'ProSME',
         actions: currentIndex == 0
             ? [
                 IconButton(
@@ -97,7 +97,7 @@ Future<bool> _confirmExit(BuildContext context) async {
   return await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Exit Pro SME?'),
+          title: const Text('Exit ProSME?'),
           content: const Text('Press Exit to close the app.'),
           actions: [
             TextButton(
