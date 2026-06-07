@@ -1,0 +1,5 @@
+{
+  "buildCommand": "npm --prefix developer_web install && npm --prefix developer_web run build",
+  "outputDirectory": "developer_web/dist",
+  "framework": "vite"
+}
