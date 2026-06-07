@@ -57,6 +57,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       return 'Account created. Check your email to verify, then sign in.';
     }
     if (message.contains('google sign-in') ||
+        message.contains('unsupported provider') ||
+        message.contains('provider is not enabled') ||
         message.contains('redirect url') ||
         message.contains('oauth')) {
       return 'Google sign-in is not configured yet. Check Supabase Google provider and redirect URL.';

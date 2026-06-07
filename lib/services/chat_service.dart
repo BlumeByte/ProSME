@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../models/chat_models.dart';
@@ -15,7 +16,8 @@ abstract class ChatService {
 
 class MockChatService implements ChatService {
   final Map<String, StreamController<List<ChatThread>>> _threadControllers = {};
-  final Map<String, StreamController<List<ChatMessage>>> _messageControllers = {};
+  final Map<String, StreamController<List<ChatMessage>>> _messageControllers =
+      {};
   final Map<String, List<ChatThread>> _threadsByUser = {};
   final Map<String, List<ChatMessage>> _messagesByThread = {};
   final Map<String, Set<String>> _threadWatchers = {};
@@ -76,7 +78,8 @@ class MockChatService implements ChatService {
       () => <ChatMessage>[],
     );
     messages.add(message);
-    _messageControllers[message.threadId]?.add(List<ChatMessage>.from(messages));
+    _messageControllers[message.threadId]
+        ?.add(List<ChatMessage>.from(messages));
 
     final ownerIds = _threadWatchers[message.threadId] ?? <String>{};
     ownerIds.add(message.senderId);
@@ -84,7 +87,8 @@ class MockChatService implements ChatService {
 
     for (final ownerId in ownerIds) {
       final threads = _threadsByUser.putIfAbsent(ownerId, () => <ChatThread>[]);
-      final index = threads.indexWhere((thread) => thread.id == message.threadId);
+      final index =
+          threads.indexWhere((thread) => thread.id == message.threadId);
       final updatedThread = ChatThread(
         id: message.threadId,
         userId: ownerId,
@@ -110,32 +114,51 @@ class SupabaseChatService implements ChatService {
   final SupabaseClient _supabase;
 
   @override
-  Stream<List<ChatThread>> watchThreads(String userId) {
-    return _supabase.from('threads').stream(primaryKey: ['id']).map(
-          (rows) => rows
-              .where(
-                (row) =>
-                    (row['user_id'] ?? row['userId'])?.toString() == userId ||
-                    (row['artisan_id'] ?? row['artisanId'])?.toString() ==
-                        userId,
-              )
-              .map((row) => ChatThread.fromJson(row))
-              .toList(),
-        );
+  Stream<List<ChatThread>> watchThreads(String userId) async* {
+    var lastGood = const <ChatThread>[];
+    while (true) {
+      try {
+        final rows = await _supabase
+            .from('threads')
+            .select()
+            .or('user_id.eq.$userId,artisan_id.eq.$userId')
+            .order('updated_at', ascending: false);
+        lastGood = rows
+            .map((row) => ChatThread.fromJson(Map<String, dynamic>.from(row)))
+            .toList(growable: false);
+        yield lastGood;
+      } catch (error, stackTrace) {
+        debugPrint('Failed to refresh chat threads: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        yield lastGood;
+      }
+      await Future<void>.delayed(const Duration(seconds: 6));
+    }
   }
 
   @override
-  Stream<List<ChatMessage>> watchMessages(String threadId) {
-    return _supabase.from('messages').stream(primaryKey: ['id']).map(
-          (rows) => rows
-              .where(
-                (row) =>
-                    (row['thread_id'] ?? row['threadId'])?.toString() ==
-                    threadId,
-              )
-              .map((row) => ChatMessage.fromJson(row))
-              .toList(),
-        );
+  Stream<List<ChatMessage>> watchMessages(String threadId) async* {
+    var lastGood = const <ChatMessage>[];
+    while (true) {
+      try {
+        final rows = await _supabase
+            .from('messages')
+            .select()
+            .eq('thread_id', threadId)
+            .order('created_at');
+        final seen = <String>{};
+        lastGood = rows
+            .map((row) => ChatMessage.fromJson(Map<String, dynamic>.from(row)))
+            .where((message) => seen.add(message.id))
+            .toList(growable: false);
+        yield lastGood;
+      } catch (error, stackTrace) {
+        debugPrint('Failed to refresh chat messages: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        yield lastGood;
+      }
+      await Future<void>.delayed(const Duration(seconds: 4));
+    }
   }
 
   @override

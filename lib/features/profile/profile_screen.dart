@@ -21,9 +21,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
     final authService = ref.read(authServiceProvider);
-    final themeMode = ref.watch(themeModeControllerProvider);
-    final isDarkMode = themeMode == ThemeMode.dark;
-
     if (user == null) {
       return ListView(
         padding: const EdgeInsets.all(20),
@@ -116,7 +113,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           title: user.description.isEmpty
               ? 'Add profile description'
               : user.description,
-          subtitle: 'Tell customers what you do.',
+          subtitle: user.role == UserRole.artisan
+              ? 'Tell customers what you do.'
+              : 'Tell artisans a little about yourself.',
           trailingText: 'Edit',
           onTap: () => _showDescriptionDialog(
             context,
@@ -134,12 +133,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         const SizedBox(height: 26),
         const _SectionTitle(title: 'Other'),
         const SizedBox(height: 8),
-        _SettingsTile(
-          icon: Icons.local_offer_outlined,
-          title: 'Promo codes',
-          onTap: () => _showPromoCodeDialog(context),
-        ),
-        const Divider(),
         _SettingsTile(
           icon: Icons.settings_outlined,
           title: 'Settings',
@@ -178,15 +171,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           icon: Icons.security_outlined,
           title: 'Security',
           onTap: () => context.push(RouteNames.security),
-        ),
-        const SizedBox(height: 6),
-        SwitchListTile(
-          secondary: const Icon(Icons.dark_mode_outlined),
-          title: const Text('Dark mode'),
-          value: isDarkMode,
-          onChanged: (value) {
-            ref.read(themeModeControllerProvider.notifier).setDarkMode(value);
-          },
         ),
         const SizedBox(height: 8),
         ListTile(
@@ -467,19 +451,6 @@ Future<String?> _showEditDialog({
   return result;
 }
 
-Future<void> _showPromoCodeDialog(BuildContext context) async {
-  final code = await _showEditDialog(
-    context: context,
-    title: 'Promo code',
-    hintText: 'Enter promo code',
-    initialValue: '',
-  );
-  if (!context.mounted || code == null || code.isEmpty) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('Promo code "$code" applied.')),
-  );
-}
-
 Future<void> _showInfoSheet(
   BuildContext context,
   String title,
@@ -518,119 +489,125 @@ Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
+    isScrollControlled: true,
     builder: (context) => StatefulBuilder(
       builder: (context, setSheetState) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Settings',
-                      style: Theme.of(context).textTheme.titleLarge,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Settings',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                     ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Close',
+                    ),
+                  ],
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.dark_mode_outlined),
+                  title: const Text('Dark mode'),
+                  value: isDarkMode,
+                  onChanged: (value) {
+                    setSheetState(() => isDarkMode = value);
+                    ref
+                        .read(themeModeControllerProvider.notifier)
+                        .setDarkMode(value);
+                  },
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.email_outlined),
+                  title: const Text('Email notifications'),
+                  value: emailNotifications,
+                  onChanged: (value) async {
+                    setSheetState(() => emailNotifications = value);
+                    await prefs.setBool('settings_email_notifications', value);
+                  },
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.sms_outlined),
+                  title: const Text('SMS notifications'),
+                  value: smsNotifications,
+                  onChanged: (value) async {
+                    setSheetState(() => smsNotifications = value);
+                    await prefs.setBool('settings_sms_notifications', value);
+                  },
+                ),
+                DropdownButtonFormField<String>(
+                  initialValue: language,
+                  decoration: const InputDecoration(
+                    labelText: 'Language',
+                    prefixIcon: Icon(Icons.language_outlined),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Close',
+                  items: languages
+                      .map(
+                        (item) => DropdownMenuItem(
+                          value: item,
+                          child: Text(item),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (value) async {
+                    if (value == null) return;
+                    setSheetState(() => language = value);
+                    await prefs.setString('settings_language', value);
+                  },
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<CountryOption>(
+                  initialValue: country,
+                  decoration: const InputDecoration(
+                    labelText: 'Country',
+                    prefixIcon: Icon(Icons.public_outlined),
                   ),
-                ],
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                secondary: const Icon(Icons.dark_mode_outlined),
-                title: const Text('Dark mode'),
-                value: isDarkMode,
-                onChanged: (value) {
-                  setSheetState(() => isDarkMode = value);
-                  ref
-                      .read(themeModeControllerProvider.notifier)
-                      .setDarkMode(value);
-                },
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                secondary: const Icon(Icons.email_outlined),
-                title: const Text('Email notifications'),
-                value: emailNotifications,
-                onChanged: (value) async {
-                  setSheetState(() => emailNotifications = value);
-                  await prefs.setBool('settings_email_notifications', value);
-                },
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                secondary: const Icon(Icons.sms_outlined),
-                title: const Text('SMS notifications'),
-                value: smsNotifications,
-                onChanged: (value) async {
-                  setSheetState(() => smsNotifications = value);
-                  await prefs.setBool('settings_sms_notifications', value);
-                },
-              ),
-              DropdownButtonFormField<String>(
-                initialValue: language,
-                decoration: const InputDecoration(
-                  labelText: 'Language',
-                  prefixIcon: Icon(Icons.language_outlined),
+                  items: kCountries
+                      .map(
+                        (item) => DropdownMenuItem(
+                          value: item,
+                          child: Text('${item.name} (${item.dialCode})'),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (value) async {
+                    if (value == null) return;
+                    setSheetState(() => country = value);
+                    await prefs.setString('settings_country', value.name);
+                  },
                 ),
-                items: languages
-                    .map(
-                      (item) => DropdownMenuItem(
-                        value: item,
-                        child: Text(item),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: (value) async {
-                  if (value == null) return;
-                  setSheetState(() => language = value);
-                  await prefs.setString('settings_language', value);
-                },
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<CountryOption>(
-                initialValue: country,
-                decoration: const InputDecoration(
-                  labelText: 'Country',
-                  prefixIcon: Icon(Icons.public_outlined),
+                const SizedBox(height: 10),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.security_outlined),
+                  title: const Text('Account security'),
+                  subtitle: const Text(
+                    'Email, SMS, and Google verification are handled by Supabase.',
+                  ),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showInfoSheet(
+                      context,
+                      'Account security',
+                      'Use verified email and phone sign-in for account security. Google sign-in uses Supabase OAuth.',
+                    );
+                  },
                 ),
-                items: kCountries
-                    .map(
-                      (item) => DropdownMenuItem(
-                        value: item,
-                        child: Text('${item.name} (${item.dialCode})'),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: (value) async {
-                  if (value == null) return;
-                  setSheetState(() => country = value);
-                  await prefs.setString('settings_country', value.name);
-                },
-              ),
-              const SizedBox(height: 10),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.security_outlined),
-                title: const Text('Account security'),
-                subtitle: const Text(
-                  'Email, SMS, and Google verification are handled by Supabase.',
-                ),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _showInfoSheet(
-                    context,
-                    'Account security',
-                    'Use verified email and phone sign-in for account security. Google sign-in uses Supabase OAuth.',
-                  );
-                },
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

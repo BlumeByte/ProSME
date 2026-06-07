@@ -64,8 +64,6 @@ class ListingDetailScreen extends ConsumerWidget {
                 child: Text('This listing is no longer available.'));
           }
           final listingData = listing;
-          final previewImageUrl =
-              listingData.images.isNotEmpty ? listingData.images.first : null;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -113,24 +111,8 @@ class ListingDetailScreen extends ConsumerWidget {
                 children: [
                   const Icon(Icons.location_on),
                   const SizedBox(width: 8),
-                  Text(listingData.location),
+                  Expanded(child: Text(listingData.location)),
                 ],
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 160,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Image.network(
-                    previewImageUrl ?? '',
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.grey.shade200,
-                      alignment: Alignment.center,
-                      child: const Icon(Icons.map_outlined),
-                    ),
-                  ),
-                ),
               ),
               const SizedBox(height: 16),
               PrimaryButton(

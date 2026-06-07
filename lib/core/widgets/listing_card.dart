@@ -11,7 +11,8 @@ class ListingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final imageUrl = listing.images.isNotEmpty ? listing.images.first : null;
     final hasArtisanName = listing.artisanName?.trim().isNotEmpty ?? false;
-    final displayArtisan = hasArtisanName ? listing.artisanName! : listing.artisanId;
+    final displayArtisan =
+        hasArtisanName ? listing.artisanName! : listing.artisanId;
 
     return InkWell(
       onTap: onTap,

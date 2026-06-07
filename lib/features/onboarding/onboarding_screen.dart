@@ -16,7 +16,12 @@ class OnboardingScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.handyman, size: 96),
+              Image.asset(
+                'assets/images/prosme_logo.png',
+                width: 112,
+                height: 112,
+                fit: BoxFit.contain,
+              ),
               const SizedBox(height: 24),
               Text(
                 'Find trusted artisans fast',

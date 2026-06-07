@@ -671,38 +671,37 @@ class _SearchControls extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: DropdownButtonFormField<CountryOption>(
-                initialValue: selectedCountry,
-                decoration: const InputDecoration(labelText: 'Country'),
-                items: kCountries
-                    .map((country) => DropdownMenuItem(
-                          value: country,
-                          child: Text(country.name),
-                        ))
-                    .toList(growable: false),
-                onChanged: (value) {
-                  if (value != null) onCountryChanged(value);
+              child: _PickerField(
+                label: 'Country',
+                value: selectedCountry.name,
+                onTap: () async {
+                  final selected = await _pickOption<CountryOption>(
+                    context,
+                    title: 'Country',
+                    options: kCountries,
+                    labelFor: (country) => country.name,
+                  );
+                  if (selected != null) onCountryChanged(selected.value);
                 },
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: DropdownButtonFormField<RegionOption?>(
-                initialValue: selectedRegion,
-                decoration: const InputDecoration(labelText: 'Region'),
-                items: [
-                  const DropdownMenuItem<RegionOption?>(
-                    value: null,
-                    child: Text('Any'),
-                  ),
-                  ...selectedCountry.regions.map(
-                    (region) => DropdownMenuItem<RegionOption?>(
-                      value: region,
-                      child: Text(region.name),
-                    ),
-                  ),
-                ],
-                onChanged: onRegionChanged,
+              child: _PickerField(
+                label: 'Region',
+                value: selectedRegion?.name ?? 'Any',
+                onTap: () async {
+                  final selected = await _pickOption<RegionOption?>(
+                    context,
+                    title: 'Region',
+                    options: <RegionOption?>[
+                      null,
+                      ...selectedCountry.regions,
+                    ],
+                    labelFor: (region) => region?.name ?? 'Any',
+                  );
+                  if (selected != null) onRegionChanged(selected.value);
+                },
               ),
             ),
           ],
@@ -711,42 +710,34 @@ class _SearchControls extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: DropdownButtonFormField<CityOption?>(
-                initialValue: selectedCity,
-                decoration: const InputDecoration(labelText: 'City'),
-                items: [
-                  const DropdownMenuItem<CityOption?>(
-                    value: null,
-                    child: Text('Any'),
-                  ),
-                  ...cities.map(
-                    (city) => DropdownMenuItem<CityOption?>(
-                      value: city,
-                      child: Text(city.name),
-                    ),
-                  ),
-                ],
-                onChanged: onCityChanged,
+              child: _PickerField(
+                label: 'City',
+                value: selectedCity?.name ?? 'Any',
+                onTap: () async {
+                  final selected = await _pickOption<CityOption?>(
+                    context,
+                    title: 'City',
+                    options: <CityOption?>[null, ...cities],
+                    labelFor: (city) => city?.name ?? 'Any',
+                  );
+                  if (selected != null) onCityChanged(selected.value);
+                },
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: DropdownButtonFormField<String?>(
-                initialValue: selectedTown,
-                decoration: const InputDecoration(labelText: 'Town'),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('Any'),
-                  ),
-                  ...towns.map(
-                    (town) => DropdownMenuItem<String?>(
-                      value: town,
-                      child: Text(town),
-                    ),
-                  ),
-                ],
-                onChanged: onTownChanged,
+              child: _PickerField(
+                label: 'Town',
+                value: selectedTown ?? 'Any',
+                onTap: () async {
+                  final selected = await _pickOption<String?>(
+                    context,
+                    title: 'Town',
+                    options: <String?>[null, ...towns],
+                    labelFor: (town) => town ?? 'Any',
+                  );
+                  if (selected != null) onTownChanged(selected.value);
+                },
               ),
             ),
           ],
@@ -797,6 +788,105 @@ class _RecentSearches extends StatelessWidget {
       ],
     );
   }
+}
+
+class _PickerField extends StatelessWidget {
+  const _PickerField({
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: InputDecorator(
+        decoration: InputDecoration(labelText: label),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            const Icon(Icons.arrow_drop_down),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PickerResult<T> {
+  const _PickerResult(this.value);
+
+  final T value;
+}
+
+Future<_PickerResult<T>?> _pickOption<T>(
+  BuildContext context, {
+  required String title,
+  required List<T> options,
+  required String Function(T option) labelFor,
+}) {
+  return showModalBottomSheet<_PickerResult<T>>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (context) => SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Close',
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final option = options[index];
+                  return ListTile(
+                    title: Text(labelFor(option)),
+                    onTap: () =>
+                        Navigator.of(context).pop(_PickerResult(option)),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _OpenJobsPreview extends ConsumerWidget {
@@ -961,22 +1051,26 @@ class _ProfessionalCard extends StatelessWidget {
                   .toList(growable: false),
             ),
             const SizedBox(height: 12),
+            Text(
+              'From $kCurrencySymbol ${pro.minPrice.toStringAsFixed(2)}',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 10),
             Row(
               children: [
-                Text(
-                  'From $kCurrencySymbol ${pro.minPrice.toStringAsFixed(2)}',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const Spacer(),
-                OutlinedButton.icon(
-                  onPressed: onChat,
-                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                  label: const Text('Chat'),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onChat,
+                    icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                    label: const Text('Chat'),
+                  ),
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: onBook,
-                  child: const Text('Book Now'),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: onBook,
+                    child: const Text('Book Now'),
+                  ),
                 ),
               ],
             ),

@@ -31,25 +31,31 @@ class Listing {
 
   factory Listing.fromJson(Map<String, dynamic> json) {
     final artisanRaw = json['artisan'];
-    final artisanData = artisanRaw is Map
-        ? Map<String, dynamic>.from(artisanRaw)
-        : null;
+    final artisanData =
+        artisanRaw is Map ? Map<String, dynamic>.from(artisanRaw) : null;
 
     return Listing(
       id: (json['id'] ?? '') as String,
       artisanId: (json['artisanId'] ?? json['artisan_id'] ?? '') as String,
-      artisanName: (json['artisanName'] ?? json['artisan_name'] ?? artisanData?['full_name'] ?? artisanData?['name']) as String?,
+      artisanName: (json['artisanName'] ??
+          json['artisan_name'] ??
+          artisanData?['full_name'] ??
+          artisanData?['name']) as String?,
       artisanPhotoUrl: (json['artisanPhotoUrl'] ??
-              json['artisan_photo_url'] ??
-              artisanData?['avatar_url']) as String?,
+          json['artisan_photo_url'] ??
+          artisanData?['avatar_url']) as String?,
       title: (json['title'] ?? '') as String,
       description: (json['description'] ?? '') as String,
       category: (json['category'] ?? '') as String,
-      priceMin: ((json['priceMin'] ?? json['price_min'] ?? 0) as num).toDouble(),
-      priceMax: ((json['priceMax'] ?? json['price_max'] ?? 0) as num).toDouble(),
-      images: List<String>.from((json['images'] ?? const <dynamic>[]) as List<dynamic>),
+      priceMin:
+          ((json['priceMin'] ?? json['price_min'] ?? 0) as num).toDouble(),
+      priceMax:
+          ((json['priceMax'] ?? json['price_max'] ?? 0) as num).toDouble(),
+      images: List<String>.from(
+          (json['images'] ?? const <dynamic>[]) as List<dynamic>),
       location: (json['location'] ?? '') as String,
-      verifiedOnly: (json['verifiedOnly'] ?? json['verified_only'] ?? false) as bool,
+      verifiedOnly:
+          (json['verifiedOnly'] ?? json['verified_only'] ?? false) as bool,
       createdAt: DateTime.tryParse(
             (json['createdAt'] ?? json['created_at'] ?? '').toString(),
           ) ??

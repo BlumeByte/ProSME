@@ -37,7 +37,8 @@ class SupabaseListingService implements ListingService {
 
   final SupabaseClient _supabase;
 
-  Future<List<Listing>> _hydrateListings(List<Map<String, dynamic>> rows) async {
+  Future<List<Listing>> _hydrateListings(
+      List<Map<String, dynamic>> rows) async {
     final artisanIds = rows
         .map(
           (row) => (row['artisan_id'] ?? row['artisanId'])?.toString() ?? '',
@@ -99,12 +100,19 @@ class SupabaseListingService implements ListingService {
   }
 
   @override
-  Stream<List<Listing>> watchListings() {
-    return _supabase.from('listings').stream(primaryKey: ['id']).asyncMap(
-      (rows) => _hydrateListings(
-        rows.map((row) => Map<String, dynamic>.from(row)).toList(),
-      ),
-    );
+  Stream<List<Listing>> watchListings() async* {
+    var lastGood = const <Listing>[];
+    while (true) {
+      try {
+        lastGood = await fetchListings();
+        yield lastGood;
+      } catch (error, stackTrace) {
+        debugPrint('Failed to refresh listings: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        yield lastGood;
+      }
+      await Future<void>.delayed(const Duration(seconds: 12));
+    }
   }
 
   @override

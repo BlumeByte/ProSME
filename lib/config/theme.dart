@@ -20,7 +20,8 @@ ThemeData buildLightTheme() {
     appBarTheme: const AppBarTheme(centerTitle: false),
     scaffoldBackgroundColor: colorScheme.surface,
     inputDecorationTheme: const InputDecorationTheme(
-      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(10))),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.all(Radius.circular(10)),
         borderSide: BorderSide(color: Color(0xFFE5E7EB)),
@@ -63,7 +64,8 @@ ThemeData buildDarkTheme() {
     appBarTheme: const AppBarTheme(centerTitle: false),
     scaffoldBackgroundColor: colorScheme.surface,
     inputDecorationTheme: const InputDecorationTheme(
-      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(10))),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.all(Radius.circular(10)),
         borderSide: BorderSide(color: Color(0xFF31384A)),

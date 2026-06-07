@@ -22,9 +22,8 @@ class DiscountOffer {
       id: json['id'] as String,
       title: json['title'] as String,
       description: json['description'] as String,
-      percent: json['percent'] == null
-          ? null
-          : (json['percent'] as num).toDouble(),
+      percent:
+          json['percent'] == null ? null : (json['percent'] as num).toDouble(),
       active: json['active'] as bool,
       start: DateTime.parse(json['start'] as String),
       end: DateTime.parse(json['end'] as String),

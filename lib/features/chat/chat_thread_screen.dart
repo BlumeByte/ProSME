@@ -18,6 +18,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
 class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   final _controller = TextEditingController();
   final _uuid = const Uuid();
+  bool _sending = false;
 
   @override
   void dispose() {
@@ -27,9 +28,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
   Future<void> _sendMessage() async {
     final user = ref.read(authStateProvider).valueOrNull;
-    if (user == null || _controller.text.isEmpty) return;
+    if (_sending || user == null || _controller.text.isEmpty) return;
     final text = _controller.text.trim();
     if (text.isEmpty) return;
+    setState(() => _sending = true);
     final message = ChatMessage(
       id: _uuid.v4(),
       threadId: widget.threadId,
@@ -47,6 +49,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         const SnackBar(
             content: Text('Could not send message. Please try again.')),
       );
+    } finally {
+      if (mounted) setState(() => _sending = false);
     }
   }
 
@@ -103,10 +107,16 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   padding: const EdgeInsets.all(16),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
+                    final user = ref.read(authStateProvider).valueOrNull;
                     final message = messages[index];
+                    final isMine = user?.id == message.senderId;
                     return Align(
-                      alignment: Alignment.centerLeft,
+                      alignment:
+                          isMine ? Alignment.centerRight : Alignment.centerLeft,
                       child: Card(
+                        color: isMine
+                            ? Theme.of(context).colorScheme.primaryContainer
+                            : null,
                         child: Padding(
                           padding: const EdgeInsets.all(12),
                           child: Text(message.content),
@@ -147,12 +157,20 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 Expanded(
                   child: TextField(
                     controller: _controller,
+                    minLines: 1,
+                    maxLines: 4,
                     decoration: const InputDecoration(hintText: 'Message'),
+                    onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
                 IconButton(
-                  onPressed: _sendMessage,
-                  icon: const Icon(Icons.send),
+                  onPressed: _sending ? null : _sendMessage,
+                  icon: _sending
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send),
                 ),
               ],
             ),

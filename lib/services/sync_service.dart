@@ -8,9 +8,7 @@ class SyncService {
 
   Stream<List<Listing>> listenListings() {
     return _supabase.from('listings').stream(primaryKey: ['id']).map(
-          (rows) => rows
-              .map((row) => Listing.fromJson(row))
-              .toList(),
-        );
+      (rows) => rows.map((row) => Listing.fromJson(row)).toList(),
+    );
   }
 }

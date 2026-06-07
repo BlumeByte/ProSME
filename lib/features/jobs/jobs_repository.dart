@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -104,32 +105,71 @@ class SupabaseJobsRepository implements JobsRepository {
   final SupabaseClient _client;
 
   @override
-  Stream<List<JobFeedItem>> watchJobs() {
-    return _client
-        .from('jobs')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: false)
-        .map((rows) => rows.map(_mapJob).toList(growable: false));
+  Stream<List<JobFeedItem>> watchJobs() async* {
+    var lastGood = const <JobFeedItem>[];
+    while (true) {
+      try {
+        final rows = await _client
+            .from('jobs')
+            .select()
+            .order('created_at', ascending: false);
+        lastGood = rows
+            .map((row) => _mapJob(Map<String, dynamic>.from(row as Map)))
+            .toList(growable: false);
+        yield lastGood;
+      } catch (error, stackTrace) {
+        debugPrint('Failed to refresh jobs: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        yield lastGood;
+      }
+      await Future<void>.delayed(const Duration(seconds: 12));
+    }
   }
 
   @override
-  Stream<List<JobRating>> watchRatings(String jobId) {
-    return _client
-        .from('job_ratings')
-        .stream(primaryKey: ['id'])
-        .eq('job_id', jobId)
-        .order('created_at', ascending: false)
-        .map((rows) => rows.map(_mapRating).toList(growable: false));
+  Stream<List<JobRating>> watchRatings(String jobId) async* {
+    var lastGood = const <JobRating>[];
+    while (true) {
+      try {
+        final rows = await _client
+            .from('job_ratings')
+            .select()
+            .eq('job_id', jobId)
+            .order('created_at', ascending: false);
+        lastGood = rows
+            .map((row) => _mapRating(Map<String, dynamic>.from(row as Map)))
+            .toList(growable: false);
+        yield lastGood;
+      } catch (error, stackTrace) {
+        debugPrint('Failed to refresh job ratings: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        yield lastGood;
+      }
+      await Future<void>.delayed(const Duration(seconds: 12));
+    }
   }
 
   @override
-  Stream<List<JobBid>> watchBids(String jobId) {
-    return _client
-        .from('job_bids')
-        .stream(primaryKey: ['id'])
-        .eq('job_id', jobId)
-        .order('created_at', ascending: false)
-        .map((rows) => rows.map(_mapBid).toList(growable: false));
+  Stream<List<JobBid>> watchBids(String jobId) async* {
+    var lastGood = const <JobBid>[];
+    while (true) {
+      try {
+        final rows = await _client
+            .from('job_bids')
+            .select()
+            .eq('job_id', jobId)
+            .order('created_at', ascending: false);
+        lastGood = rows
+            .map((row) => _mapBid(Map<String, dynamic>.from(row as Map)))
+            .toList(growable: false);
+        yield lastGood;
+      } catch (error, stackTrace) {
+        debugPrint('Failed to refresh job bids: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        yield lastGood;
+      }
+      await Future<void>.delayed(const Duration(seconds: 8));
+    }
   }
 
   @override

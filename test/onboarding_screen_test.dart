@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:prosme/features/onboarding/onboarding_screen.dart';
 
@@ -9,6 +10,6 @@ void main() {
     );
 
     expect(find.text('Get Started'), findsOneWidget);
-    expect(find.byIcon(Icons.handyman), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
   });
 }
