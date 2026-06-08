@@ -1,6 +1,6 @@
 # ProSME Developer Web Dashboard
 
-This is the Vercel-ready web dashboard for ProSME admins and developers.
+This is the Vercel-ready web dashboard for ProSME developers.
 
 ## Vercel Setup
 
@@ -13,7 +13,19 @@ This is the Vercel-ready web dashboard for ProSME admins and developers.
    - `VITE_SUPABASE_PUBLISHABLE_KEY`
 6. Deploy.
 
-Do not add a Supabase `service_role` or secret key here. This dashboard runs in the browser, so it must use the publishable or anon key and rely on Supabase Row Level Security.
+Do not add a Supabase `service_role` or secret key to Vercel. This dashboard runs in the browser, so it must use only the publishable or anon key and rely on Supabase Row Level Security.
+
+## Supabase Setup
+
+Apply the migrations in `supabase/migrations`, then deploy the developer admin Edge Function:
+
+```powershell
+supabase functions deploy developer-admin
+supabase secrets set SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+supabase secrets set PASSWORD_RESET_REDIRECT_URL="https://your-vercel-domain.vercel.app"
+```
+
+The `SUPABASE_SERVICE_ROLE_KEY` belongs in Supabase Function secrets only. It is used for developer-only actions such as creating accounts, sending password reset emails, and setting temporary passwords.
 
 ## Local Run
 
@@ -35,4 +47,4 @@ set role = 'developer',
 where email = 'blumebyte@gmail.com';
 ```
 
-The dashboard only allows users with `admin` or `developer` role to continue after login.
+The dashboard only allows users with `developer` role to continue after login. Admin, artisan, and customer accounts are signed out immediately.

@@ -5,6 +5,16 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const app = document.querySelector('#app');
 
+const emptyData = () => ({
+  profiles: [],
+  listings: [],
+  jobs: [],
+  bids: [],
+  ratings: [],
+  notifications: [],
+  reports: [],
+});
+
 const state = {
   session: null,
   profile: null,
@@ -13,15 +23,8 @@ const state = {
   busy: false,
   error: '',
   notice: '',
-  data: {
-    profiles: [],
-    listings: [],
-    jobs: [],
-    bids: [],
-    ratings: [],
-    notifications: [],
-    reports: [],
-  },
+  filters: { q: '', role: 'all', status: 'all', sort: 'newest' },
+  data: emptyData(),
   tableErrors: {},
 };
 
@@ -54,6 +57,9 @@ const esc = (value) =>
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+
+const normalize = (value) => String(value ?? '').trim();
+const lower = (value) => normalize(value).toLowerCase();
 
 const money = (value) =>
   Number(value || 0).toLocaleString('en-GH', {
@@ -90,6 +96,9 @@ const statusBadge = (status) => {
     completed: 'badge badge-blue',
     cancelled: 'badge badge-red',
     accepted: 'badge badge-green',
+    resolved: 'badge badge-green',
+    reviewing: 'badge badge-blue',
+    open: 'badge badge-orange',
   };
   return `<span class="${map[status] || 'badge'}">${esc(status || 'unknown')}</span>`;
 };
@@ -129,15 +138,8 @@ async function init() {
     state.session = session;
     if (!session) {
       state.profile = null;
-      state.data = {
-        profiles: [],
-        listings: [],
-        jobs: [],
-        bids: [],
-        ratings: [],
-        notifications: [],
-        reports: [],
-      };
+      state.data = emptyData();
+      state.loading = false;
       render();
       return;
     }
@@ -179,9 +181,11 @@ async function loadDashboard() {
 
   state.profile = profile;
 
-  if (!['admin', 'developer'].includes(profile?.role)) {
-    state.error =
-      'This account can sign in, but it is not marked as admin or developer in public.profiles.';
+  if (profile?.role !== 'developer') {
+    await supabase.auth.signOut();
+    state.session = null;
+    state.profile = null;
+    state.error = 'Only developer accounts can open this dashboard.';
     state.loading = false;
     render();
     return;
@@ -195,15 +199,7 @@ async function loadDashboard() {
 async function refreshData() {
   state.tableErrors = {};
 
-  const [
-    profiles,
-    listings,
-    jobs,
-    bids,
-    ratings,
-    notifications,
-    reports,
-  ] = await Promise.all([
+  const [profiles, listings, jobs, bids, ratings, notifications, reports] = await Promise.all([
     safeSelect(
       'profiles',
       supabase
@@ -212,7 +208,7 @@ async function refreshData() {
           'id,full_name,email,phone,role,verification_status,tenant_id,country,location,categories,description,bio,rating_summary,national_id_front_url,national_id_back_url,business_certificate_urls,verification_notes,verification_submitted_at,verification_reviewed_at,created_at'
         )
         .order('created_at', { ascending: false })
-        .limit(300)
+        .limit(500)
     ),
     safeSelect(
       'listings',
@@ -220,7 +216,7 @@ async function refreshData() {
         .from('listings')
         .select('id,title,description,category,location,price_min,price_max,artisan_id,tenant_id,created_at')
         .order('created_at', { ascending: false })
-        .limit(300)
+        .limit(500)
     ),
     safeSelect(
       'jobs',
@@ -228,7 +224,7 @@ async function refreshData() {
         .from('jobs')
         .select('id,title,description,location,budget,status,created_by,tenant_id,created_at')
         .order('created_at', { ascending: false })
-        .limit(300)
+        .limit(500)
     ),
     safeSelect(
       'job_bids',
@@ -236,7 +232,7 @@ async function refreshData() {
         .from('job_bids')
         .select('id,job_id,artisan_id,amount,message,status,created_at,updated_at')
         .order('created_at', { ascending: false })
-        .limit(300)
+        .limit(500)
     ),
     safeSelect(
       'job_ratings',
@@ -244,15 +240,15 @@ async function refreshData() {
         .from('job_ratings')
         .select('id,job_id,artisan_id,user_id,stars,comment,created_at')
         .order('created_at', { ascending: false })
-        .limit(300)
+        .limit(500)
     ),
     safeSelect(
       'admin_notifications',
       supabase
         .from('admin_notifications')
-        .select('id,type,title,body,actor_id,read_at,created_at')
+        .select('id,type,title,body,actor_id,related_user_id,related_table,related_id,read_at,created_at')
         .order('created_at', { ascending: false })
-        .limit(300)
+        .limit(500)
     ),
     safeSelect(
       'reports',
@@ -260,19 +256,20 @@ async function refreshData() {
         .from('reports')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(300)
+        .limit(500)
     ),
   ]);
 
-  state.data = {
-    profiles,
-    listings,
-    jobs,
-    bids,
-    ratings,
-    notifications,
-    reports,
-  };
+  state.data = { profiles, listings, jobs, bids, ratings, notifications, reports };
+}
+
+async function developerAction(action, payload = {}) {
+  const { data, error } = await supabase.functions.invoke('developer-admin', {
+    body: { action, ...payload },
+  });
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(data.error);
+  return data;
 }
 
 async function signIn(event) {
@@ -283,19 +280,24 @@ async function signIn(event) {
   render();
 
   const { error } = await supabase.auth.signInWithPassword({
-    email: String(form.get('email') || '').trim(),
+    email: normalize(form.get('email')),
     password: String(form.get('password') || ''),
   });
 
   state.busy = false;
-  if (error) {
-    state.error = error.message;
-  }
+  if (error) state.error = error.message;
   render();
 }
 
 async function signOut() {
-  await supabase.auth.signOut();
+  state.busy = true;
+  render();
+  await supabase.auth.signOut({ scope: 'local' });
+  state.session = null;
+  state.profile = null;
+  state.data = emptyData();
+  state.busy = false;
+  render();
 }
 
 async function setVerification(userId, status) {
@@ -303,9 +305,6 @@ async function setVerification(userId, status) {
     status === 'rejected'
       ? window.prompt('Reason for rejection', 'Documents are unclear or incomplete.') || ''
       : '';
-  state.busy = true;
-  render();
-
   const update = {
     verification_status: status,
     verification_notes: notes,
@@ -318,49 +317,111 @@ async function setVerification(userId, status) {
     update.verification_retry_after = retry.toISOString();
   }
 
-  const { error } = await supabase.from('profiles').update(update).eq('id', userId);
-  state.busy = false;
+  await updateTableRow('profiles', userId, update, `Verification ${status}.`);
+}
 
-  if (error) {
-    state.error = error.message;
-  } else {
-    setNotice(`Verification ${status}.`);
-    await refreshData();
-  }
-  render();
+async function updateProfile(id) {
+  const profile = state.data.profiles.find((item) => item.id === id);
+  if (!profile) return;
+  const full_name = window.prompt('Full name', profile.full_name || '') ?? profile.full_name;
+  const phone = window.prompt('Phone', profile.phone || '') ?? profile.phone;
+  const country = window.prompt('Country', profile.country || '') ?? profile.country;
+  const location = window.prompt('Location', profile.location || '') ?? profile.location;
+  await updateTableRow('profiles', id, { full_name, phone, country, location }, 'Profile updated.');
 }
 
 async function updateRole(userId, role) {
+  await updateTableRow('profiles', userId, { role }, `Role changed to ${role}.`);
+}
+
+async function updateTableRow(table, id, patch, message) {
   state.busy = true;
+  state.error = '';
   render();
-  const { error } = await supabase.from('profiles').update({ role }).eq('id', userId);
+  const { error } = await supabase.from(table).update(patch).eq('id', id);
   state.busy = false;
 
   if (error) {
     state.error = error.message;
   } else {
-    setNotice(`Role changed to ${role}.`);
+    setNotice(message);
     await refreshData();
   }
   render();
 }
 
-async function markNotificationRead(id) {
+async function deleteTableRow(table, id) {
+  if (!window.confirm(`Delete this ${table.slice(0, -1)}? This cannot be undone.`)) return;
   state.busy = true;
+  state.error = '';
   render();
-  const { error } = await supabase
-    .from('admin_notifications')
-    .update({ read_at: new Date().toISOString() })
-    .eq('id', id);
+  const { error } = await supabase.from(table).delete().eq('id', id);
   state.busy = false;
 
   if (error) {
     state.error = error.message;
   } else {
-    setNotice('Notification marked as reviewed.');
+    setNotice('Record deleted.');
     await refreshData();
   }
   render();
+}
+
+async function createAccount(role) {
+  const email = normalize(window.prompt(`New ${role} email`, ''));
+  if (!email) return;
+  const fullName = normalize(window.prompt('Full name', '')) || email.split('@')[0];
+  const randomPassword = crypto.getRandomValues(new Uint32Array(2)).join('-') + 'Aa!';
+
+  await runAction(async () => {
+    await developerAction('createUser', {
+      email,
+      password: randomPassword,
+      role,
+      full_name: fullName,
+    });
+    setNotice(`${role} created. Temporary password: ${randomPassword}`);
+    await refreshData();
+  });
+}
+
+async function sendPasswordReset(email) {
+  if (!email) return;
+  await runAction(async () => {
+    await developerAction('sendPasswordReset', { email });
+    setNotice(`Password reset sent to ${email}.`);
+  });
+}
+
+async function randomizePassword(userId, email) {
+  if (!window.confirm(`Create a new random password for ${email}?`)) return;
+  const password = crypto.getRandomValues(new Uint32Array(2)).join('-') + 'Aa!';
+  await runAction(async () => {
+    await developerAction('setPassword', { userId, password });
+    setNotice(`New temporary password for ${email}: ${password}`);
+  });
+}
+
+async function runAction(fn) {
+  state.busy = true;
+  state.error = '';
+  render();
+  try {
+    await fn();
+  } catch (error) {
+    state.error = error.message || String(error);
+  } finally {
+    state.busy = false;
+    render();
+  }
+}
+
+async function markNotificationRead(id) {
+  await updateTableRow('admin_notifications', id, { read_at: new Date().toISOString() }, 'Notification reviewed.');
+}
+
+async function setReportStatus(id, status) {
+  await updateTableRow('reports', id, { status, reviewed_at: new Date().toISOString() }, `Report marked ${status}.`);
 }
 
 function dashboardStats() {
@@ -371,14 +432,12 @@ function dashboardStats() {
   const rejected = artisans.filter((profile) => profile.verification_status === 'rejected');
   const unread = state.data.notifications.filter((item) => !item.read_at);
   const openJobs = state.data.jobs.filter((job) => (job.status || 'active') === 'active');
-  const reports = state.data.reports.length
-    ? state.data.reports
-    : state.data.notifications.filter((item) => String(item.type || '').includes('report'));
+  const reports = visibleReports();
 
   return [
     ['Total users', profiles.length, `${customers.length} customers`],
     ['Artisans', artisans.length, `${pending.length} pending verification`],
-    ['Listings', state.data.listings.length, 'Visible in app search'],
+    ['Listings', state.data.listings.length, 'Editable service listings'],
     ['Open jobs', openJobs.length, `${state.data.bids.length} bids`],
     ['Reports', reports.length, `${unread.length} unread admin notices`],
     ['Rejected verification', rejected.length, 'Retry lock handled in app'],
@@ -414,10 +473,11 @@ function renderShell(content) {
       <main class="main">
         <header class="topbar">
           <div>
-            <p>Admin / Developer</p>
+            <p>Developer only</p>
             <h1>${esc(tabs.find(([id]) => id === state.tab)?.[1] || 'Overview')}</h1>
           </div>
           <div class="actions">
+            <button class="ghost" data-action="print">Print</button>
             <button class="ghost" data-action="refresh">Refresh</button>
           </div>
         </header>
@@ -439,7 +499,7 @@ function renderShell(content) {
 
 function renderTableErrors() {
   return `
-    <details class="warning">
+    <details class="warning" open>
       <summary>Some Supabase tables or policies need attention</summary>
       <ul>
         ${Object.entries(state.tableErrors)
@@ -492,6 +552,61 @@ function pendingVerifications() {
   );
 }
 
+function controls({ roleFilter = true, statusFilter = true } = {}) {
+  return `
+    <div class="toolbar">
+      <input data-filter="q" type="search" placeholder="Search records" value="${esc(state.filters.q)}" />
+      ${
+        roleFilter
+          ? `<select data-filter="role">
+              ${['all', 'customer', 'artisan', 'admin', 'developer']
+                .map((role) => `<option value="${role}" ${state.filters.role === role ? 'selected' : ''}>${role}</option>`)
+                .join('')}
+            </select>`
+          : ''
+      }
+      ${
+        statusFilter
+          ? `<select data-filter="status">
+              ${['all', 'pending', 'verified', 'rejected', 'active', 'open', 'reviewing', 'resolved', 'completed', 'cancelled']
+                .map(
+                  (status) => `<option value="${status}" ${state.filters.status === status ? 'selected' : ''}>${status}</option>`
+                )
+                .join('')}
+            </select>`
+          : ''
+      }
+      <select data-filter="sort">
+        <option value="newest" ${state.filters.sort === 'newest' ? 'selected' : ''}>Newest</option>
+        <option value="oldest" ${state.filters.sort === 'oldest' ? 'selected' : ''}>Oldest</option>
+        <option value="name" ${state.filters.sort === 'name' ? 'selected' : ''}>Name A-Z</option>
+      </select>
+    </div>
+  `;
+}
+
+function filterRows(rows, fields) {
+  const q = lower(state.filters.q);
+  const filtered = rows.filter((row) => {
+    if (state.filters.role !== 'all' && 'role' in row && row.role !== state.filters.role) return false;
+    const status = row.verification_status || row.status || (row.read_at ? 'resolved' : 'open');
+    const hasStatus = 'verification_status' in row || 'status' in row || 'read_at' in row;
+    if (state.filters.status !== 'all' && hasStatus && status !== state.filters.status) return false;
+    if (!q) return true;
+    return fields.some((field) => lower(row[field]).includes(q));
+  });
+
+  return filtered.sort((a, b) => {
+    if (state.filters.sort === 'oldest') return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+    if (state.filters.sort === 'name') {
+      const aName = a.full_name || a.title || a.email || '';
+      const bName = b.full_name || b.title || b.email || '';
+      return aName.localeCompare(bName);
+    }
+    return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+  });
+}
+
 function renderVerificationList(items) {
   return `
     <div class="list">
@@ -535,14 +650,17 @@ function renderActivityList(items) {
       ${items
         .map(
           (item) => `
-        <div class="list-row">
-          <div>
-            <strong>${esc(item.title || item.type || 'Activity')}</strong>
-            <span>${esc(item.body || '')}</span>
-            <small>${dateText(item.created_at)}</small>
-          </div>
-          ${item.read_at ? '<span class="badge">Reviewed</span>' : `<button class="ghost small" data-read="${esc(item.id)}">Mark read</button>`}
-        </div>`
+        <details class="detail-row">
+          <summary>
+            <span>
+              <strong>${esc(item.title || item.type || 'Activity')}</strong>
+              <small>${dateText(item.created_at)}</small>
+            </span>
+            ${item.read_at ? '<span class="badge">Reviewed</span>' : `<button class="ghost small" data-read="${esc(item.id)}">Mark read</button>`}
+          </summary>
+          <p>${esc(item.body || '')}</p>
+          <small>Related: ${esc(item.related_table || '')} ${esc(item.related_id || '')}</small>
+        </details>`
         )
         .join('')}
     </div>
@@ -550,15 +668,21 @@ function renderActivityList(items) {
 }
 
 function renderProfiles(filterRole = null) {
-  const rows = filterRole
+  const source = filterRole
     ? state.data.profiles.filter((profile) => profile.role === filterRole)
     : state.data.profiles;
+  const rows = filterRows(source, ['full_name', 'email', 'phone', 'location', 'country', 'tenant_id']);
   return `
     <section class="panel">
       <div class="panel-head">
         <h2>${filterRole === 'artisan' ? 'Artisan Accounts' : 'User Accounts'}</h2>
-        <span class="badge">${rows.length} records</span>
+        <div class="row-actions">
+          <button class="primary compact-button" data-create-role="customer">Create user</button>
+          <button class="primary compact-button" data-create-role="artisan">Create artisan</button>
+          <button class="primary compact-button" data-create-role="developer">Create developer</button>
+        </div>
       </div>
+      ${controls({ roleFilter: !filterRole })}
       <div class="table-wrap">
         <table>
           <thead>
@@ -595,7 +719,10 @@ function renderProfileRow(profile) {
       <td>${statusBadge(profile.verification_status)}</td>
       <td>${esc(profile.tenant_id || 'default')}</td>
       <td>${dateText(profile.created_at)}</td>
-      <td>
+      <td class="row-actions">
+        <button class="ghost small" data-edit-profile="${esc(profile.id)}">Edit</button>
+        <button class="ghost small" data-reset-email="${esc(profile.email || '')}">Reset</button>
+        <button class="ghost small" data-random-password="${esc(profile.id)}" data-email="${esc(profile.email || '')}">Random password</button>
         <select data-role-user="${esc(profile.id)}">
           ${['customer', 'artisan', 'admin', 'developer']
             .map((role) => `<option value="${role}" ${profile.role === role ? 'selected' : ''}>${role}</option>`)
@@ -607,13 +734,17 @@ function renderProfileRow(profile) {
 }
 
 function renderVerifications() {
-  const rows = state.data.profiles.filter((profile) => profile.role === 'artisan');
+  const rows = filterRows(
+    state.data.profiles.filter((profile) => profile.role === 'artisan'),
+    ['full_name', 'email', 'location', 'verification_notes']
+  );
   return `
     <section class="panel">
       <div class="panel-head">
         <h2>Artisan Verification Queue</h2>
         <span class="badge">${pendingVerifications().length} pending</span>
       </div>
+      ${controls({ roleFilter: false })}
       <div class="table-wrap">
         <table>
           <thead>
@@ -636,7 +767,7 @@ function renderVerifications() {
                   <td class="doc-cell">${documentLinks(profile)}</td>
                   <td>${esc(profile.verification_notes || '')}</td>
                   <td>${dateText(profile.verification_submitted_at || profile.created_at)}</td>
-                  <td>
+                  <td class="row-actions">
                     <button class="approve small" data-verify="verified" data-id="${esc(profile.id)}">Approve</button>
                     <button class="reject small" data-verify="rejected" data-id="${esc(profile.id)}">Reject</button>
                   </td>
@@ -650,17 +781,22 @@ function renderVerifications() {
   `;
 }
 
-function renderReports() {
-  const reports = state.data.reports.length
+function visibleReports() {
+  const reportRows = state.data.reports.length
     ? state.data.reports
     : state.data.notifications.filter((item) => String(item.type || '').includes('report'));
+  return filterRows(reportRows, ['type', 'category', 'title', 'reason', 'body', 'description', 'message', 'status']);
+}
 
+function renderReports() {
+  const reports = visibleReports();
   return `
     <section class="panel">
       <div class="panel-head">
         <h2>Reports and Admin Notifications</h2>
         <span class="badge">${reports.length || state.data.notifications.length} records</span>
       </div>
+      ${controls({ roleFilter: false })}
       ${reports.length ? renderReportRows(reports) : renderActivityList(state.data.notifications)}
     </section>
   `;
@@ -668,43 +804,47 @@ function renderReports() {
 
 function renderReportRows(reports) {
   return `
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Title</th>
-            <th>Details</th>
-            <th>Status</th>
-            <th>Date</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${reports
-            .map(
-              (item) => `
-              <tr>
-                <td>${esc(item.type || item.category || 'report')}</td>
-                <td><strong>${esc(item.title || item.reason || 'Report')}</strong></td>
-                <td>${esc(item.body || item.description || item.message || '')}</td>
-                <td>${statusBadge(item.status || (item.read_at ? 'reviewed' : 'open'))}</td>
-                <td>${dateText(item.created_at)}</td>
-              </tr>`
-            )
-            .join('')}
-        </tbody>
-      </table>
+    <div class="list">
+      ${reports
+        .map(
+          (item) => `
+          <details class="detail-row">
+            <summary>
+              <span>
+                <strong>${esc(item.title || item.reason || item.type || 'Report')}</strong>
+                <small>${esc(item.body || item.description || item.message || '')}</small>
+              </span>
+              ${statusBadge(item.status || (item.read_at ? 'resolved' : 'open'))}
+            </summary>
+            <dl class="details-grid">
+              <dt>Type</dt><dd>${esc(item.type || item.category || 'report')}</dd>
+              <dt>Reporter</dt><dd>${esc(item.reporter_id || item.actor_id || '')}</dd>
+              <dt>Reported user</dt><dd>${esc(item.reported_user_id || item.related_user_id || '')}</dd>
+              <dt>Related</dt><dd>${esc(item.related_table || '')} ${esc(item.related_id || '')}</dd>
+              <dt>Date</dt><dd>${dateText(item.created_at)}</dd>
+              <dt>Details</dt><dd>${esc(item.body || item.description || item.message || '')}</dd>
+            </dl>
+            <div class="row-actions">
+              ${item.id ? `<button class="ghost small" data-report-status="reviewing" data-id="${esc(item.id)}">Reviewing</button>` : ''}
+              ${item.id ? `<button class="approve small" data-report-status="resolved" data-id="${esc(item.id)}">Resolve</button>` : ''}
+              ${item.read_at || !item.id ? '' : `<button class="ghost small" data-read="${esc(item.id)}">Mark read</button>`}
+            </div>
+          </details>`
+        )
+        .join('')}
     </div>
   `;
 }
 
 function renderJobs() {
+  const rows = filterRows(state.data.jobs, ['title', 'description', 'location', 'status', 'tenant_id']);
   return `
     <section class="panel">
       <div class="panel-head">
         <h2>Jobs and Bids</h2>
-        <span class="badge">${state.data.jobs.length} jobs</span>
+        <span class="badge">${rows.length} jobs</span>
       </div>
+      ${controls({ roleFilter: false })}
       <div class="table-wrap">
         <table>
           <thead>
@@ -715,10 +855,11 @@ function renderJobs() {
               <th>Status</th>
               <th>Bids</th>
               <th>Created</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            ${state.data.jobs
+            ${rows
               .map((job) => {
                 const bidCount = state.data.bids.filter((bid) => bid.job_id === job.id).length;
                 return `
@@ -729,9 +870,13 @@ function renderJobs() {
                     <td>${statusBadge(job.status || 'active')}</td>
                     <td>${bidCount}</td>
                     <td>${dateText(job.created_at)}</td>
+                    <td class="row-actions">
+                      <button class="ghost small" data-edit-job="${esc(job.id)}">Edit</button>
+                      <button class="reject small" data-delete-row="jobs" data-id="${esc(job.id)}">Delete</button>
+                    </td>
                   </tr>`;
               })
-              .join('') || tableEmpty(6)}
+              .join('') || tableEmpty(7)}
           </tbody>
         </table>
       </div>
@@ -740,12 +885,14 @@ function renderJobs() {
 }
 
 function renderListings() {
+  const rows = filterRows(state.data.listings, ['title', 'description', 'category', 'location', 'tenant_id']);
   return `
     <section class="panel">
       <div class="panel-head">
         <h2>Listings</h2>
-        <span class="badge">${state.data.listings.length} listings</span>
+        <span class="badge">${rows.length} listings</span>
       </div>
+      ${controls({ roleFilter: false, statusFilter: false })}
       <div class="table-wrap">
         <table>
           <thead>
@@ -755,10 +902,11 @@ function renderListings() {
               <th>Location</th>
               <th>Price</th>
               <th>Created</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            ${state.data.listings
+            ${rows
               .map(
                 (listing) => `
                 <tr>
@@ -767,14 +915,36 @@ function renderListings() {
                   <td>${esc(listing.location || '')}</td>
                   <td>${money(listing.price_min)} - ${money(listing.price_max)}</td>
                   <td>${dateText(listing.created_at)}</td>
+                  <td class="row-actions">
+                    <button class="ghost small" data-edit-listing="${esc(listing.id)}">Edit</button>
+                    <button class="reject small" data-delete-row="listings" data-id="${esc(listing.id)}">Delete</button>
+                  </td>
                 </tr>`
               )
-              .join('') || tableEmpty(5)}
+              .join('') || tableEmpty(6)}
           </tbody>
         </table>
       </div>
     </section>
   `;
+}
+
+async function editListing(id) {
+  const listing = state.data.listings.find((item) => item.id === id);
+  if (!listing) return;
+  const title = window.prompt('Listing title', listing.title || '') ?? listing.title;
+  const category = window.prompt('Category', listing.category || '') ?? listing.category;
+  const location = window.prompt('Location', listing.location || '') ?? listing.location;
+  await updateTableRow('listings', id, { title, category, location }, 'Listing updated.');
+}
+
+async function editJob(id) {
+  const job = state.data.jobs.find((item) => item.id === id);
+  if (!job) return;
+  const title = window.prompt('Job title', job.title || '') ?? job.title;
+  const status = window.prompt('Status', job.status || 'active') ?? job.status;
+  const location = window.prompt('Location', job.location || '') ?? job.location;
+  await updateTableRow('jobs', id, { title, status, location }, 'Job updated.');
 }
 
 function renderSettings() {
@@ -790,11 +960,11 @@ function renderSettings() {
         <strong>${supabaseKey ? 'Configured' : 'Missing'}</strong>
       </div>
       <div class="callout">
-        Keep service role keys out of Vercel frontend variables. Use only publishable or anon keys here.
+        Keep service role keys out of Vercel frontend variables. Account creation and password changes are handled by the <code>developer-admin</code> Edge Function.
       </div>
       <h2>Developer Access</h2>
       <p class="muted">
-        A signed-in account must have <code>role = 'developer'</code> or <code>role = 'admin'</code> in <code>public.profiles</code>.
+        Only accounts with <code>role = 'developer'</code> in <code>public.profiles</code> can continue. Admin, artisan, and user accounts are signed out immediately.
       </p>
     </section>
   `;
@@ -810,11 +980,11 @@ function renderLogin() {
       <form class="login-card" id="login-form">
         <img src="/prosme_logo.png" alt="ProSME" />
         <h1>ProSME Developer Dashboard</h1>
-        <p>Sign in with an admin or developer account.</p>
+        <p>Developer accounts only.</p>
         ${state.error ? `<div class="error">${esc(state.error)}</div>` : ''}
         <label>
           Email
-          <input name="email" type="email" autocomplete="email" placeholder="blumebyte@gmail.com" required />
+          <input name="email" type="email" autocomplete="email" placeholder="Email address" required />
         </label>
         <label>
           Password
@@ -871,7 +1041,8 @@ function bindEvents() {
     });
   });
 
-  document.querySelector('[data-action="sign-out"]')?.addEventListener('click', signOut);
+  document.querySelectorAll('[data-action="sign-out"]').forEach((button) => button.addEventListener('click', signOut));
+  document.querySelector('[data-action="print"]')?.addEventListener('click', () => window.print());
   document.querySelector('[data-action="refresh"]')?.addEventListener('click', async () => {
     state.loading = true;
     render();
@@ -881,16 +1052,65 @@ function bindEvents() {
     render();
   });
 
+  document.querySelectorAll('[data-filter]').forEach((input) => {
+    input.addEventListener('input', () => {
+      state.filters[input.dataset.filter] = input.value;
+      render();
+    });
+    input.addEventListener('change', () => {
+      state.filters[input.dataset.filter] = input.value;
+      render();
+    });
+  });
+
   document.querySelectorAll('[data-verify]').forEach((button) => {
     button.addEventListener('click', () => setVerification(button.dataset.id, button.dataset.verify));
   });
 
   document.querySelectorAll('[data-read]').forEach((button) => {
-    button.addEventListener('click', () => markNotificationRead(button.dataset.read));
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      markNotificationRead(button.dataset.read);
+    });
+  });
+
+  document.querySelectorAll('[data-report-status]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      setReportStatus(button.dataset.id, button.dataset.reportStatus);
+    });
   });
 
   document.querySelectorAll('[data-role-user]').forEach((select) => {
     select.addEventListener('change', () => updateRole(select.dataset.roleUser, select.value));
+  });
+
+  document.querySelectorAll('[data-edit-profile]').forEach((button) => {
+    button.addEventListener('click', () => updateProfile(button.dataset.editProfile));
+  });
+
+  document.querySelectorAll('[data-reset-email]').forEach((button) => {
+    button.addEventListener('click', () => sendPasswordReset(button.dataset.resetEmail));
+  });
+
+  document.querySelectorAll('[data-random-password]').forEach((button) => {
+    button.addEventListener('click', () => randomizePassword(button.dataset.randomPassword, button.dataset.email));
+  });
+
+  document.querySelectorAll('[data-create-role]').forEach((button) => {
+    button.addEventListener('click', () => createAccount(button.dataset.createRole));
+  });
+
+  document.querySelectorAll('[data-edit-listing]').forEach((button) => {
+    button.addEventListener('click', () => editListing(button.dataset.editListing));
+  });
+
+  document.querySelectorAll('[data-edit-job]').forEach((button) => {
+    button.addEventListener('click', () => editJob(button.dataset.editJob));
+  });
+
+  document.querySelectorAll('[data-delete-row]').forEach((button) => {
+    button.addEventListener('click', () => deleteTableRow(button.dataset.deleteRow, button.dataset.id));
   });
 }
 

@@ -326,6 +326,48 @@ nav {
   border-radius: 8px;
 }
 
+.detail-row {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.detail-row summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.detail-row summary::-webkit-details-marker {
+  display: none;
+}
+
+.detail-row p {
+  color: #475569;
+  line-height: 1.5;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 8px 14px;
+  margin: 14px 0;
+}
+
+.details-grid dt {
+  color: #64748b;
+  font-weight: 800;
+}
+
+.details-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .list-row strong,
 td strong {
   display: block;
@@ -345,6 +387,27 @@ td small {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(140px, 180px));
+  gap: 10px;
+  margin: 12px 0 16px;
+}
+
+.compact-button {
+  width: auto;
+  margin: 0;
+  padding: 9px 12px;
 }
 
 .table-wrap {
@@ -513,5 +576,58 @@ code {
     border: 1px solid #dbe2ea;
     border-radius: 8px;
     background: #ffffff;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .actions,
+  .panel-head,
+  .list-row,
+  .detail-row summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .row-actions {
+    justify-content: flex-start;
+  }
+
+  .toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  body {
+    background: #ffffff;
+  }
+
+  .sidebar,
+  .mobile-account,
+  .actions,
+  .toolbar,
+  .row-actions {
+    display: none !important;
+  }
+
+  .shell {
+    display: block;
+  }
+
+  .main {
+    padding: 0;
+  }
+
+  .panel,
+  .stat-card {
+    box-shadow: none;
+    break-inside: avoid;
   }
 }
