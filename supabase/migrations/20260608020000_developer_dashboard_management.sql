@@ -3,11 +3,6 @@
 
 create extension if not exists "pgcrypto";
 
-alter table public.admin_notifications
-add column if not exists related_user_id uuid references public.profiles(id) on delete set null,
-add column if not exists related_table text,
-add column if not exists related_id uuid;
-
 create table if not exists public.reports (
   id uuid primary key default gen_random_uuid(),
   reporter_id uuid references public.profiles(id) on delete set null,
@@ -26,6 +21,17 @@ create table if not exists public.reports (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+do $$
+begin
+  if to_regclass('public.admin_notifications') is not null then
+    alter table public.admin_notifications
+    add column if not exists related_user_id uuid references public.profiles(id) on delete set null,
+    add column if not exists related_table text,
+    add column if not exists related_id uuid;
+  end if;
+end;
+$$;
+
 drop trigger if exists reports_set_updated_at on public.reports;
 create trigger reports_set_updated_at
 before update on public.reports
@@ -37,9 +43,16 @@ grant select, insert, update, delete on public.profiles to authenticated;
 grant select, insert, update, delete on public.listings to authenticated;
 grant select, insert, update, delete on public.jobs to authenticated;
 grant select, insert, update, delete on public.reports to authenticated;
-grant select, update, delete on public.admin_notifications to authenticated;
 
 revoke select, insert, update, delete on public.reports from anon;
+
+do $$
+begin
+  if to_regclass('public.admin_notifications') is not null then
+    grant select, update, delete on public.admin_notifications to authenticated;
+  end if;
+end;
+$$;
 
 drop policy if exists "Users can create own reports" on public.reports;
 create policy "Users can create own reports"
@@ -159,39 +172,45 @@ with check (
   )
 );
 
-drop policy if exists "Developers can update admin notifications" on public.admin_notifications;
-create policy "Developers can update admin notifications"
-on public.admin_notifications for update
-to authenticated
-using (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = (select auth.uid())
-      and p.role = 'developer'
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = (select auth.uid())
-      and p.role = 'developer'
-  )
-);
+do $$
+begin
+  if to_regclass('public.admin_notifications') is not null then
+    drop policy if exists "Developers can update admin notifications" on public.admin_notifications;
+    create policy "Developers can update admin notifications"
+    on public.admin_notifications for update
+    to authenticated
+    using (
+      exists (
+        select 1
+        from public.profiles p
+        where p.id = (select auth.uid())
+          and p.role = 'developer'
+      )
+    )
+    with check (
+      exists (
+        select 1
+        from public.profiles p
+        where p.id = (select auth.uid())
+          and p.role = 'developer'
+      )
+    );
 
-drop policy if exists "Developers can delete admin notifications" on public.admin_notifications;
-create policy "Developers can delete admin notifications"
-on public.admin_notifications for delete
-to authenticated
-using (
-  exists (
-    select 1
-    from public.profiles p
-    where p.id = (select auth.uid())
-      and p.role = 'developer'
-  )
-);
+    drop policy if exists "Developers can delete admin notifications" on public.admin_notifications;
+    create policy "Developers can delete admin notifications"
+    on public.admin_notifications for delete
+    to authenticated
+    using (
+      exists (
+        select 1
+        from public.profiles p
+        where p.id = (select auth.uid())
+          and p.role = 'developer'
+      )
+    );
+  end if;
+end;
+$$;
 
 do $$
 begin
