@@ -687,7 +687,6 @@ Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
   var isDarkMode = ref.read(themeModeControllerProvider) == ThemeMode.dark;
   var emailNotifications =
       prefs.getBool('settings_email_notifications') ?? true;
-  var smsNotifications = prefs.getBool('settings_sms_notifications') ?? true;
   var language = prefs.getString('settings_language') ?? 'English';
   var country = countryByName(prefs.getString('settings_country') ?? 'Ghana');
   const languages = ['English', 'Twi', 'Ewe', 'Ga', 'French', 'Spanish'];
@@ -742,16 +741,6 @@ Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
                   onChanged: (value) async {
                     setSheetState(() => emailNotifications = value);
                     await prefs.setBool('settings_email_notifications', value);
-                  },
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  secondary: const Icon(Icons.sms_outlined),
-                  title: const Text('SMS notifications'),
-                  value: smsNotifications,
-                  onChanged: (value) async {
-                    setSheetState(() => smsNotifications = value);
-                    await prefs.setBool('settings_sms_notifications', value);
                   },
                 ),
                 DropdownButtonFormField<String>(
