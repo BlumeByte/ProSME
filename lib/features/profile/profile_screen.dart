@@ -83,8 +83,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           icon: Icons.person_outline,
           title: user.name,
           trailingText: 'Edit',
-          onTap: () =>
-              _showChangeUsernameDialog(context, authService, user.name),
+          onTap: () => _showChangeUsernameDialog(
+            context,
+            authService,
+            user.name,
+          ),
         ),
         const Divider(),
         _SettingsTile(
@@ -170,7 +173,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         _SettingsTile(
           icon: Icons.security_outlined,
           title: 'Security',
-          onTap: () => context.push(RouteNames.security),
+          onTap: () => _showSecuritySheet(context, authService),
         ),
         const SizedBox(height: 8),
         ListTile(
@@ -196,17 +199,21 @@ Future<void> _showChangeUsernameDialog(
   AuthService authService,
   String currentUsername,
 ) async {
-  final nextUsername = await _showEditDialog(
+  final requestSent = await _sendEmailOtp(context, authService);
+  if (!requestSent) return;
+  if (!context.mounted) return;
+
+  final result = await _showUsernameOtpDialog(
     context: context,
-    title: 'Change username',
-    hintText: 'Enter new username',
-    initialValue: currentUsername,
+    currentUsername: currentUsername,
   );
 
-  if (nextUsername == null || nextUsername.isEmpty) return;
+  if (result == null) return;
+  final (nextUsername, otp) = result;
+  if (nextUsername.isEmpty || otp.isEmpty) return;
 
   try {
-    await authService.updateUsername(nextUsername);
+    await authService.updateUsername(nextUsername, emailOtp: otp);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Username updated.')),
@@ -216,6 +223,205 @@ Future<void> _showChangeUsernameDialog(
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not update username: $error')),
+      );
+    }
+  }
+}
+
+Future<bool> _sendEmailOtp(
+  BuildContext context,
+  AuthService authService,
+) async {
+  try {
+    await authService.requestEmailOtp();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Email verification code sent.')),
+      );
+    }
+    return true;
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not send email code: $error')),
+      );
+    }
+    return false;
+  }
+}
+
+Future<(String username, String otp)?> _showUsernameOtpDialog({
+  required BuildContext context,
+  required String currentUsername,
+}) async {
+  final usernameController = TextEditingController(text: currentUsername);
+  final otpController = TextEditingController();
+  final result = await showDialog<(String, String)>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Change username'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: usernameController,
+            decoration: const InputDecoration(labelText: 'New username'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: otpController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Email code'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(
+            (usernameController.text.trim(), otpController.text.trim()),
+          ),
+          child: const Text('Verify and save'),
+        ),
+      ],
+    ),
+  );
+  usernameController.dispose();
+  otpController.dispose();
+  return result;
+}
+
+Future<void> _showSecuritySheet(
+  BuildContext context,
+  AuthService authService,
+) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Security',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            ListTile(
+              leading: const Icon(Icons.password_outlined),
+              title: const Text('Change password'),
+              subtitle: const Text('Requires an email verification code.'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _showChangePasswordDialog(context, authService);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.mark_email_read_outlined),
+              title: const Text('Email verification'),
+              subtitle: const Text('Security codes are sent by Supabase Auth.'),
+              onTap: () => _sendEmailOtp(context, authService),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+Future<void> _showChangePasswordDialog(
+  BuildContext context,
+  AuthService authService,
+) async {
+  final requestSent = await _sendEmailOtp(context, authService);
+  if (!requestSent) return;
+  if (!context.mounted) return;
+
+  final passwordController = TextEditingController();
+  final confirmController = TextEditingController();
+  final otpController = TextEditingController();
+  final result = await showDialog<(String, String, String)>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Change password'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: passwordController,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'New password'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: confirmController,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Confirm password'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: otpController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Email code'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(
+            (
+              passwordController.text,
+              confirmController.text,
+              otpController.text.trim(),
+            ),
+          ),
+          child: const Text('Update password'),
+        ),
+      ],
+    ),
+  );
+  passwordController.dispose();
+  confirmController.dispose();
+  otpController.dispose();
+  if (result == null) return;
+  final (password, confirm, otp) = result;
+  if (password != confirm) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passwords do not match.')),
+      );
+    }
+    return;
+  }
+  try {
+    await authService.updatePassword(password, otp);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password updated.')),
+      );
+    }
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update password: $error')),
       );
     }
   }
@@ -595,14 +801,14 @@ Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
                   leading: const Icon(Icons.security_outlined),
                   title: const Text('Account security'),
                   subtitle: const Text(
-                    'Email, SMS, and Google verification are handled by Supabase.',
+                    'Email codes, password recovery, and Google verification are handled by Supabase.',
                   ),
                   onTap: () {
                     Navigator.of(context).pop();
                     _showInfoSheet(
                       context,
                       'Account security',
-                      'Use verified email and phone sign-in for account security. Google sign-in uses Supabase OAuth.',
+                      'Use verified email codes for sensitive account changes. Google sign-in uses Supabase OAuth.',
                     );
                   },
                 ),

@@ -22,10 +22,12 @@ abstract class AuthService {
     UserRole role = UserRole.customer,
   });
   Future<AppUser> signInWithGoogle();
-  Future<AppUser> signInWithPhone(String phone);
+  Future<void> requestPasswordReset(String email);
+  Future<void> requestEmailOtp();
+  Future<void> updatePassword(String password, String emailOtp);
   Future<void> signOut();
   Future<void> updateRole(UserRole role);
-  Future<void> updateUsername(String username);
+  Future<void> updateUsername(String username, {String? emailOtp});
   Future<void> updatePhone(String phone);
   Future<void> updateCountry(String country, String countryCode);
   Future<void> updateDescription(String description);
@@ -132,21 +134,16 @@ class MockAuthService implements AuthService {
   }
 
   @override
-  Future<AppUser> signInWithPhone(String phone) async {
-    final now = DateTime.now().microsecondsSinceEpoch;
-    _currentUser = AppUser(
-      id: 'mock_phone_$now',
-      role: UserRole.customer,
-      name: 'Phone User',
-      phone: phone.trim(),
-      email: 'phone_user_$now@example.com',
-      photoUrl: '',
-      verificationStatus: VerificationStatus.verified,
-      createdAt: DateTime.now(),
-    );
-    _accountsByEmail[_currentUser!.email.toLowerCase()] = _currentUser!;
-    _controller.add(_currentUser);
-    return _currentUser!;
+  Future<void> requestPasswordReset(String email) async {}
+
+  @override
+  Future<void> requestEmailOtp() async {}
+
+  @override
+  Future<void> updatePassword(String password, String emailOtp) async {
+    if (password.length < 6) {
+      throw StateError('Password must be at least 6 characters.');
+    }
   }
 
   @override
@@ -165,7 +162,7 @@ class MockAuthService implements AuthService {
   }
 
   @override
-  Future<void> updateUsername(String username) async {
+  Future<void> updateUsername(String username, {String? emailOtp}) async {
     final user = _currentUser;
     if (user == null) {
       throw StateError('No signed-in user.');
@@ -524,13 +521,38 @@ class SupabaseAuthService implements AuthService {
   }
 
   @override
-  Future<AppUser> signInWithPhone(String phone) async {
-    final normalized = phone.trim();
-    if (normalized.isEmpty) {
-      throw StateError('Enter a phone number for OTP sign-in.');
+  Future<void> requestPasswordReset(String email) async {
+    final normalized = email.trim().toLowerCase();
+    if (!_isValidEmailAddress(normalized)) {
+      throw StateError('Enter a valid email address.');
     }
-    await _supabase.auth.signInWithOtp(phone: normalized);
-    throw StateError('OTP sent. Enter the code from SMS to complete sign-in.');
+    await _supabase.auth.resetPasswordForEmail(normalized);
+  }
+
+  @override
+  Future<void> requestEmailOtp() async {
+    if (_supabase.auth.currentUser == null) {
+      throw StateError('No signed-in user.');
+    }
+    await _supabase.auth.reauthenticate();
+  }
+
+  @override
+  Future<void> updatePassword(String password, String emailOtp) async {
+    if (_supabase.auth.currentUser == null) {
+      throw StateError('No signed-in user.');
+    }
+    final normalizedOtp = emailOtp.trim();
+    if (password.length < 6) {
+      throw StateError('Password must be at least 6 characters.');
+    }
+    if (normalizedOtp.isEmpty) {
+      throw StateError('Enter the email verification code.');
+    }
+
+    await _supabase.auth.updateUser(
+      UserAttributes(password: password, nonce: normalizedOtp),
+    );
   }
 
   @override
@@ -581,7 +603,7 @@ class SupabaseAuthService implements AuthService {
   }
 
   @override
-  Future<void> updateUsername(String username) async {
+  Future<void> updateUsername(String username, {String? emailOtp}) async {
     final user = _supabase.auth.currentUser;
     if (user == null) {
       throw StateError('No signed-in user.');
@@ -589,6 +611,9 @@ class SupabaseAuthService implements AuthService {
     final normalized = username.trim();
     if (normalized.isEmpty) {
       throw StateError('Username cannot be empty.');
+    }
+    if ((emailOtp ?? '').trim().isEmpty) {
+      throw StateError('Enter the email verification code.');
     }
 
     await _updateProfile(user.id, {
@@ -603,6 +628,7 @@ class SupabaseAuthService implements AuthService {
           'full_name': normalized,
           'name': normalized,
         },
+        nonce: emailOtp!.trim(),
       ),
     );
 

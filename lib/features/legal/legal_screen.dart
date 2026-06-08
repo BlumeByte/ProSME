@@ -94,7 +94,7 @@ _LegalContent _contentFor(LegalPageKind kind) {
         sections: [
           _LegalSection(
             'Authentication',
-            'Accounts are protected through Supabase Auth with email, SMS OTP, and OAuth providers when configured.',
+            'Accounts are protected through Supabase Auth with email verification, password recovery, and OAuth providers when configured.',
           ),
           _LegalSection(
             'Access controls',

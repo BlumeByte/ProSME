@@ -62,10 +62,48 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         message.contains('oauth')) {
       return 'Google sign-in is not configured yet. Check Supabase Google provider and redirect URL.';
     }
-    if (message.contains('otp sent')) {
-      return 'OTP sent. Check your SMS messages.';
-    }
     return 'Something went wrong. Please try again.';
+  }
+
+  Future<void> _showForgotPasswordDialog(AuthService authService) async {
+    final controller = TextEditingController(text: _email);
+    final email = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset password'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(labelText: 'Email'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Send email'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (email == null || email.isEmpty) return;
+    try {
+      await authService.requestPasswordReset(email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password reset email sent. Check your inbox.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_friendlyError(error))),
+      );
+    }
   }
 
   String? _validateEmailPassword() {
@@ -209,6 +247,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               obscureText: true,
               decoration: const InputDecoration(labelText: 'Password'),
             ),
+            if (!_isCreateAccountMode)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _isLoading
+                      ? null
+                      : () => _showForgotPasswordDialog(authService),
+                  child: const Text('Forgot password?'),
+                ),
+              ),
             const SizedBox(height: 16),
             PrimaryButton(
               label: _isLoading
