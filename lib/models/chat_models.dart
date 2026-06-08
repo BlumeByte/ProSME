@@ -7,6 +7,10 @@ class ChatThread {
     required this.artisanId,
     required this.lastMessage,
     required this.updatedAt,
+    this.userName,
+    this.userPhotoUrl,
+    this.artisanName,
+    this.artisanPhotoUrl,
   });
 
   final String id;
@@ -14,6 +18,10 @@ class ChatThread {
   final String artisanId;
   final String lastMessage;
   final DateTime updatedAt;
+  final String? userName;
+  final String? userPhotoUrl;
+  final String? artisanName;
+  final String? artisanPhotoUrl;
 
   factory ChatThread.fromJson(Map<String, dynamic> json) {
     return ChatThread(
@@ -26,6 +34,36 @@ class ChatThread {
             (json['updatedAt'] ?? json['updated_at'] ?? '').toString(),
           ) ??
           DateTime.now(),
+      userName: (json['userName'] ?? json['user_name'])?.toString(),
+      userPhotoUrl:
+          (json['userPhotoUrl'] ?? json['user_photo_url'])?.toString(),
+      artisanName: (json['artisanName'] ?? json['artisan_name'])?.toString(),
+      artisanPhotoUrl:
+          (json['artisanPhotoUrl'] ?? json['artisan_photo_url'])?.toString(),
+    );
+  }
+
+  ChatThread copyWith({
+    String? id,
+    String? userId,
+    String? artisanId,
+    String? lastMessage,
+    DateTime? updatedAt,
+    String? userName,
+    String? userPhotoUrl,
+    String? artisanName,
+    String? artisanPhotoUrl,
+  }) {
+    return ChatThread(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      artisanId: artisanId ?? this.artisanId,
+      lastMessage: lastMessage ?? this.lastMessage,
+      updatedAt: updatedAt ?? this.updatedAt,
+      userName: userName ?? this.userName,
+      userPhotoUrl: userPhotoUrl ?? this.userPhotoUrl,
+      artisanName: artisanName ?? this.artisanName,
+      artisanPhotoUrl: artisanPhotoUrl ?? this.artisanPhotoUrl,
     );
   }
 
@@ -36,6 +74,10 @@ class ChatThread {
       'artisan_id': artisanId,
       'last_message': lastMessage,
       'updated_at': updatedAt.toIso8601String(),
+      if (userName != null) 'user_name': userName,
+      if (userPhotoUrl != null) 'user_photo_url': userPhotoUrl,
+      if (artisanName != null) 'artisan_name': artisanName,
+      if (artisanPhotoUrl != null) 'artisan_photo_url': artisanPhotoUrl,
     };
   }
 }

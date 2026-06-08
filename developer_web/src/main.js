@@ -423,6 +423,13 @@ function renderShell(content) {
         </header>
         ${state.notice ? `<div class="notice">${esc(state.notice)}</div>` : ''}
         ${state.error ? `<div class="error">${esc(state.error)}</div>` : ''}
+        <div class="mobile-account">
+          <div>
+            <strong>${esc(profile?.email || state.session?.user?.email || '')}</strong>
+            ${roleBadge(profile?.role)}
+          </div>
+          <button class="ghost small" data-action="sign-out">Sign out</button>
+        </div>
         ${Object.keys(state.tableErrors).length ? renderTableErrors() : ''}
         ${content}
       </main>

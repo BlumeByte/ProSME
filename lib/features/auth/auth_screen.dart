@@ -22,7 +22,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _phoneController = TextEditingController();
   bool _isLoading = false;
   bool _isCreateAccountMode = false;
   UserRole _selectedRole = UserRole.customer;
@@ -136,7 +135,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _phoneController.dispose();
     super.dispose();
   }
 
@@ -257,23 +255,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     : () => _signIn(
                           authService.signInWithGoogle,
                           forceRoleSelection: true,
-                        ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _phoneController,
-                decoration: const InputDecoration(labelText: 'Phone (OTP)'),
-              ),
-              const SizedBox(height: 12),
-              PrimaryButton(
-                label: 'Phone Sign in',
-                icon: Icons.phone,
-                onPressed: _isLoading
-                    ? null
-                    : () => _signIn(
-                          () => authService.signInWithPhone(
-                            _phoneController.text,
-                          ),
                         ),
               ),
             ],

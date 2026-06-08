@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../config/constants.dart';
+import '../../core/utils/service_categories.dart';
 import '../../models/listing.dart';
 import '../../services/service_providers.dart';
 
@@ -77,11 +78,41 @@ class ListingManageScreen extends ConsumerWidget {
               ...listings.map(
                 (listing) => Card(
                   child: ListTile(
+                    leading: listing.images.isEmpty
+                        ? const CircleAvatar(child: Icon(Icons.storefront))
+                        : ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              listing.images.first,
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const CircleAvatar(
+                                child: Icon(Icons.storefront),
+                              ),
+                            ),
+                          ),
                     title: Text(listing.title),
                     subtitle: Text(
                       '${listing.category} - ${listing.location}\n$kCurrencySymbol ${listing.priceMin.toStringAsFixed(2)} - ${listing.priceMax.toStringAsFixed(2)}',
                     ),
                     isThreeLine: true,
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (action) async {
+                        if (action == 'edit') {
+                          await _openListingSheet(context, ref,
+                              existing: listing);
+                          return;
+                        }
+                        if (action == 'delete') {
+                          await _deleteListing(context, ref, listing);
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(value: 'edit', child: Text('Edit')),
+                        PopupMenuItem(value: 'delete', child: Text('Delete')),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -94,14 +125,36 @@ class ListingManageScreen extends ConsumerWidget {
 
 Future<void> _openCreateListingSheet(
     BuildContext context, WidgetRef ref) async {
-  final titleController = TextEditingController();
-  final descriptionController = TextEditingController();
-  final categoryController = TextEditingController();
-  final locationController = TextEditingController();
-  final priceMinController = TextEditingController();
-  final priceMaxController = TextEditingController();
+  await _openListingSheet(context, ref);
+}
+
+Future<void> _openListingSheet(
+  BuildContext context,
+  WidgetRef ref, {
+  Listing? existing,
+}) async {
+  final titleController = TextEditingController(text: existing?.title ?? '');
+  final descriptionController =
+      TextEditingController(text: existing?.description ?? '');
+  final otherCategoryController = TextEditingController();
+  final locationController =
+      TextEditingController(text: existing?.location ?? '');
+  final priceMinController = TextEditingController(
+      text: existing == null ? '' : existing.priceMin.toStringAsFixed(0));
+  final priceMaxController = TextEditingController(
+      text: existing == null ? '' : existing.priceMax.toStringAsFixed(0));
   final formKey = GlobalKey<FormState>();
   final selectedImages = <Uint8List>[];
+  final existingImages = <String>[...(existing?.images ?? const <String>[])];
+  var selectedCategory = kServiceCategories.any(
+    (category) => category.name == existing?.category,
+  )
+      ? existing?.category ?? kServiceCategories.first.name
+      : 'Other';
+  if (selectedCategory == 'Other' &&
+      existing?.category.trim().isNotEmpty == true) {
+    otherCategoryController.text = existing!.category;
+  }
   const uuid = Uuid();
 
   await showModalBottomSheet<void>(
@@ -124,7 +177,7 @@ Future<void> _openCreateListingSheet(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Create listing',
+                  Text(existing == null ? 'Create listing' : 'Edit listing',
                       style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -134,11 +187,31 @@ Future<void> _openCreateListingSheet(
                     validator: _required,
                   ),
                   const SizedBox(height: 8),
-                  TextFormField(
-                    controller: categoryController,
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedCategory,
                     decoration: const InputDecoration(labelText: 'Category'),
-                    validator: _required,
+                    items: kServiceCategories
+                        .map(
+                          (category) => DropdownMenuItem(
+                            value: category.name,
+                            child: Text(category.name),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setSheetState(() => selectedCategory = value);
+                    },
                   ),
+                  if (selectedCategory == 'Other') ...[
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: otherCategoryController,
+                      decoration:
+                          const InputDecoration(labelText: 'Custom category'),
+                      validator: _required,
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: descriptionController,
@@ -180,22 +253,64 @@ Future<void> _openCreateListingSheet(
                     ],
                   ),
                   const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: selectedImages.length >= 3
-                        ? null
-                        : () async {
-                            final next = await _pickListingImages(
-                              remaining: 3 - selectedImages.length,
-                            );
-                            setSheetState(() => selectedImages.addAll(next));
-                          },
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: Text(
-                      selectedImages.isEmpty
-                          ? 'Upload images'
-                          : '${selectedImages.length}/3 images selected',
+                  Builder(builder: (context) {
+                    final totalImages =
+                        existingImages.length + selectedImages.length;
+                    final remainingImages = 3 - totalImages;
+                    return OutlinedButton.icon(
+                      onPressed: remainingImages <= 0
+                          ? null
+                          : () async {
+                              final next = await _pickListingImages(
+                                remaining: remainingImages,
+                              );
+                              setSheetState(() => selectedImages.addAll(next));
+                            },
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: Text(
+                        totalImages == 0
+                            ? 'Upload images'
+                            : '$totalImages/3 images selected',
+                      ),
+                    );
+                  }),
+                  if (existingImages.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 74,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: existingImages.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        itemBuilder: (context, index) => Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(
+                                existingImages[index],
+                                width: 120,
+                                height: 68,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              child: IconButton.filledTonal(
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () {
+                                  setSheetState(
+                                    () => existingImages.removeAt(index),
+                                  );
+                                },
+                                icon: const Icon(Icons.close, size: 16),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                   if (selectedImages.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     SizedBox(
@@ -257,34 +372,48 @@ Future<void> _openCreateListingSheet(
                         }
 
                         try {
-                          final imageUrls = await _uploadListingImages(
+                          final uploadedUrls = await _uploadListingImages(
                             ref,
                             user.id,
                             selectedImages,
                           );
+                          final category = normalizeServiceCategory(
+                              selectedCategory == 'Other'
+                                  ? otherCategoryController.text
+                                  : selectedCategory);
                           final listing = Listing(
-                            id: uuid.v4(),
+                            id: existing?.id ?? uuid.v4(),
                             artisanId: user.id,
                             artisanName: user.name,
                             artisanPhotoUrl: user.photoUrl,
                             title: titleController.text.trim(),
                             description: descriptionController.text.trim(),
-                            category: categoryController.text.trim(),
+                            category: category,
                             priceMin: minPrice,
                             priceMax: maxPrice,
-                            images: imageUrls,
+                            images: [...existingImages, ...uploadedUrls],
                             location: locationController.text.trim(),
                             verifiedOnly: user.verificationStatus ==
                                 VerificationStatus.verified,
-                            createdAt: DateTime.now(),
+                            createdAt: existing?.createdAt ?? DateTime.now(),
                           );
-                          await ref
-                              .read(listingServiceProvider)
-                              .createListing(listing);
+                          if (existing == null) {
+                            await ref
+                                .read(listingServiceProvider)
+                                .createListing(listing);
+                          } else {
+                            await ref
+                                .read(listingServiceProvider)
+                                .updateListing(listing);
+                          }
                           if (context.mounted) {
                             Navigator.of(context).pop();
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Listing created.')),
+                              SnackBar(
+                                content: Text(existing == null
+                                    ? 'Listing created.'
+                                    : 'Listing updated.'),
+                              ),
                             );
                           }
                         } catch (_) {
@@ -299,7 +428,9 @@ Future<void> _openCreateListingSheet(
                           }
                         }
                       },
-                      child: const Text('Create listing'),
+                      child: Text(
+                        existing == null ? 'Create listing' : 'Save listing',
+                      ),
                     ),
                   ),
                 ],
@@ -313,10 +444,50 @@ Future<void> _openCreateListingSheet(
 
   titleController.dispose();
   descriptionController.dispose();
-  categoryController.dispose();
+  otherCategoryController.dispose();
   locationController.dispose();
   priceMinController.dispose();
   priceMaxController.dispose();
+}
+
+Future<void> _deleteListing(
+  BuildContext context,
+  WidgetRef ref,
+  Listing listing,
+) async {
+  final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Delete listing'),
+          content: Text('Delete "${listing.title}" permanently?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+  if (!confirmed) return;
+  try {
+    await ref.read(listingServiceProvider).deleteListing(listing.id);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Listing deleted.')),
+      );
+    }
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete listing: $error')),
+      );
+    }
+  }
 }
 
 Future<List<Uint8List>> _pickListingImages({required int remaining}) async {

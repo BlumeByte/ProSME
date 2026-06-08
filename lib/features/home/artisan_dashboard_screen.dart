@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../config/constants.dart';
+import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
 import '../jobs/jobs_repository.dart';
 
@@ -53,16 +55,25 @@ class ArtisanDashboardScreen extends ConsumerWidget {
                 listings: myListings.length,
                 openRequests: 0,
                 pending: 0,
+                onOpenListings: onOpenListings,
+                onOpenRequests: onOpenJobs,
+                onOpenPending: onOpenChats,
               ),
               error: (_, __) => _StatRow(
                 listings: myListings.length,
                 openRequests: 0,
                 pending: 0,
+                onOpenListings: onOpenListings,
+                onOpenRequests: onOpenJobs,
+                onOpenPending: onOpenChats,
               ),
               data: (jobs) => _StatRow(
                 listings: myListings.length,
                 openRequests: jobs.length,
                 pending: jobs.take(3).length,
+                onOpenListings: onOpenListings,
+                onOpenRequests: onOpenJobs,
+                onOpenPending: onOpenChats,
               ),
             );
           },
@@ -167,10 +178,12 @@ class ArtisanDashboardScreen extends ConsumerWidget {
                         '${job.location} - $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
                       ),
                       trailing: FilledButton(
-                        onPressed: onOpenJobs,
+                        onPressed: () =>
+                            context.push('${RouteNames.jobDetail}/${job.id}'),
                         child: const Text('Bid'),
                       ),
-                      onTap: onOpenJobs,
+                      onTap: () =>
+                          context.push('${RouteNames.jobDetail}/${job.id}'),
                     ),
                   ),
                 ),
@@ -188,11 +201,17 @@ class _StatRow extends StatelessWidget {
     required this.listings,
     required this.openRequests,
     required this.pending,
+    required this.onOpenListings,
+    required this.onOpenRequests,
+    required this.onOpenPending,
   });
 
   final int listings;
   final int openRequests;
   final int pending;
+  final VoidCallback onOpenListings;
+  final VoidCallback onOpenRequests;
+  final VoidCallback onOpenPending;
 
   @override
   Widget build(BuildContext context) {
@@ -203,6 +222,7 @@ class _StatRow extends StatelessWidget {
             value: listings.toString(),
             label: 'Services',
             icon: Icons.storefront_outlined,
+            onTap: onOpenListings,
           ),
         ),
         const SizedBox(width: 8),
@@ -211,6 +231,7 @@ class _StatRow extends StatelessWidget {
             value: openRequests.toString(),
             label: 'Requests',
             icon: Icons.work_outline,
+            onTap: onOpenRequests,
           ),
         ),
         const SizedBox(width: 8),
@@ -219,6 +240,7 @@ class _StatRow extends StatelessWidget {
             value: pending.toString(),
             label: 'Pending',
             icon: Icons.pending_actions_outlined,
+            onTap: onOpenPending,
           ),
         ),
       ],
@@ -231,35 +253,41 @@ class _StatTile extends StatelessWidget {
     required this.value,
     required this.label,
     required this.icon,
+    required this.onTap,
   });
 
   final String value;
   final String label;
   final IconData icon;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-        child: Column(
-          children: [
-            Icon(icon, color: scheme.primary),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: scheme.onSurfaceVariant),
-            ),
-          ],
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          child: Column(
+            children: [
+              Icon(icon, color: scheme.primary),
+              const SizedBox(height: 6),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+            ],
+          ),
         ),
       ),
     );

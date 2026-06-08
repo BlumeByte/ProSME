@@ -8,6 +8,8 @@ abstract class ListingService {
   Stream<List<Listing>> watchListings();
   Future<List<Listing>> fetchListings();
   Future<Listing> createListing(Listing listing);
+  Future<Listing> updateListing(Listing listing);
+  Future<void> deleteListing(String listingId);
 }
 
 class MockListingService implements ListingService {
@@ -29,6 +31,21 @@ class MockListingService implements ListingService {
     _listings.insert(0, listing);
     _controller.add(List<Listing>.unmodifiable(_listings));
     return listing;
+  }
+
+  @override
+  Future<Listing> updateListing(Listing listing) async {
+    final index = _listings.indexWhere((item) => item.id == listing.id);
+    if (index == -1) return createListing(listing);
+    _listings[index] = listing;
+    _controller.add(List<Listing>.unmodifiable(_listings));
+    return listing;
+  }
+
+  @override
+  Future<void> deleteListing(String listingId) async {
+    _listings.removeWhere((listing) => listing.id == listingId);
+    _controller.add(List<Listing>.unmodifiable(_listings));
   }
 }
 
@@ -144,6 +161,33 @@ class SupabaseListingService implements ListingService {
         .single();
     final hydrated = await _hydrateListings([Map<String, dynamic>.from(row)]);
     return hydrated.first;
+  }
+
+  @override
+  Future<Listing> updateListing(Listing listing) async {
+    final row = await _supabase
+        .from('listings')
+        .update({
+          'title': listing.title,
+          'description': listing.description,
+          'category': listing.category,
+          'price_min': listing.priceMin,
+          'price_max': listing.priceMax,
+          'images': listing.images,
+          'location': listing.location,
+          'verified_only': listing.verifiedOnly,
+        })
+        .eq('id', listing.id)
+        .eq('artisan_id', listing.artisanId)
+        .select()
+        .single();
+    final hydrated = await _hydrateListings([Map<String, dynamic>.from(row)]);
+    return hydrated.first;
+  }
+
+  @override
+  Future<void> deleteListing(String listingId) async {
+    await _supabase.from('listings').delete().eq('id', listingId);
   }
 }
 

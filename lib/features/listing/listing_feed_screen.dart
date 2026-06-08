@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/constants.dart';
 import '../../core/utils/location_data.dart';
+import '../../core/utils/service_categories.dart';
 import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
 import '../../models/listing.dart';
@@ -18,7 +19,7 @@ bool _matchesLocation(String target, String query) {
       .where((token) => token.length > 2)
       .toList(growable: false);
   if (tokens.isEmpty) return true;
-  return tokens.any(target.contains);
+  return tokens.any((token) => fuzzyContains(target, token));
 }
 
 class ListingFeedScreen extends ConsumerStatefulWidget {
@@ -45,14 +46,6 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   bool _showSearchResults = false;
   bool _locating = false;
   List<String> _recentSearches = const [];
-  static const _defaultCategories = [
-    ('Plumbing', Icons.plumbing, 0),
-    ('Electrical', Icons.electrical_services, 0),
-    ('Cleaning', Icons.cleaning_services, 0),
-    ('Painting', Icons.format_paint, 0),
-    ('Gardening', Icons.yard, 0),
-    ('Carpentry', Icons.handyman, 0),
-  ];
 
   @override
   void initState() {
@@ -270,12 +263,11 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               '${listing.title} ${listing.description} ${listing.category}'
                   .toLowerCase();
           final locationText = listing.location.toLowerCase();
-          final serviceMatches =
-              _serviceQuery.isEmpty || serviceText.contains(_serviceQuery);
+          final serviceMatches = _serviceQuery.isEmpty ||
+              fuzzyContains(serviceText, _serviceQuery);
           final categoryMatches = _selectedCategory == null ||
-              listing.category
-                  .toLowerCase()
-                  .contains(_selectedCategory!.toLowerCase());
+              normalizeServiceCategory(listing.category) == _selectedCategory ||
+              fuzzyContains(listing.category, _selectedCategory!);
           final locationMatches = _locationQuery.isEmpty ||
               _matchesLocation(locationText, _locationQuery);
           return serviceMatches && categoryMatches && locationMatches;
@@ -283,16 +275,18 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
 
         final categoryCounts = <String, int>{};
         for (final listing in filtered) {
-          final category = listing.category.trim().isEmpty
-              ? 'Other'
-              : listing.category.trim();
+          final category = normalizeServiceCategory(listing.category);
           categoryCounts.update(category, (value) => value + 1,
               ifAbsent: () => 1);
         }
-        final categoryCards = _defaultCategories.map((item) {
-          final count = categoryCounts[item.$1] ?? item.$3;
-          return _CategoryPreview(item.$1, item.$2, count);
-        }).toList(growable: false);
+        final categoryCards = kServiceCategories
+            .map((item) => _CategoryPreview(
+                  item.name,
+                  item.icon,
+                  categoryCounts[item.name] ?? 0,
+                ))
+            .where((item) => item.count > 0)
+            .toList(growable: false);
 
         final professionalsById = <String, _ProfessionalPreview>{};
         for (final listing in filtered) {
@@ -307,7 +301,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               avatarUrl: listing.artisanPhotoUrl,
               location: listing.location,
               minPrice: listing.priceMin,
-              categories: {listing.category},
+              categories: {normalizeServiceCategory(listing.category)},
               isVerified: listing.verifiedOnly,
               listingCount: 1,
             );
@@ -320,7 +314,10 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             minPrice: listing.priceMin < existing.minPrice
                 ? listing.priceMin
                 : existing.minPrice,
-            categories: {...existing.categories, listing.category},
+            categories: {
+              ...existing.categories,
+              normalizeServiceCategory(listing.category),
+            },
             isVerified: existing.isVerified || listing.verifiedOnly,
             listingCount: existing.listingCount + 1,
           );
@@ -457,55 +454,62 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                 },
               ),
             ],
-            const SizedBox(height: 22),
-            Text('Popular Services',
-                style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: categoryCards.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 0.9,
+            if (categoryCards.isNotEmpty) ...[
+              const SizedBox(height: 22),
+              Text(
+                'Popular Services',
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-              itemBuilder: (context, index) {
-                final item = categoryCards[index];
-                return InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () {
-                    _applyCategory(item.name);
-                  },
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 10),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(item.icon, color: scheme.primary),
-                          const SizedBox(height: 8),
-                          Text(
-                            item.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${item.count} pros',
-                            style: TextStyle(color: scheme.onSurfaceVariant),
-                          ),
-                        ],
+              const SizedBox(height: 12),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: categoryCards.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 0.9,
+                ),
+                itemBuilder: (context, index) {
+                  final item = categoryCards[index];
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () {
+                      _applyCategory(item.name);
+                    },
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 10,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(item.icon, color: scheme.primary),
+                            const SizedBox(height: 8),
+                            Text(
+                              item.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${item.count} pros',
+                              style: TextStyle(color: scheme.onSurfaceVariant),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 20),
+                  );
+                },
+              ),
+              const SizedBox(height: 20),
+            ],
             Row(
               children: [
                 Expanded(
@@ -541,7 +545,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                         leading: const Icon(Icons.campaign_outlined),
                         title: Text(listing.title),
                         subtitle: Text(
-                          '${listing.category} • ${listing.location}',
+                          '${normalizeServiceCategory(listing.category)} - ${listing.location}',
                         ),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: user == null
@@ -915,7 +919,7 @@ class _OpenJobsPreview extends ConsumerWidget {
         final filtered = jobs.where((job) {
           final jobText = '${job.title} ${job.description}'.toLowerCase();
           final locationText = job.location.toLowerCase();
-          final queryMatches = query.isEmpty || jobText.contains(query);
+          final queryMatches = query.isEmpty || fuzzyContains(jobText, query);
           final locationMatches = locationQuery.isEmpty ||
               _matchesLocation(locationText, locationQuery);
           return queryMatches && locationMatches;

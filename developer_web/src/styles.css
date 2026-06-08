@@ -1,8 +1,18 @@
+html,
+body,
+button,
+input,
+select,
+textarea,
+table {
+  font-family: Arial, Helvetica, "Segoe UI", sans-serif !important;
+  font-variant-ligatures: none;
+  font-feature-settings: normal;
+}
+
 :root {
   color-scheme: light;
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  font-family: Arial, Helvetica, "Segoe UI", sans-serif;
   background: #eef2f6;
   color: #101827;
   font-synthesis: none;
@@ -221,6 +231,10 @@ nav {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 22px;
+}
+
+.mobile-account {
+  display: none;
 }
 
 .topbar p {
@@ -483,5 +497,21 @@ code {
 
   .main {
     padding: 18px;
+  }
+
+  .account {
+    display: none;
+  }
+
+  .mobile-account {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 12px;
+    border: 1px solid #dbe2ea;
+    border-radius: 8px;
+    background: #ffffff;
   }
 }

@@ -123,9 +123,9 @@ class SupabaseChatService implements ChatService {
             .select()
             .or('user_id.eq.$userId,artisan_id.eq.$userId')
             .order('updated_at', ascending: false);
-        lastGood = rows
+        lastGood = await _hydrateThreads(rows
             .map((row) => ChatThread.fromJson(Map<String, dynamic>.from(row)))
-            .toList(growable: false);
+            .toList(growable: false));
         yield lastGood;
       } catch (error, stackTrace) {
         debugPrint('Failed to refresh chat threads: $error');
@@ -133,6 +133,57 @@ class SupabaseChatService implements ChatService {
         yield lastGood;
       }
       await Future<void>.delayed(const Duration(seconds: 6));
+    }
+  }
+
+  Future<List<ChatThread>> _hydrateThreads(List<ChatThread> threads) async {
+    if (threads.isEmpty) return threads;
+    final profileIds = <String>{};
+    for (final thread in threads) {
+      if (thread.userId.isNotEmpty) profileIds.add(thread.userId);
+      if (thread.artisanId.isNotEmpty) profileIds.add(thread.artisanId);
+    }
+    if (profileIds.isEmpty) return threads;
+
+    try {
+      final rows = await _supabase
+          .from('profiles')
+          .select('id,full_name,email,avatar_url')
+          .inFilter('id', profileIds.toList());
+      final profiles = <String, Map<String, dynamic>>{};
+      for (final row in rows) {
+        final profile = Map<String, dynamic>.from(row);
+        profiles[(profile['id'] ?? '').toString()] = profile;
+      }
+
+      String? nameFor(String id) {
+        final profile = profiles[id];
+        final fullName = (profile?['full_name'] ?? '').toString().trim();
+        if (fullName.isNotEmpty) return fullName;
+        final email = (profile?['email'] ?? '').toString().trim();
+        if (email.isEmpty) return null;
+        return email.split('@').first;
+      }
+
+      String? photoFor(String id) {
+        final value = (profiles[id]?['avatar_url'] ?? '').toString().trim();
+        return value.isEmpty ? null : value;
+      }
+
+      return threads
+          .map(
+            (thread) => thread.copyWith(
+              userName: nameFor(thread.userId),
+              userPhotoUrl: photoFor(thread.userId),
+              artisanName: nameFor(thread.artisanId),
+              artisanPhotoUrl: photoFor(thread.artisanId),
+            ),
+          )
+          .toList(growable: false);
+    } catch (error, stackTrace) {
+      debugPrint('Failed to hydrate chat profiles: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      return threads;
     }
   }
 

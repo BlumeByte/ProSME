@@ -56,9 +56,22 @@ class ChatListScreen extends ConsumerWidget {
           separatorBuilder: (_, __) => const Divider(),
           itemBuilder: (context, index) {
             final thread = threads[index];
+            final showingCustomer = user.id == thread.artisanId;
+            final title = showingCustomer
+                ? (thread.userName ?? 'Customer')
+                : (thread.artisanName ?? 'Artisan');
+            final photoUrl =
+                showingCustomer ? thread.userPhotoUrl : thread.artisanPhotoUrl;
             return ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.person)),
-              title: const Text('Conversation'),
+              leading: CircleAvatar(
+                backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+                    ? NetworkImage(photoUrl)
+                    : null,
+                child: (photoUrl == null || photoUrl.isEmpty)
+                    ? const Icon(Icons.person)
+                    : null,
+              ),
+              title: Text(title),
               subtitle: Text(
                 thread.lastMessage.isEmpty
                     ? 'No messages yet'
