@@ -78,13 +78,14 @@ const dateText = (value) => {
 };
 
 const roleBadge = (role) => {
+  const displayRole = role === 'admin' ? 'developer' : role;
   const map = {
     developer: 'badge badge-purple',
-    admin: 'badge badge-blue',
+    admin: 'badge badge-purple',
     artisan: 'badge badge-teal',
     customer: 'badge',
   };
-  return `<span class="${map[role] || 'badge'}">${esc(role || 'customer')}</span>`;
+  return `<span class="${map[role] || 'badge'}">${esc(displayRole || 'customer')}</span>`;
 };
 
 const statusBadge = (status) => {
@@ -173,7 +174,11 @@ async function loadDashboard() {
     .maybeSingle();
 
   if (profileError) {
-    state.error = `Could not load your developer profile: ${profileError.message}`;
+    await supabase.auth.signOut({ scope: 'local' });
+    state.session = null;
+    state.profile = null;
+    state.data = emptyData();
+    state.error = `Could not verify developer access: ${profileError.message}`;
     state.loading = false;
     render();
     return;
@@ -182,7 +187,7 @@ async function loadDashboard() {
   state.profile = profile;
 
   if (profile?.role !== 'developer') {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     state.session = null;
     state.profile = null;
     state.error = 'Only developer accounts can open this dashboard.';
@@ -424,6 +429,35 @@ async function setReportStatus(id, status) {
   await updateTableRow('reports', id, { status, reviewed_at: new Date().toISOString() }, `Report marked ${status}.`);
 }
 
+async function sendReportResponse(id) {
+  const report = state.data.reports.find((item) => item.id === id);
+  if (!report?.reporter_id) {
+    state.error = 'This report has no reporter account to notify.';
+    render();
+    return;
+  }
+  const response = window.prompt('No-reply message to user', 'Your support ticket has been reviewed.');
+  if (!response) return;
+  await runAction(async () => {
+    const { error } = await supabase.from('admin_notifications').insert({
+      type: 'developer_response',
+      title: 'Support update',
+      body: response,
+      actor_id: state.session?.user?.id,
+      related_user_id: report.reporter_id,
+      related_table: 'reports',
+      related_id: id,
+    });
+    if (error) throw new Error(error.message);
+    await supabase.from('reports').update({
+      status: 'resolved',
+      reviewed_at: new Date().toISOString(),
+    }).eq('id', id);
+    setNotice('No-reply support response sent.');
+    await refreshData();
+  });
+}
+
 function dashboardStats() {
   const profiles = state.data.profiles;
   const artisans = profiles.filter((profile) => profile.role === 'artisan');
@@ -439,7 +473,7 @@ function dashboardStats() {
     ['Artisans', artisans.length, `${pending.length} pending verification`],
     ['Listings', state.data.listings.length, 'Editable service listings'],
     ['Open jobs', openJobs.length, `${state.data.bids.length} bids`],
-    ['Reports', reports.length, `${unread.length} unread admin notices`],
+    ['Reports', reports.length, `${unread.length} unread developer notices`],
     ['Rejected verification', rejected.length, 'Retry lock handled in app'],
   ];
 }
@@ -540,7 +574,7 @@ function renderOverview() {
           <h2>Recent Activity</h2>
           <button class="link" data-tab="reports">Reports</button>
         </div>
-        ${recentNotifications.length ? renderActivityList(recentNotifications) : '<p class="empty">No admin activity yet.</p>'}
+        ${recentNotifications.length ? renderActivityList(recentNotifications) : '<p class="empty">No developer activity yet.</p>'}
       </article>
     </section>
   `;
@@ -559,7 +593,7 @@ function controls({ roleFilter = true, statusFilter = true } = {}) {
       ${
         roleFilter
           ? `<select data-filter="role">
-              ${['all', 'customer', 'artisan', 'admin', 'developer']
+              ${['all', 'customer', 'artisan', 'developer']
                 .map((role) => `<option value="${role}" ${state.filters.role === role ? 'selected' : ''}>${role}</option>`)
                 .join('')}
             </select>`
@@ -724,7 +758,7 @@ function renderProfileRow(profile) {
         <button class="ghost small" data-reset-email="${esc(profile.email || '')}">Reset</button>
         <button class="ghost small" data-random-password="${esc(profile.id)}" data-email="${esc(profile.email || '')}">Random password</button>
         <select data-role-user="${esc(profile.id)}">
-          ${['customer', 'artisan', 'admin', 'developer']
+          ${['customer', 'artisan', 'developer']
             .map((role) => `<option value="${role}" ${profile.role === role ? 'selected' : ''}>${role}</option>`)
             .join('')}
         </select>
@@ -793,7 +827,7 @@ function renderReports() {
   return `
     <section class="panel">
       <div class="panel-head">
-        <h2>Reports and Admin Notifications</h2>
+        <h2>Reports and Developer Notifications</h2>
         <span class="badge">${reports.length || state.data.notifications.length} records</span>
       </div>
       ${controls({ roleFilter: false })}
@@ -827,6 +861,7 @@ function renderReportRows(reports) {
             <div class="row-actions">
               ${item.id ? `<button class="ghost small" data-report-status="reviewing" data-id="${esc(item.id)}">Reviewing</button>` : ''}
               ${item.id ? `<button class="approve small" data-report-status="resolved" data-id="${esc(item.id)}">Resolve</button>` : ''}
+              ${item.reporter_id ? `<button class="ghost small" data-report-response="${esc(item.id)}">Send response</button>` : ''}
               ${item.read_at || !item.id ? '' : `<button class="ghost small" data-read="${esc(item.id)}">Mark read</button>`}
             </div>
           </details>`
@@ -964,7 +999,7 @@ function renderSettings() {
       </div>
       <h2>Developer Access</h2>
       <p class="muted">
-        Only accounts with <code>role = 'developer'</code> in <code>public.profiles</code> can continue. Admin, artisan, and user accounts are signed out immediately.
+        Only accounts with <code>role = 'developer'</code> in <code>public.profiles</code> can continue. Artisan and user accounts are signed out immediately.
       </p>
     </section>
   `;
@@ -1078,6 +1113,13 @@ function bindEvents() {
     button.addEventListener('click', (event) => {
       event.preventDefault();
       setReportStatus(button.dataset.id, button.dataset.reportStatus);
+    });
+  });
+
+  document.querySelectorAll('[data-report-response]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      sendReportResponse(button.dataset.reportResponse);
     });
   });
 

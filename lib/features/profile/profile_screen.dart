@@ -69,7 +69,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 : 'Verification ${user.verificationStatus.name}',
             subtitle: user.verificationStatus == VerificationStatus.verified
                 ? 'Your profile shows a public verified checkmark.'
-                : 'Submit or update your ID for admin review.',
+                : 'Submit or update your ID for developer review.',
             trailingText: user.verificationStatus == VerificationStatus.verified
                 ? null
                 : 'Upload',

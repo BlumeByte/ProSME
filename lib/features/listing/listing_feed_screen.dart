@@ -169,7 +169,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
           builder: (context) => AlertDialog(
             title: const Text('Unverified artisan'),
             content: Text(
-              '${pro.name} has not been verified by ProSME admin yet. Continue only if you are comfortable engaging this artisan.',
+              '${pro.name} has not been verified by a ProSME developer yet. Continue only if you are comfortable engaging this artisan.',
             ),
             actions: [
               TextButton(

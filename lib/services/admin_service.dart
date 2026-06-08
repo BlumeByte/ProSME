@@ -48,6 +48,20 @@ class PlatformModuleCounts {
   final int notifications;
 }
 
+class SupportNotice {
+  const SupportNotice({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String title;
+  final String body;
+  final DateTime createdAt;
+}
+
 class AdminService {
   const AdminService([this._supabase]);
 
@@ -195,7 +209,7 @@ class AdminService {
       'to_email': 'blumebyte@gmail.com',
       'subject': 'New ProSME artisan verification',
       'body':
-          'An artisan uploaded front and back ID documents for verification. Review them in the admin dashboard.',
+          'An artisan uploaded front and back ID documents for verification. Review them in the developer dashboard.',
       'related_user_id': userId,
     });
   }
@@ -230,6 +244,69 @@ class AdminService {
           : 'Your artisan verification was rejected. Notes: $notes',
       'related_user_id': userId,
     });
+  }
+
+  Future<void> submitSupportReport({
+    required String title,
+    required String message,
+    String category = 'support',
+  }) async {
+    final client = _supabase;
+    if (client == null) return;
+    final userId = client.auth.currentUser?.id;
+    final body = message.trim();
+    if (userId == null || body.isEmpty) return;
+
+    final inserted = await client
+        .from('reports')
+        .insert({
+          'reporter_id': userId,
+          'type': 'support_ticket',
+          'category': category,
+          'title': title.trim().isEmpty ? 'Support request' : title.trim(),
+          'body': body,
+          'message': body,
+          'status': 'open',
+        })
+        .select('id')
+        .maybeSingle();
+
+    final ticketId = (inserted?['id'] ?? '').toString();
+    await client.from('admin_notifications').insert({
+      'type': 'support_ticket',
+      'title': 'New support ticket',
+      'body': body,
+      'actor_id': userId,
+      'related_user_id': userId,
+      'related_table': 'reports',
+      'related_id': ticketId.isEmpty ? null : ticketId,
+    });
+  }
+
+  Future<List<SupportNotice>> fetchSupportNotices() async {
+    final client = _supabase;
+    if (client == null) return const [];
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return const [];
+    final rows = await client
+        .from('admin_notifications')
+        .select('id,title,body,created_at')
+        .eq('related_user_id', userId)
+        .eq('type', 'developer_response')
+        .order('created_at', ascending: false)
+        .limit(10);
+    return (rows as List<dynamic>)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .map(
+          (row) => SupportNotice(
+            id: (row['id'] ?? '').toString(),
+            title: (row['title'] ?? 'Support update').toString(),
+            body: (row['body'] ?? '').toString(),
+            createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()) ??
+                DateTime.now(),
+          ),
+        )
+        .toList(growable: false);
   }
 
   Future<List<DiscountOffer>> fetchDiscounts() async {

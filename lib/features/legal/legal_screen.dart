@@ -76,7 +76,7 @@ _LegalContent _contentFor(LegalPageKind kind) {
           ),
           _LegalSection(
             'Verification',
-            'Admin verification improves trust but does not replace user judgment. Users should review artisan status before engagement.',
+            'Developer verification improves trust but does not replace user judgment. Users should review artisan status before engagement.',
           ),
           _LegalSection(
             'Payments',
@@ -98,7 +98,7 @@ _LegalContent _contentFor(LegalPageKind kind) {
           ),
           _LegalSection(
             'Access controls',
-            'Supabase row-level security policies restrict private data and limit verification review tools to admin accounts.',
+            'Supabase row-level security policies restrict private data and limit verification review tools to developer accounts.',
           ),
           _LegalSection(
             'Verification documents',
@@ -106,7 +106,7 @@ _LegalContent _contentFor(LegalPageKind kind) {
           ),
           _LegalSection(
             'Incident response',
-            'Report suspicious behavior or security concerns through Support so admins can review accounts and platform activity.',
+            'Report suspicious behavior or security concerns through Support so developers can review accounts and platform activity.',
           ),
         ],
       );

@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
       const role = clean(body.role) || 'customer';
       const fullName = clean(body.full_name) || email.split('@')[0];
       const password = clean(body.password) || randomPassword();
-      const allowedRoles = new Set(['customer', 'artisan', 'admin', 'developer']);
+      const allowedRoles = new Set(['customer', 'artisan', 'developer']);
 
       if (!email || !email.includes('@')) return json(400, { error: 'Valid email is required.' });
       if (!allowedRoles.has(role)) return json(400, { error: 'Invalid role.' });

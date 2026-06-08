@@ -20,7 +20,7 @@ class RoleSelectionScreen extends ConsumerWidget {
     if (!context.mounted) return;
     if (role == UserRole.artisan) {
       context.go(RouteNames.artisanVerification);
-    } else if (role == UserRole.admin || role == UserRole.developer) {
+    } else if (role == UserRole.developer) {
       context.go(RouteNames.adminHome);
     } else {
       context.go(RouteNames.home);
@@ -49,18 +49,6 @@ class RoleSelectionScreen extends ConsumerWidget {
               label: 'I am an artisan',
               icon: Icons.handyman,
               onPressed: () => _selectRole(ref, context, UserRole.artisan),
-            ),
-            const SizedBox(height: 16),
-            PrimaryButton(
-              label: 'Admin access',
-              icon: Icons.admin_panel_settings,
-              onPressed: () => _selectRole(ref, context, UserRole.admin),
-            ),
-            const SizedBox(height: 16),
-            PrimaryButton(
-              label: 'Developer access',
-              icon: Icons.developer_mode,
-              onPressed: () => _selectRole(ref, context, UserRole.developer),
             ),
           ],
         ),

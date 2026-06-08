@@ -90,7 +90,7 @@ class ArtisanDashboardScreen extends ConsumerWidget {
             subtitle: Text(
               isVerified
                   ? 'Customers can see your verified badge.'
-                  : 'Upload ID documents so admin can verify your profile.',
+                  : 'Upload ID documents so a developer can verify your profile.',
             ),
             trailing: isVerified ? null : const Icon(Icons.info_outline),
           ),

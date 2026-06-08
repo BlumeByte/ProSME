@@ -89,7 +89,7 @@ class _DeveloperOverview extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Use this area to inspect account roles, tenants, marketplace modules, jobs, bids, chats, and admin notifications.',
+              'Use this area to inspect account roles, tenants, marketplace modules, jobs, bids, chats, and developer notifications.',
             ),
             const SizedBox(height: 16),
             Wrap(
@@ -294,7 +294,7 @@ class _ModulesPanel extends ConsumerWidget {
           ('Bids', counts.bids, 'Negotiation offers from artisans'),
           ('Threads', counts.threads, 'Chat rooms'),
           ('Messages', counts.messages, 'Chat messages and offers'),
-          ('Notifications', counts.notifications, 'Admin and support tasks'),
+          ('Notifications', counts.notifications, 'Developer and support tasks'),
         ];
         return ListView.separated(
           padding: const EdgeInsets.all(16),

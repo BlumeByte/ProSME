@@ -41,7 +41,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin Dashboard')),
+      appBar: AppBar(title: const Text('Developer Dashboard')),
       body: Row(
         children: [
           NavigationRail(
