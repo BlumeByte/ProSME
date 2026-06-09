@@ -325,14 +325,52 @@ class _BidTile extends ConsumerWidget {
           children: [
             Row(
               children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundImage:
+                      (bid.artisanAvatarUrl?.trim().isNotEmpty ?? false)
+                          ? NetworkImage(bid.artisanAvatarUrl!)
+                          : null,
+                  child: (bid.artisanAvatarUrl?.trim().isNotEmpty ?? false)
+                      ? null
+                      : const Icon(Icons.person_outline),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    '$kCurrencySymbol ${bid.amount.toStringAsFixed(2)}',
-                    style: Theme.of(context).textTheme.titleMedium,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        bid.artisanName ?? 'Artisan ${bid.artisanId}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${bid.acceptedBidCount} won bid${bid.acceptedBidCount == 1 ? '' : 's'}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
                   ),
                 ),
-                Chip(label: Text(bid.status)),
+                Chip(
+                  avatar: Icon(
+                    bid.artisanVerified
+                        ? Icons.verified
+                        : Icons.pending_actions_outlined,
+                    size: 16,
+                  ),
+                  label: Text(bid.artisanVerified ? 'Verified' : bid.status),
+                ),
               ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '$kCurrencySymbol ${bid.amount.toStringAsFixed(2)}',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
             if (bid.message.isNotEmpty) ...[
               const SizedBox(height: 8),

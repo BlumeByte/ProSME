@@ -25,6 +25,9 @@ class ArtisanDashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authStateProvider).valueOrNull;
     final jobsAsync = ref.watch(jobsStreamProvider);
+    final bidsAsync = user == null
+        ? const AsyncValue<List<JobBid>>.data(<JobBid>[])
+        : ref.watch(artisanBidsProvider(user.id));
     final listingsAsync = ref.watch(listingServiceProvider).watchListings();
     final status = user?.verificationStatus ?? VerificationStatus.pending;
     final isVerified = status == VerificationStatus.verified;
@@ -53,24 +56,24 @@ class ArtisanDashboardScreen extends ConsumerWidget {
             return jobsAsync.when(
               loading: () => _StatRow(
                 listings: myListings.length,
-                openRequests: 0,
-                pending: 0,
+                bids: bidsAsync.valueOrNull?.length ?? 0,
+                won: _wonBidCount(bidsAsync.valueOrNull ?? const []),
                 onOpenListings: onOpenListings,
                 onOpenRequests: onOpenJobs,
                 onOpenPending: onOpenChats,
               ),
               error: (_, __) => _StatRow(
                 listings: myListings.length,
-                openRequests: 0,
-                pending: 0,
+                bids: bidsAsync.valueOrNull?.length ?? 0,
+                won: _wonBidCount(bidsAsync.valueOrNull ?? const []),
                 onOpenListings: onOpenListings,
                 onOpenRequests: onOpenJobs,
                 onOpenPending: onOpenChats,
               ),
               data: (jobs) => _StatRow(
                 listings: myListings.length,
-                openRequests: jobs.length,
-                pending: jobs.take(3).length,
+                bids: bidsAsync.valueOrNull?.length ?? 0,
+                won: _wonBidCount(bidsAsync.valueOrNull ?? const []),
                 onOpenListings: onOpenListings,
                 onOpenRequests: onOpenJobs,
                 onOpenPending: onOpenChats,
@@ -89,8 +92,8 @@ class ArtisanDashboardScreen extends ConsumerWidget {
                 Text(isVerified ? 'Verified artisan' : 'Verification needed'),
             subtitle: Text(
               isVerified
-                  ? 'Customers can see your verified badge.'
-                  : 'Upload ID documents so a developer can verify your profile.',
+                ? 'Customers can see your verified badge.'
+                  : 'Upload ID documents so Support can verify your profile.',
             ),
             trailing: isVerified ? null : const Icon(Icons.info_outline),
           ),
@@ -196,19 +199,23 @@ class ArtisanDashboardScreen extends ConsumerWidget {
   }
 }
 
+int _wonBidCount(List<JobBid> bids) {
+  return bids.where((bid) => bid.status == 'accepted').length;
+}
+
 class _StatRow extends StatelessWidget {
   const _StatRow({
     required this.listings,
-    required this.openRequests,
-    required this.pending,
+    required this.bids,
+    required this.won,
     required this.onOpenListings,
     required this.onOpenRequests,
     required this.onOpenPending,
   });
 
   final int listings;
-  final int openRequests;
-  final int pending;
+  final int bids;
+  final int won;
   final VoidCallback onOpenListings;
   final VoidCallback onOpenRequests;
   final VoidCallback onOpenPending;
@@ -228,18 +235,18 @@ class _StatRow extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: _StatTile(
-            value: openRequests.toString(),
-            label: 'Requests',
-            icon: Icons.work_outline,
+            value: bids.toString(),
+            label: 'Bids',
+            icon: Icons.request_quote_outlined,
             onTap: onOpenRequests,
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: _StatTile(
-            value: pending.toString(),
-            label: 'Pending',
-            icon: Icons.pending_actions_outlined,
+            value: won.toString(),
+            label: 'Won',
+            icon: Icons.emoji_events_outlined,
             onTap: onOpenPending,
           ),
         ),

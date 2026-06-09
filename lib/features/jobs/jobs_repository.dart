@@ -35,6 +35,10 @@ class JobBid {
     required this.message,
     required this.status,
     required this.createdAt,
+    this.artisanName,
+    this.artisanAvatarUrl,
+    this.artisanVerified = false,
+    this.acceptedBidCount = 0,
   });
 
   final String id;
@@ -44,6 +48,10 @@ class JobBid {
   final String message;
   final String status;
   final DateTime createdAt;
+  final String? artisanName;
+  final String? artisanAvatarUrl;
+  final bool artisanVerified;
+  final int acceptedBidCount;
 }
 
 class JobRating {
@@ -70,6 +78,8 @@ abstract class JobsRepository {
   Stream<List<JobFeedItem>> watchJobs();
 
   Stream<List<JobBid>> watchBids(String jobId);
+
+  Stream<List<JobBid>> watchBidsByArtisan(String artisanId);
 
   Stream<List<JobRating>> watchRatings(String jobId);
 
@@ -159,9 +169,9 @@ class SupabaseJobsRepository implements JobsRepository {
             .select()
             .eq('job_id', jobId)
             .order('created_at', ascending: false);
-        lastGood = rows
+        lastGood = await _hydrateBids(rows
             .map((row) => _mapBid(Map<String, dynamic>.from(row as Map)))
-            .toList(growable: false);
+            .toList(growable: false));
         yield lastGood;
       } catch (error, stackTrace) {
         debugPrint('Failed to refresh job bids: $error');
@@ -169,6 +179,82 @@ class SupabaseJobsRepository implements JobsRepository {
         yield lastGood;
       }
       await Future<void>.delayed(const Duration(seconds: 8));
+    }
+  }
+
+  @override
+  Stream<List<JobBid>> watchBidsByArtisan(String artisanId) async* {
+    var lastGood = const <JobBid>[];
+    while (true) {
+      try {
+        final rows = await _client
+            .from('job_bids')
+            .select()
+            .eq('artisan_id', artisanId)
+            .order('created_at', ascending: false);
+        lastGood = rows
+            .map((row) => _mapBid(Map<String, dynamic>.from(row as Map)))
+            .toList(growable: false);
+        yield lastGood;
+      } catch (error, stackTrace) {
+        debugPrint('Failed to refresh artisan bids: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        yield lastGood;
+      }
+      await Future<void>.delayed(const Duration(seconds: 10));
+    }
+  }
+
+  Future<List<JobBid>> _hydrateBids(List<JobBid> bids) async {
+    if (bids.isEmpty) return bids;
+    final artisanIds = bids.map((bid) => bid.artisanId).toSet().toList();
+    try {
+      final profileRows = await _client
+          .from('profiles')
+          .select('id,username,full_name,avatar_url,verification_status')
+          .inFilter('id', artisanIds);
+      final acceptedRows = await _client
+          .from('job_bids')
+          .select('artisan_id')
+          .inFilter('artisan_id', artisanIds)
+          .eq('status', 'accepted');
+
+      final profiles = <String, Map<String, dynamic>>{};
+      for (final row in profileRows) {
+        final profile = Map<String, dynamic>.from(row as Map);
+        profiles[(profile['id'] ?? '').toString()] = profile;
+      }
+
+      final acceptedCounts = <String, int>{};
+      for (final row in acceptedRows) {
+        final artisanId = (row['artisan_id'] ?? '').toString();
+        acceptedCounts.update(artisanId, (value) => value + 1, ifAbsent: () => 1);
+      }
+
+      return bids.map((bid) {
+        final profile = profiles[bid.artisanId];
+        final name = (profile?['full_name'] ?? profile?['username'] ?? '')
+            .toString()
+            .trim();
+        return JobBid(
+          id: bid.id,
+          jobId: bid.jobId,
+          artisanId: bid.artisanId,
+          amount: bid.amount,
+          message: bid.message,
+          status: bid.status,
+          createdAt: bid.createdAt,
+          artisanName: name.isEmpty ? null : name,
+          artisanAvatarUrl: (profile?['avatar_url'] ?? '').toString(),
+          artisanVerified:
+              (profile?['verification_status'] ?? '').toString() == 'verified',
+          acceptedBidCount: acceptedCounts[bid.artisanId] ?? 0,
+        );
+      }).toList(growable: false);
+    } catch (error, stackTrace) {
+      debugPrint('Failed to hydrate bid profiles: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      return bids;
     }
   }
 
@@ -328,6 +414,15 @@ class MockJobsRepository implements JobsRepository {
   }
 
   @override
+  Stream<List<JobBid>> watchBidsByArtisan(String artisanId) async* {
+    final owned = _bidsByJobId.values
+        .expand((bids) => bids)
+        .where((bid) => bid.artisanId == artisanId)
+        .toList(growable: false);
+    yield List<JobBid>.unmodifiable(owned);
+  }
+
+  @override
   Future<JobFeedItem> createJob({
     required String title,
     required String description,
@@ -394,6 +489,10 @@ class MockJobsRepository implements JobsRepository {
         message: bid.message,
         status: 'accepted',
         createdAt: bid.createdAt,
+        artisanName: bid.artisanName,
+        artisanAvatarUrl: bid.artisanAvatarUrl,
+        artisanVerified: bid.artisanVerified,
+        acceptedBidCount: bid.acceptedBidCount + 1,
       );
       _bidControllers[entry.key]?.add(List<JobBid>.unmodifiable(entry.value));
       return;
@@ -448,6 +547,11 @@ final jobsStreamProvider = StreamProvider<List<JobFeedItem>>((ref) {
 final jobBidsProvider =
     StreamProvider.family<List<JobBid>, String>((ref, jobId) {
   return ref.watch(jobsRepositoryProvider).watchBids(jobId);
+});
+
+final artisanBidsProvider =
+    StreamProvider.family<List<JobBid>, String>((ref, artisanId) {
+  return ref.watch(jobsRepositoryProvider).watchBidsByArtisan(artisanId);
 });
 
 final jobRatingsProvider =

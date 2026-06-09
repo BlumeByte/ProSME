@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
@@ -30,6 +32,7 @@ abstract class AuthService {
   Future<void> updateUsername(String username, {String? emailOtp});
   Future<void> updatePhone(String phone);
   Future<void> updateCountry(String country, String countryCode);
+  Future<void> updatePhoto(Uint8List bytes, {required String contentType});
   Future<void> updateDescription(String description);
   Future<void> updateEmail(String email);
   Future<void> deleteAccount();
@@ -215,6 +218,17 @@ class MockAuthService implements AuthService {
   }
 
   @override
+  Future<void> updatePhoto(Uint8List bytes, {required String contentType}) async {
+    if (_currentUser == null) {
+      throw StateError('No signed-in user.');
+    }
+    final dataUrl = 'data:$contentType;base64,${base64Encode(bytes)}';
+    _currentUser = _currentUser!.copyWith(photoUrl: dataUrl);
+    _accountsByEmail[_currentUser!.email.toLowerCase()] = _currentUser!;
+    _controller.add(_currentUser);
+  }
+
+  @override
   Future<void> updateDescription(String description) async {
     if (_currentUser == null) {
       throw StateError('No signed-in user.');
@@ -297,7 +311,10 @@ class SupabaseAuthService implements AuthService {
         (metadata['full_name'] ?? metadata['name'] ?? _defaultDisplayName)
             .toString();
     final username = metadata['username']?.toString().trim();
-    final avatarUrl = (metadata['avatar_url'] ?? '').toString();
+    final metadataAvatarUrl = (metadata['avatar_url'] ?? '').toString();
+    final existingAvatarUrl = (existingProfile?['avatar_url'] ?? '').toString();
+    final avatarUrl =
+        metadataAvatarUrl.isNotEmpty ? metadataAvatarUrl : existingAvatarUrl;
     final role = (metadata['role'] ?? UserRole.customer.name).toString();
 
     final payload = <String, dynamic>{
@@ -671,6 +688,39 @@ class SupabaseAuthService implements AuthService {
         country: country,
         countryCode: countryCode,
       );
+    }
+  }
+
+  @override
+  Future<void> updatePhoto(Uint8List bytes, {required String contentType}) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      throw StateError('No signed-in user.');
+    }
+    final extension = contentType == 'image/png' ? 'png' : 'jpg';
+    final path =
+        '${user.id}/avatar_${DateTime.now().microsecondsSinceEpoch}.$extension';
+    try {
+      await _supabase.storage.from('avatars').uploadBinary(
+            path,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: contentType,
+              upsert: false,
+            ),
+          );
+    } on StorageException catch (error) {
+      throw StateError(
+        'Storage bucket "avatars" is not ready or your account cannot upload to it. ${error.message}',
+      );
+    }
+    final url = _supabase.storage.from('avatars').getPublicUrl(path);
+    await _updateProfile(user.id, {'avatar_url': url});
+    await _supabase.auth.updateUser(
+      UserAttributes(data: {'avatar_url': url}),
+    );
+    if (_resolvedCurrentUser != null) {
+      _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(photoUrl: url);
     }
   }
 

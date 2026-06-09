@@ -39,7 +39,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   String _serviceQuery = '';
   String _locationQuery = '';
   String? _selectedCategory;
-  CountryOption _selectedCountry = kCountries.first;
+  CountryOption? _selectedCountry = kCountries.first;
   RegionOption? _selectedRegion;
   CityOption? _selectedCity;
   String? _selectedTown;
@@ -66,7 +66,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
       _selectedTown,
       _selectedCity?.name,
       _selectedRegion?.name,
-      _selectedCountry.name,
+      _selectedCountry?.name,
     ].whereType<String>().where((item) => item.trim().isNotEmpty).toList();
     setState(() {
       _serviceQuery = _serviceController.text.trim().toLowerCase();
@@ -99,10 +99,11 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   Future<void> _saveRecentSearch() async {
     final query = [
       _serviceController.text.trim(),
-      _selectedTown ??
+          _selectedTown ??
           _selectedCity?.name ??
           _selectedRegion?.name ??
-          _selectedCountry.name,
+          _selectedCountry?.name ??
+          '',
     ].where((item) => item.isNotEmpty).join(' in ');
     if (query.trim().isEmpty) return;
     final next = [query, ..._recentSearches.where((item) => item != query)]
@@ -169,7 +170,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
           builder: (context) => AlertDialog(
             title: const Text('Unverified artisan'),
             content: Text(
-              '${pro.name} has not been verified by a ProSME developer yet. Continue only if you are comfortable engaging this artisan.',
+              '${pro.name} has not been verified by ProSME Support yet. Continue only if you are comfortable engaging this artisan.',
             ),
             actions: [
               TextButton(
@@ -625,12 +626,12 @@ class _SearchControls extends StatelessWidget {
 
   final TextEditingController serviceController;
   final TextEditingController locationController;
-  final CountryOption selectedCountry;
+  final CountryOption? selectedCountry;
   final RegionOption? selectedRegion;
   final CityOption? selectedCity;
   final String? selectedTown;
   final bool locating;
-  final ValueChanged<CountryOption> onCountryChanged;
+  final ValueChanged<CountryOption?> onCountryChanged;
   final ValueChanged<RegionOption?> onRegionChanged;
   final ValueChanged<CityOption?> onCityChanged;
   final ValueChanged<String?> onTownChanged;
@@ -640,6 +641,7 @@ class _SearchControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final regions = selectedCountry?.regions ?? const <RegionOption>[];
     final cities = selectedRegion?.cities ?? const <CityOption>[];
     final towns = selectedCity?.towns ?? const <String>[];
     return Column(
@@ -677,13 +679,13 @@ class _SearchControls extends StatelessWidget {
             Expanded(
               child: _PickerField(
                 label: 'Country',
-                value: selectedCountry.name,
+                value: selectedCountry?.name ?? 'Any',
                 onTap: () async {
-                  final selected = await _pickOption<CountryOption>(
+                  final selected = await _pickOption<CountryOption?>(
                     context,
                     title: 'Country',
-                    options: kCountries,
-                    labelFor: (country) => country.name,
+                    options: <CountryOption?>[null, ...kCountries],
+                    labelFor: (country) => country?.name ?? 'Any',
                   );
                   if (selected != null) onCountryChanged(selected.value);
                 },
@@ -700,7 +702,7 @@ class _SearchControls extends StatelessWidget {
                     title: 'Region',
                     options: <RegionOption?>[
                       null,
-                      ...selectedCountry.regions,
+                      ...regions,
                     ],
                     labelFor: (region) => region?.name ?? 'Any',
                   );

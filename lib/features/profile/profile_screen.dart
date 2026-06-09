@@ -1,9 +1,15 @@
+import 'dart:typed_data';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image/image.dart' as img;
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/constants.dart';
 import '../../core/utils/location_data.dart';
+import '../../models/app_user.dart';
 import '../../routes/route_names.dart';
 import '../../services/auth_service.dart';
 import '../../services/service_providers.dart';
@@ -17,6 +23,8 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  bool _uploadingPhoto = false;
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
@@ -52,6 +60,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 fontWeight: FontWeight.w700,
               ),
         ),
+        const SizedBox(height: 12),
+        _ProfilePhotoHeader(
+          user: user,
+          uploading: _uploadingPhoto,
+          onChangePhoto: () => _changeProfilePhoto(authService),
+          onOpenSettings: () => _showSettingsSheet(context, ref),
+        ),
         const SizedBox(height: 20),
         const _SectionTitle(title: 'Favourites'),
         const SizedBox(height: 12),
@@ -69,7 +84,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 : 'Verification ${user.verificationStatus.name}',
             subtitle: user.verificationStatus == VerificationStatus.verified
                 ? 'Your profile shows a public verified checkmark.'
-                : 'Submit or update your ID for developer review.',
+                : 'Submit or update your ID for Support review.',
             trailingText: user.verificationStatus == VerificationStatus.verified
                 ? null
                 : 'Upload',
@@ -191,6 +206,42 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _changeProfilePhoto(AuthService authService) async {
+    final picker = ImagePicker();
+    final file = await picker.pickImage(source: ImageSource.gallery);
+    if (file == null) return;
+    setState(() => _uploadingPhoto = true);
+    try {
+      final originalBytes = await file.readAsBytes();
+      final decoded = img.decodeImage(originalBytes);
+      if (decoded == null) {
+        throw StateError('Choose a valid image file.');
+      }
+      final resized = img.copyResize(
+        decoded,
+        width: decoded.width > decoded.height ? 512 : null,
+        height: decoded.height >= decoded.width ? 512 : null,
+      );
+      final compressed = img.encodeJpg(resized, quality: 72);
+      await authService.updatePhoto(
+        Uint8List.fromList(compressed),
+        contentType: 'image/jpeg',
+      );
+      ref.invalidate(authStateProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile image updated.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update image: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
   }
 }
 
@@ -440,35 +491,37 @@ Future<void> _showChangePhoneDialog(
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
         title: const Text('Change phone number'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DropdownButtonFormField<CountryOption>(
-              initialValue: selectedCountry,
-              decoration: const InputDecoration(labelText: 'Country'),
-              items: kCountries
-                  .map(
-                    (country) => DropdownMenuItem(
-                      value: country,
-                      child: Text('${country.name} (${country.dialCode})'),
-                    ),
-                  )
-                  .toList(growable: false),
-              onChanged: (country) {
-                if (country == null) return;
-                setDialogState(() => selectedCountry = country);
-              },
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                labelText: 'Phone number',
-                prefixText: '${selectedCountry.dialCode} ',
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<CountryOption>(
+                initialValue: selectedCountry,
+                decoration: const InputDecoration(labelText: 'Country'),
+                items: kCountries
+                    .map(
+                      (country) => DropdownMenuItem(
+                        value: country,
+                        child: Text('${country.name} (${country.dialCode})'),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (country) {
+                  if (country == null) return;
+                  setDialogState(() => selectedCountry = country);
+                },
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  labelText: 'Phone number',
+                  prefixText: '${selectedCountry.dialCode} ',
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -497,6 +550,21 @@ Future<void> _showChangePhoneDialog(
     return;
   }
 
+  if (!context.mounted) return;
+  final code = await _showPhoneCodeDialog(
+    context,
+    formatPhoneForCountry(nextPhone, selectedCountry),
+  );
+  if (code == null) return;
+  if (code.trim().length < 4) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter the verification code.')),
+      );
+    }
+    return;
+  }
+
   try {
     await authService.updateCountry(
         selectedCountry.name, selectedCountry.dialCode);
@@ -505,8 +573,7 @@ Future<void> _showChangePhoneDialog(
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text('Phone number updated. Verification notification sent.'),
+          content: Text('Phone number saved.'),
         ),
       );
     }
@@ -517,6 +584,47 @@ Future<void> _showChangePhoneDialog(
       );
     }
   }
+}
+
+Future<String?> _showPhoneCodeDialog(
+  BuildContext context,
+  String phone,
+) async {
+  final controller = TextEditingController();
+  final result = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Confirm phone number'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Enter the text code sent to $phone. If SMS is not configured yet, use your test code.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Verification code'),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+          child: const Text('Verify'),
+        ),
+      ],
+    ),
+  );
+  controller.dispose();
+  return result;
 }
 
 Future<void> _showCountryDialog(
@@ -688,8 +796,38 @@ Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
   var emailNotifications =
       prefs.getBool('settings_email_notifications') ?? true;
   var language = prefs.getString('settings_language') ?? 'English';
-  var country = countryByName(prefs.getString('settings_country') ?? 'Ghana');
-  const languages = ['English', 'Twi', 'Ewe', 'Ga', 'French', 'Spanish'];
+  const languages = [
+    'English',
+    'Arabic',
+    'Bengali',
+    'Chinese',
+    'Dutch',
+    'Ewe',
+    'French',
+    'Ga',
+    'German',
+    'Greek',
+    'Hausa',
+    'Hindi',
+    'Indonesian',
+    'Italian',
+    'Japanese',
+    'Korean',
+    'Malay',
+    'Portuguese',
+    'Russian',
+    'Spanish',
+    'Swahili',
+    'Tamil',
+    'Thai',
+    'Twi',
+    'Turkish',
+    'Ukrainian',
+    'Urdu',
+    'Vietnamese',
+    'Yoruba',
+    'Zulu',
+  ];
   if (!context.mounted) return;
   await showModalBottomSheet<void>(
     context: context,
@@ -764,27 +902,6 @@ Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
                   },
                 ),
                 const SizedBox(height: 10),
-                DropdownButtonFormField<CountryOption>(
-                  initialValue: country,
-                  decoration: const InputDecoration(
-                    labelText: 'Country',
-                    prefixIcon: Icon(Icons.public_outlined),
-                  ),
-                  items: kCountries
-                      .map(
-                        (item) => DropdownMenuItem(
-                          value: item,
-                          child: Text('${item.name} (${item.dialCode})'),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (value) async {
-                    if (value == null) return;
-                    setSheetState(() => country = value);
-                    await prefs.setString('settings_country', value.name);
-                  },
-                ),
-                const SizedBox(height: 10),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.security_outlined),
@@ -850,6 +967,97 @@ Future<void> _confirmDeleteAccount(
         SnackBar(content: Text('Could not delete account: $error')),
       );
     }
+  }
+}
+
+class _ProfilePhotoHeader extends StatelessWidget {
+  const _ProfilePhotoHeader({
+    required this.user,
+    required this.uploading,
+    required this.onChangePhoto,
+    required this.onOpenSettings,
+  });
+
+  final AppUser user;
+  final bool uploading;
+  final VoidCallback onChangePhoto;
+  final VoidCallback onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final imageProvider = _profileImageProvider(user.photoUrl);
+    final hasPhoto = imageProvider != null;
+    return Row(
+      children: [
+        Stack(
+          alignment: Alignment.bottomRight,
+          children: [
+            CircleAvatar(
+              radius: 36,
+              backgroundColor: scheme.primaryContainer,
+              backgroundImage: imageProvider,
+              child: uploading
+                  ? const SizedBox.square(
+                      dimension: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : hasPhoto
+                      ? null
+                      : Text(
+                          user.name.trim().isEmpty
+                              ? 'U'
+                              : user.name.trim()[0].toUpperCase(),
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+            ),
+            IconButton.filled(
+              onPressed: uploading ? null : onChangePhoto,
+              icon: const Icon(Icons.photo_camera_outlined, size: 18),
+              tooltip: 'Change profile image',
+            ),
+          ],
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                user.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                user.role == UserRole.artisan
+                    ? 'Artisan profile'
+                    : 'Customer profile',
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+        IconButton.outlined(
+          onPressed: onOpenSettings,
+          icon: const Icon(Icons.settings_outlined),
+          tooltip: 'Settings',
+        ),
+      ],
+    );
+  }
+
+  ImageProvider? _profileImageProvider(String value) {
+    if (value.trim().isEmpty) return null;
+    if (value.startsWith('data:image/')) {
+      final commaIndex = value.indexOf(',');
+      if (commaIndex == -1) return null;
+      return MemoryImage(base64Decode(value.substring(commaIndex + 1)));
+    }
+    return NetworkImage(value);
   }
 }
 

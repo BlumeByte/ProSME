@@ -99,6 +99,24 @@ class ChatMessage {
   final String content;
   final DateTime createdAt;
 
+  ChatMessage copyWith({
+    String? id,
+    String? threadId,
+    String? senderId,
+    MessageType? type,
+    String? content,
+    DateTime? createdAt,
+  }) {
+    return ChatMessage(
+      id: id ?? this.id,
+      threadId: threadId ?? this.threadId,
+      senderId: senderId ?? this.senderId,
+      type: type ?? this.type,
+      content: content ?? this.content,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     return ChatMessage(
       id: (json['id'] ?? '').toString(),

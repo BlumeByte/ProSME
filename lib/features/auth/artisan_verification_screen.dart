@@ -163,7 +163,7 @@ class _ArtisanVerificationScreenState
           );
       if (!mounted) return;
       setState(() => _hasSubmittedDocuments = true);
-      _showMessage('Verification sent to developer for review.');
+      _showMessage('Verification sent to Support for review.');
       context.go(RouteNames.artisanHome);
     } catch (_) {
       if (!mounted) return;
@@ -213,7 +213,7 @@ class _ArtisanVerificationScreenState
               icon: Icons.pending_actions,
               title: 'Submitted and under review',
               message:
-                  'Your documents are with a developer. You cannot submit again until review is complete.',
+                  'Your documents are with Support. You cannot submit again until review is complete.',
             )
           else if (isRetryLocked)
             _StatusPanel(

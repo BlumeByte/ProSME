@@ -26,7 +26,7 @@ class _DeveloperDashboardScreenState
       const _ModulesPanel(),
     ];
     return Scaffold(
-      appBar: AppBar(title: const Text('Developer Dashboard')),
+      appBar: AppBar(title: const Text('Support Dashboard')),
       body: Row(
         children: [
           NavigationRail(
@@ -89,7 +89,7 @@ class _DeveloperOverview extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Use this area to inspect account roles, tenants, marketplace modules, jobs, bids, chats, and developer notifications.',
+              'Use this area to inspect account roles, tenants, marketplace modules, jobs, bids, chats, and support notifications.',
             ),
             const SizedBox(height: 16),
             Wrap(
@@ -294,7 +294,7 @@ class _ModulesPanel extends ConsumerWidget {
           ('Bids', counts.bids, 'Negotiation offers from artisans'),
           ('Threads', counts.threads, 'Chat rooms'),
           ('Messages', counts.messages, 'Chat messages and offers'),
-          ('Notifications', counts.notifications, 'Developer and support tasks'),
+          ('Notifications', counts.notifications, 'Support tasks'),
         ];
         return ListView.separated(
           padding: const EdgeInsets.all(16),

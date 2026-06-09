@@ -371,12 +371,27 @@ Future<void> _openListingSheet(
                           return;
                         }
 
+                        List<String> uploadedUrls = const [];
                         try {
-                          final uploadedUrls = await _uploadListingImages(
+                          uploadedUrls = await _uploadListingImages(
                             ref,
                             user.id,
                             selectedImages,
                           );
+                        } catch (error) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Could not upload listing image: $error',
+                                ),
+                              ),
+                            );
+                          }
+                          return;
+                        }
+
+                        try {
                           final category = normalizeServiceCategory(
                               selectedCategory == 'Other'
                                   ? otherCategoryController.text
@@ -416,12 +431,14 @@ Future<void> _openListingSheet(
                               ),
                             );
                           }
-                        } catch (_) {
+                        } catch (error) {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
+                              SnackBar(
                                 content: Text(
-                                  'Could not create listing. Check Supabase setup.',
+                                  existing == null
+                                      ? 'Could not create listing: $error'
+                                      : 'Could not save listing: $error',
                                 ),
                               ),
                             );
@@ -541,14 +558,20 @@ Future<List<String>> _uploadListingImages(
   final urls = <String>[];
   for (var i = 0; i < images.length; i++) {
     final path = '$userId/${DateTime.now().microsecondsSinceEpoch}_$i.jpg';
-    await client.storage.from('listing-images').uploadBinary(
+    try {
+      await client.storage.from('listing-images').uploadBinary(
           path,
           images[i],
           fileOptions: const FileOptions(
-            upsert: true,
+            upsert: false,
             contentType: 'image/jpeg',
           ),
         );
+    } on StorageException catch (error) {
+      throw StateError(
+        'Storage bucket "listing-images" is not ready or your account cannot upload to it. ${error.message}',
+      );
+    }
     urls.add(client.storage.from('listing-images').getPublicUrl(path));
   }
   return urls;

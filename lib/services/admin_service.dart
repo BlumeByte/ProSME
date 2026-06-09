@@ -209,7 +209,7 @@ class AdminService {
       'to_email': 'blumebyte@gmail.com',
       'subject': 'New ProSME artisan verification',
       'body':
-          'An artisan uploaded front and back ID documents for verification. Review them in the developer dashboard.',
+          'An artisan uploaded front and back ID documents for verification. Review them in the Support dashboard.',
       'related_user_id': userId,
     });
   }

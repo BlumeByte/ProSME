@@ -66,7 +66,17 @@ class JobsScreen extends ConsumerWidget {
                     subtitle: Text(
                       '${job.location} - $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
                     ),
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: FilledButton(
+                      onPressed: () =>
+                          context.push('${RouteNames.jobDetail}/${job.id}'),
+                      child: Text(
+                        user.role == UserRole.artisan
+                            ? 'Bid'
+                            : job.createdBy == user.id
+                                ? 'View bids'
+                                : 'View',
+                      ),
+                    ),
                     onTap: () =>
                         context.push('${RouteNames.jobDetail}/${job.id}'),
                   ),

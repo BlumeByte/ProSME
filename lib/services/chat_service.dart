@@ -12,6 +12,12 @@ abstract class ChatService {
     required String artisanId,
   });
   Future<void> sendMessage(ChatMessage message);
+  Future<void> updateMessage(ChatMessage message);
+  Future<void> deleteMessage({
+    required String threadId,
+    required String messageId,
+  });
+  Future<void> clearMessages(String threadId);
 }
 
 class MockChatService implements ChatService {
@@ -89,20 +95,77 @@ class MockChatService implements ChatService {
       final threads = _threadsByUser.putIfAbsent(ownerId, () => <ChatThread>[]);
       final index =
           threads.indexWhere((thread) => thread.id == message.threadId);
-      final updatedThread = ChatThread(
-        id: message.threadId,
-        userId: ownerId,
-        artisanId: '',
-        lastMessage: message.content,
-        updatedAt: message.createdAt,
-      );
       if (index == -1) {
+        final updatedThread = ChatThread(
+          id: message.threadId,
+          userId: ownerId,
+          artisanId: '',
+          lastMessage: message.content,
+          updatedAt: message.createdAt,
+        );
         threads.insert(0, updatedThread);
       } else {
+        final updatedThread = threads[index].copyWith(
+          lastMessage: message.content,
+          updatedAt: message.createdAt,
+        );
         threads
           ..removeAt(index)
           ..insert(0, updatedThread);
       }
+      _threadControllers[ownerId]?.add(List<ChatThread>.from(threads));
+    }
+  }
+
+  @override
+  Future<void> updateMessage(ChatMessage message) async {
+    final messages = _messagesByThread[message.threadId];
+    if (messages == null) return;
+    final index = messages.indexWhere((item) => item.id == message.id);
+    if (index == -1) return;
+    messages[index] = message;
+    _messageControllers[message.threadId]
+        ?.add(List<ChatMessage>.from(messages));
+    _refreshThreadSummaries(message.threadId);
+  }
+
+  @override
+  Future<void> deleteMessage({
+    required String threadId,
+    required String messageId,
+  }) async {
+    final messages = _messagesByThread[threadId];
+    if (messages == null) return;
+    messages.removeWhere((message) => message.id == messageId);
+    _messageControllers[threadId]?.add(List<ChatMessage>.from(messages));
+    _refreshThreadSummaries(threadId);
+  }
+
+  @override
+  Future<void> clearMessages(String threadId) async {
+    _messagesByThread[threadId] = <ChatMessage>[];
+    _messageControllers[threadId]?.add(const <ChatMessage>[]);
+    _refreshThreadSummaries(threadId);
+  }
+
+  void _refreshThreadSummaries(String threadId) {
+    final messages = _messagesByThread[threadId] ?? const <ChatMessage>[];
+    final lastMessage = messages.isEmpty ? null : messages.last;
+    final ownerIds = _threadWatchers[threadId] ?? <String>{};
+
+    for (final ownerId in ownerIds) {
+      final threads = _threadsByUser[ownerId];
+      if (threads == null) continue;
+      final index = threads.indexWhere((thread) => thread.id == threadId);
+      if (index == -1) continue;
+      final current = threads[index];
+      final updatedThread = current.copyWith(
+        lastMessage: lastMessage?.content ?? '',
+        updatedAt: lastMessage?.createdAt ?? DateTime.now(),
+      );
+      threads
+        ..removeAt(index)
+        ..insert(0, updatedThread);
       _threadControllers[ownerId]?.add(List<ChatThread>.from(threads));
     }
   }
@@ -248,6 +311,45 @@ class SupabaseChatService implements ChatService {
       'last_message': message.content,
       'updated_at': message.createdAt.toIso8601String(),
     }).eq('id', message.threadId);
+  }
+
+  @override
+  Future<void> updateMessage(ChatMessage message) async {
+    await _supabase
+        .from('messages')
+        .update({'content': message.content}).eq('id', message.id);
+    await _refreshThreadSummary(message.threadId);
+  }
+
+  @override
+  Future<void> deleteMessage({
+    required String threadId,
+    required String messageId,
+  }) async {
+    await _supabase.from('messages').delete().eq('id', messageId);
+    await _refreshThreadSummary(threadId);
+  }
+
+  @override
+  Future<void> clearMessages(String threadId) async {
+    await _supabase.from('messages').delete().eq('thread_id', threadId);
+    await _refreshThreadSummary(threadId);
+  }
+
+  Future<void> _refreshThreadSummary(String threadId) async {
+    final rows = await _supabase
+        .from('messages')
+        .select()
+        .eq('thread_id', threadId)
+        .order('created_at', ascending: false)
+        .limit(1);
+    final lastMessage = rows.isEmpty
+        ? null
+        : ChatMessage.fromJson(Map<String, dynamic>.from(rows.first as Map));
+    await _supabase.from('threads').update({
+      'last_message': lastMessage?.content ?? '',
+      'updated_at': (lastMessage?.createdAt ?? DateTime.now()).toIso8601String(),
+    }).eq('id', threadId);
   }
 }
 

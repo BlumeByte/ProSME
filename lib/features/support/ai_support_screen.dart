@@ -81,7 +81,7 @@ class _AiSupportScreenState extends ConsumerState<AiSupportScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Support ticket sent. A developer response will appear as a no-reply notice.',
+            'Support ticket sent. A Support response will appear as a no-reply notice.',
           ),
         ),
       );
@@ -136,7 +136,7 @@ class _AiSupportScreenState extends ConsumerState<AiSupportScreen> {
           ],
           const SizedBox(height: 24),
           Text(
-            'Developer responses',
+            'Support responses',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
@@ -148,7 +148,7 @@ class _AiSupportScreenState extends ConsumerState<AiSupportScreen> {
               }
               final notices = snapshot.data ?? const <SupportNotice>[];
               if (notices.isEmpty) {
-                return const Text('No developer responses yet.');
+                return const Text('No Support responses yet.');
               }
               return Column(
                 children: notices
@@ -185,7 +185,7 @@ class _AiSupportScreenState extends ConsumerState<AiSupportScreen> {
             maxLines: 6,
             decoration: const InputDecoration(
               labelText: 'Message',
-              hintText: 'Explain the issue so a developer can review it.',
+              hintText: 'Explain the issue so Support can review it.',
             ),
           ),
           const SizedBox(height: 12),
