@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../core/widgets/loading_state.dart';
 import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
@@ -71,11 +72,28 @@ class ChatListScreen extends ConsumerWidget {
                     ? const Icon(Icons.person)
                     : null,
               ),
-              title: Text(title),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    DateFormat('MMM d, h:mm a').format(thread.updatedAt),
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ],
+              ),
               subtitle: Text(
                 thread.lastMessage.isEmpty
                     ? 'No messages yet'
                     : thread.lastMessage,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               onTap: () =>
                   context.push('${RouteNames.chatThread}/${thread.id}'),

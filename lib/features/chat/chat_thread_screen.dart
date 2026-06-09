@@ -482,7 +482,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 if (messages.isEmpty) {
                   return const Center(child: Text('Start the conversation.'));
                 }
-                final displayMessages = messages.reversed.toList(growable: false);
+                final displayMessages =
+                    messages.reversed.toList(growable: false);
 
                 return ListView.builder(
                   reverse: true,
@@ -552,7 +553,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             Material(
               color: colorScheme.secondaryContainer,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Row(
                   children: [
                     const Icon(Icons.edit, size: 20),

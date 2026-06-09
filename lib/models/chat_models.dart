@@ -90,7 +90,8 @@ class ChatMessage {
     required this.type,
     required this.content,
     required this.createdAt,
-  });
+    DateTime? updatedAt,
+  }) : updatedAt = updatedAt ?? createdAt;
 
   final String id;
   final String threadId;
@@ -98,6 +99,7 @@ class ChatMessage {
   final MessageType type;
   final String content;
   final DateTime createdAt;
+  final DateTime updatedAt;
 
   ChatMessage copyWith({
     String? id,
@@ -106,6 +108,7 @@ class ChatMessage {
     MessageType? type,
     String? content,
     DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -114,6 +117,7 @@ class ChatMessage {
       type: type ?? this.type,
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -131,6 +135,9 @@ class ChatMessage {
             (json['createdAt'] ?? json['created_at'] ?? '').toString(),
           ) ??
           DateTime.now(),
+      updatedAt: DateTime.tryParse(
+        (json['updatedAt'] ?? json['updated_at'] ?? '').toString(),
+      ),
     );
   }
 
@@ -142,6 +149,7 @@ class ChatMessage {
       'type': type.name,
       'content': content,
       'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
     };
   }
 }

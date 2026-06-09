@@ -60,7 +60,10 @@ final chatServiceProvider = Provider<ChatService>((ref) {
   if (!shouldUseSupabase()) {
     return MockChatService();
   }
-  return SupabaseChatService(Supabase.instance.client);
+  return SupabaseChatService(
+    Supabase.instance.client,
+    ref.watch(localDbProvider),
+  );
 });
 
 final paymentServiceProvider = Provider((ref) => PaymentService());
@@ -72,7 +75,7 @@ final adminServiceProvider = Provider((ref) {
   return const AdminService();
 });
 
-final localDbProvider = Provider((ref) => LocalDbService());
+final localDbProvider = Provider((ref) => LocalDbService.instance);
 
 final savedServiceProvider = Provider<SavedService>((ref) {
   if (!shouldUseSupabase()) {
