@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -9,6 +11,7 @@ import '../../core/utils/location_data.dart';
 import '../../core/utils/service_categories.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
+import '../../services/location_lookup_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/service_providers.dart';
 import '../../models/listing.dart';
@@ -38,6 +41,7 @@ class ListingFeedScreen extends ConsumerStatefulWidget {
 class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   final _serviceController = TextEditingController();
   final _locationController = TextEditingController();
+  final _locationLookup = LocationLookupService();
   String _serviceQuery = '';
   String _locationQuery = '';
   String? _selectedCategory;
@@ -48,7 +52,9 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   bool _appliedUserCountry = false;
   bool _showSearchResults = false;
   bool _locating = false;
+  bool _locationLookupBusy = false;
   bool _seenInitialListings = false;
+  int _locationLookupRun = 0;
   String? _latestListingId;
   List<String> _recentSearches = const [];
 
@@ -66,8 +72,9 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   }
 
   void _applySearch() {
+    final typedLocation = _locationController.text.trim();
     final parts = [
-      _locationController.text.trim(),
+      typedLocation,
       _selectedTown,
       _selectedCity?.name,
       _selectedRegion?.name,
@@ -81,6 +88,38 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
           _serviceQuery.isNotEmpty || _locationQuery.isNotEmpty;
     });
     _saveRecentSearch();
+    unawaited(_enrichTypedLocation(typedLocation));
+  }
+
+  Future<void> _enrichTypedLocation(String typedLocation) async {
+    final run = ++_locationLookupRun;
+    if (typedLocation.length < 3) {
+      setState(() => _locationLookupBusy = false);
+      return;
+    }
+    setState(() => _locationLookupBusy = true);
+    final result = await _locationLookup.searchOne(
+      typedLocation,
+      countryCode: _selectedCountry?.code,
+    );
+    if (!mounted || run != _locationLookupRun) return;
+    setState(() {
+      _locationLookupBusy = false;
+      if (result == null) return;
+      final parts = [
+        _locationController.text.trim(),
+        result.searchText,
+        _selectedTown,
+        _selectedCity?.name,
+        _selectedRegion?.name,
+        _selectedCountry?.name,
+      ].whereType<String>().where((item) => item.trim().isNotEmpty);
+      _locationQuery = parts.join(' ').toLowerCase();
+      if (!_showSearchResults) {
+        _showSearchResults =
+            _serviceQuery.isNotEmpty || _locationQuery.isNotEmpty;
+      }
+    });
   }
 
   void _applyCategory(String category) {
@@ -385,6 +424,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   selectedCity: _selectedCity,
                   selectedTown: _selectedTown,
                   locating: _locating,
+                  lookingUpLocation: _locationLookupBusy,
                   onCountryChanged: (country) => setState(() {
                     _selectedCountry = country;
                     _selectedRegion = null;
@@ -451,6 +491,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               selectedCity: _selectedCity,
               selectedTown: _selectedTown,
               locating: _locating,
+              lookingUpLocation: _locationLookupBusy,
               onCountryChanged: (country) => setState(() {
                 _selectedCountry = country;
                 _selectedRegion = null;
@@ -659,6 +700,7 @@ class _SearchControls extends StatelessWidget {
     required this.selectedCity,
     required this.selectedTown,
     required this.locating,
+    required this.lookingUpLocation,
     required this.onCountryChanged,
     required this.onRegionChanged,
     required this.onCityChanged,
@@ -674,6 +716,7 @@ class _SearchControls extends StatelessWidget {
   final CityOption? selectedCity;
   final String? selectedTown;
   final bool locating;
+  final bool lookingUpLocation;
   final ValueChanged<CountryOption?> onCountryChanged;
   final ValueChanged<RegionOption?> onRegionChanged;
   final ValueChanged<CityOption?> onCityChanged;
@@ -705,8 +748,8 @@ class _SearchControls extends StatelessWidget {
             hintText: 'Type location, street, or area',
             prefixIcon: const Icon(Icons.location_on_outlined),
             suffixIcon: IconButton(
-              onPressed: locating ? null : onUseLocation,
-              icon: locating
+              onPressed: locating || lookingUpLocation ? null : onUseLocation,
+              icon: locating || lookingUpLocation
                   ? const SizedBox.square(
                       dimension: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),

@@ -30,6 +30,7 @@ dependencies:
   image: ^4.1.7
   geolocator: ^14.0.2
   local_auth: ^2.3.0
+  http: 1.2.2
 
 
 

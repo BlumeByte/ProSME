@@ -279,11 +279,56 @@ async function developerAction(action, payload = {}) {
   });
   if (error) {
     throw new Error(
-      `${error.message}. Confirm the developer-admin Edge Function is deployed and its SUPABASE_SERVICE_ROLE_KEY secret is set.`
+      `${error.message}. Confirm the developer-admin Edge Function is deployed and its SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY secrets are set for the same Supabase project as Vercel.`
     );
   }
   if (data?.error) throw new Error(data.error);
   return data;
+}
+
+const isEdgeFunctionRequestError = (error) =>
+  lower(error?.message || error).includes('failed to send a request to the edge function');
+
+async function updateManagedRow(table, id, patch, edgeAction) {
+  try {
+    await developerAction(edgeAction, { id, patch });
+  } catch (error) {
+    if (!isEdgeFunctionRequestError(error)) throw error;
+    const { error: tableError } = await supabase.from(table).update(patch).eq('id', id);
+    if (tableError) {
+      throw new Error(
+        `${tableError.message}. The Edge Function is unavailable and direct ${table} updates are blocked. Apply the developer RLS migration or deploy developer-admin.`
+      );
+    }
+  }
+}
+
+async function deleteManagedRow(table, id, edgeAction) {
+  try {
+    await developerAction(edgeAction, { id });
+  } catch (error) {
+    if (!isEdgeFunctionRequestError(error)) throw error;
+    const { error: tableError } = await supabase.from(table).delete().eq('id', id);
+    if (tableError) {
+      throw new Error(
+        `${tableError.message}. The Edge Function is unavailable and direct ${table} deletes are blocked. Apply the developer RLS migration or deploy developer-admin.`
+      );
+    }
+  }
+}
+
+async function insertManagedRow(table, patch, edgeAction) {
+  try {
+    await developerAction(edgeAction, { patch });
+  } catch (error) {
+    if (!isEdgeFunctionRequestError(error)) throw error;
+    const { error: tableError } = await supabase.from(table).insert(patch);
+    if (tableError) {
+      throw new Error(
+        `${tableError.message}. The Edge Function is unavailable and direct ${table} inserts are blocked. Apply the developer RLS migration or deploy developer-admin.`
+      );
+    }
+  }
 }
 
 async function signIn(event) {
@@ -361,7 +406,7 @@ async function updateTableRow(table, id, patch, message) {
     };
     const action = actionByTable[table];
     if (action) {
-      await developerAction(action, { id, patch });
+      await updateManagedRow(table, id, patch, action);
     } else {
       const { error } = await supabase.from(table).update(patch).eq('id', id);
       if (error) throw new Error(error.message);
@@ -389,7 +434,7 @@ async function deleteTableRow(table, id) {
     };
     const action = actionByTable[table];
     if (action) {
-      await developerAction(action, { id });
+      await deleteManagedRow(table, id, action);
     } else {
       const { error } = await supabase.from(table).delete().eq('id', id);
       if (error) throw new Error(error.message);
@@ -505,9 +550,15 @@ async function createListing() {
   const priceMin = Number(window.prompt('Minimum price', '0') || 0);
   const priceMax = Number(window.prompt('Maximum price', String(priceMin || 0)) || priceMin || 0);
   await runAction(async () => {
-    await developerAction('upsertListing', {
-      patch: { artisan_id: artisanId, title, description, category, location, price_min: priceMin, price_max: priceMax },
-    });
+    await insertManagedRow('listings', {
+      artisan_id: artisanId,
+      title,
+      description,
+      category,
+      location,
+      price_min: priceMin,
+      price_max: priceMax,
+    }, 'upsertListing');
     setNotice('Listing created.');
     await refreshData();
   });
@@ -522,9 +573,14 @@ async function createJob() {
   const location = normalize(window.prompt('Location', ''));
   const budget = Number(window.prompt('Budget', '0') || 0);
   await runAction(async () => {
-    await developerAction('upsertJob', {
-      patch: { created_by: createdBy, title, description, location, budget, status: 'active' },
-    });
+    await insertManagedRow('jobs', {
+      created_by: createdBy,
+      title,
+      description,
+      location,
+      budget,
+      status: 'active',
+    }, 'upsertJob');
     setNotice('Job created.');
     await refreshData();
   });

@@ -21,9 +21,13 @@ Apply the migrations in `supabase/migrations`, then deploy the developer admin E
 
 ```powershell
 supabase functions deploy developer-admin
+supabase secrets set SUPABASE_URL="https://your-project-ref.supabase.co"
+supabase secrets set SUPABASE_ANON_KEY="your-publishable-or-anon-key"
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 supabase secrets set PASSWORD_RESET_REDIRECT_URL="https://your-vercel-domain.vercel.app"
 ```
+
+Use the same Supabase project for Vercel and the Edge Function. For example, if your function URL is `https://ivohczdtuxasyfoiphqu.supabase.co/functions/v1/developer-admin`, then Vercel's `VITE_SUPABASE_URL` and the function secret `SUPABASE_URL` must both be `https://ivohczdtuxasyfoiphqu.supabase.co`.
 
 The `SUPABASE_SERVICE_ROLE_KEY` belongs in Supabase Function secrets only. It is used for developer-only actions such as creating accounts, sending password reset emails, and setting temporary passwords.
 
