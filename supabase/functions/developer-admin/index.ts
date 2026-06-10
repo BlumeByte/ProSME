@@ -19,6 +19,18 @@ const requiredEnv = (key: string) => {
 };
 
 const clean = (value: unknown) => String(value ?? '').trim();
+const cleanNullable = (value: unknown) => {
+  const normalized = clean(value);
+  return normalized.isEmpty ? null : normalized;
+};
+
+const hasOwn = (source: Record<string, unknown>, key: string) =>
+  Object.prototype.hasOwnProperty.call(source, key);
+
+const numberOrZero = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 const randomPassword = () => {
   const bytes = new Uint8Array(12);
@@ -74,6 +86,9 @@ Deno.serve(async (req) => {
       const email = clean(body.email).toLowerCase();
       const role = clean(body.role) || 'customer';
       const fullName = clean(body.full_name) || email.split('@')[0];
+      const phone = clean(body.phone);
+      const country = clean(body.country);
+      const location = clean(body.location);
       const password = clean(body.password) || randomPassword();
       const allowedRoles = new Set(['customer', 'artisan', 'developer']);
 
@@ -84,7 +99,7 @@ Deno.serve(async (req) => {
         email,
         password,
         email_confirm: true,
-        user_metadata: { full_name: fullName },
+        user_metadata: { full_name: fullName, role },
         app_metadata: { role },
       });
 
@@ -95,12 +110,165 @@ Deno.serve(async (req) => {
         id: createdUser.id,
         email,
         full_name: fullName,
+        phone,
+        country: country || undefined,
+        location,
         role,
         verification_status: role === 'artisan' ? 'pending' : 'verified',
       });
 
       if (profileError) return json(400, { error: profileError.message });
       return json(200, { ok: true, userId: createdUser.id, temporaryPassword: password });
+    }
+
+    if (action === 'bulkCreateUsers') {
+      const accounts = Array.isArray(body.accounts) ? body.accounts : [];
+      const created: Array<Record<string, unknown>> = [];
+      const failed: Array<Record<string, unknown>> = [];
+      const allowedRoles = new Set(['customer', 'artisan', 'developer']);
+
+      for (const rawAccount of accounts.slice(0, 200)) {
+        const account = rawAccount && typeof rawAccount === 'object' ? rawAccount as Record<string, unknown> : {};
+        const email = clean(account.email).toLowerCase();
+        const role = clean(account.role) || 'customer';
+        const fullName = clean(account.full_name) || clean(account.name) || email.split('@')[0];
+        const password = clean(account.password) || randomPassword();
+
+        if (!email || !email.includes('@')) {
+          failed.push({ email, error: 'Valid email is required.' });
+          continue;
+        }
+        if (!allowedRoles.has(role)) {
+          failed.push({ email, error: 'Invalid role.' });
+          continue;
+        }
+
+        const { data, error } = await adminClient.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { full_name: fullName, role },
+          app_metadata: { role },
+        });
+
+        if (error || !data.user) {
+          failed.push({ email, error: error?.message || 'Could not create user.' });
+          continue;
+        }
+
+        const { error: profileError } = await adminClient.from('profiles').upsert({
+          id: data.user.id,
+          email,
+          full_name: fullName,
+          phone: clean(account.phone),
+          country: cleanNullable(account.country),
+          location: clean(account.location),
+          role,
+          verification_status: role === 'artisan' ? 'pending' : 'verified',
+        });
+
+        if (profileError) {
+          failed.push({ email, error: profileError.message });
+          continue;
+        }
+
+        created.push({ email, userId: data.user.id, temporaryPassword: password });
+      }
+
+      return json(200, { ok: true, created, failed });
+    }
+
+    if (action === 'updateProfile') {
+      const id = clean(body.id);
+      const patch = body.patch && typeof body.patch === 'object' ? body.patch as Record<string, unknown> : {};
+      if (!id) return json(400, { error: 'Profile id is required.' });
+
+      const sanitized: Record<string, unknown> = {};
+      for (const key of [
+        'full_name',
+        'phone',
+        'country',
+        'location',
+        'role',
+        'verification_status',
+        'verification_notes',
+        'verification_reviewed_at',
+        'verification_retry_after',
+      ]) {
+        if (hasOwn(patch, key)) sanitized[key] = cleanNullable(patch[key]);
+      }
+      const { error } = await adminClient.from('profiles').update(sanitized).eq('id', id);
+      if (error) return json(400, { error: error.message });
+      return json(200, { ok: true });
+    }
+
+    if (action === 'upsertListing') {
+      const id = clean(body.id);
+      const patch = body.patch && typeof body.patch === 'object' ? body.patch as Record<string, unknown> : {};
+      const row = {
+        title: clean(patch.title),
+        description: clean(patch.description),
+        category: clean(patch.category) || 'General',
+        location: clean(patch.location),
+        price_min: numberOrZero(patch.price_min),
+        price_max: numberOrZero(patch.price_max),
+        artisan_id: clean(patch.artisan_id),
+        tenant_id: cleanNullable(patch.tenant_id),
+      };
+      const update = Object.fromEntries(
+        Object.entries(row).filter(([, value]) => value !== '' && value !== null)
+      );
+      if (!id && !row.artisan_id) return json(400, { error: 'Artisan owner is required.' });
+      if (!id && !row.title) return json(400, { error: 'Listing title is required.' });
+
+      const query = id
+        ? adminClient.from('listings').update(update).eq('id', id).select('id').maybeSingle()
+        : adminClient.from('listings').insert(update).select('id').maybeSingle();
+      const { data, error } = await query;
+      if (error) return json(400, { error: error.message });
+      return json(200, { ok: true, id: data?.id || id });
+    }
+
+    if (action === 'deleteListing') {
+      const id = clean(body.id);
+      if (!id) return json(400, { error: 'Listing id is required.' });
+      const { error } = await adminClient.from('listings').delete().eq('id', id);
+      if (error) return json(400, { error: error.message });
+      return json(200, { ok: true });
+    }
+
+    if (action === 'upsertJob') {
+      const id = clean(body.id);
+      const patch = body.patch && typeof body.patch === 'object' ? body.patch as Record<string, unknown> : {};
+      const row = {
+        title: clean(patch.title),
+        description: clean(patch.description),
+        location: clean(patch.location),
+        budget: numberOrZero(patch.budget),
+        status: clean(patch.status) || 'active',
+        created_by: clean(patch.created_by),
+        tenant_id: cleanNullable(patch.tenant_id),
+      };
+      const update = Object.fromEntries(
+        Object.entries(row).filter(([, value]) => value !== '' && value !== null)
+      );
+      if (!id && !row.created_by) return json(400, { error: 'Job owner is required.' });
+      if (!id && !row.title) return json(400, { error: 'Job title is required.' });
+
+      const query = id
+        ? adminClient.from('jobs').update(update).eq('id', id).select('id').maybeSingle()
+        : adminClient.from('jobs').insert(update).select('id').maybeSingle();
+      const { data, error } = await query;
+      if (error) return json(400, { error: error.message });
+      return json(200, { ok: true, id: data?.id || id });
+    }
+
+    if (action === 'deleteJob') {
+      const id = clean(body.id);
+      if (!id) return json(400, { error: 'Job id is required.' });
+      const { error } = await adminClient.from('jobs').delete().eq('id', id);
+      if (error) return json(400, { error: error.message });
+      return json(200, { ok: true });
     }
 
     if (action === 'sendPasswordReset') {

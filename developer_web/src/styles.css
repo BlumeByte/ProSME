@@ -410,6 +410,20 @@ td small {
   padding: 9px 12px;
 }
 
+.file-action {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.file-action input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .table-wrap {
   width: 100%;
   overflow-x: auto;

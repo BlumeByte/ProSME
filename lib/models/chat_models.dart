@@ -11,6 +11,7 @@ class ChatThread {
     this.userPhotoUrl,
     this.artisanName,
     this.artisanPhotoUrl,
+    this.unreadCount = 0,
   });
 
   final String id;
@@ -22,6 +23,7 @@ class ChatThread {
   final String? userPhotoUrl;
   final String? artisanName;
   final String? artisanPhotoUrl;
+  final int unreadCount;
 
   factory ChatThread.fromJson(Map<String, dynamic> json) {
     return ChatThread(
@@ -40,6 +42,8 @@ class ChatThread {
       artisanName: (json['artisanName'] ?? json['artisan_name'])?.toString(),
       artisanPhotoUrl:
           (json['artisanPhotoUrl'] ?? json['artisan_photo_url'])?.toString(),
+      unreadCount:
+          ((json['unreadCount'] ?? json['unread_count'] ?? 0) as num).toInt(),
     );
   }
 
@@ -53,6 +57,7 @@ class ChatThread {
     String? userPhotoUrl,
     String? artisanName,
     String? artisanPhotoUrl,
+    int? unreadCount,
   }) {
     return ChatThread(
       id: id ?? this.id,
@@ -64,6 +69,7 @@ class ChatThread {
       userPhotoUrl: userPhotoUrl ?? this.userPhotoUrl,
       artisanName: artisanName ?? this.artisanName,
       artisanPhotoUrl: artisanPhotoUrl ?? this.artisanPhotoUrl,
+      unreadCount: unreadCount ?? this.unreadCount,
     );
   }
 
@@ -78,6 +84,7 @@ class ChatThread {
       if (userPhotoUrl != null) 'user_photo_url': userPhotoUrl,
       if (artisanName != null) 'artisan_name': artisanName,
       if (artisanPhotoUrl != null) 'artisan_photo_url': artisanPhotoUrl,
+      'unread_count': unreadCount,
     };
   }
 }
@@ -91,6 +98,7 @@ class ChatMessage {
     required this.content,
     required this.createdAt,
     DateTime? updatedAt,
+    this.readAt,
   }) : updatedAt = updatedAt ?? createdAt;
 
   final String id;
@@ -100,6 +108,7 @@ class ChatMessage {
   final String content;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? readAt;
 
   ChatMessage copyWith({
     String? id,
@@ -109,6 +118,7 @@ class ChatMessage {
     String? content,
     DateTime? createdAt,
     DateTime? updatedAt,
+    DateTime? readAt,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -118,6 +128,7 @@ class ChatMessage {
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      readAt: readAt ?? this.readAt,
     );
   }
 
@@ -138,6 +149,9 @@ class ChatMessage {
       updatedAt: DateTime.tryParse(
         (json['updatedAt'] ?? json['updated_at'] ?? '').toString(),
       ),
+      readAt: DateTime.tryParse(
+        (json['readAt'] ?? json['read_at'] ?? '').toString(),
+      ),
     );
   }
 
@@ -150,6 +164,7 @@ class ChatMessage {
       'content': content,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      if (readAt != null) 'read_at': readAt!.toIso8601String(),
     };
   }
 }

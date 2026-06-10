@@ -1,24 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import '../../core/widgets/app_scaffold.dart';
+import '../../services/service_providers.dart';
 import '../chat/chat_list_screen.dart';
 import 'artisan_dashboard_screen.dart';
 import '../jobs/jobs_screen.dart';
 import '../listing/listing_manage_screen.dart';
 import '../profile/profile_screen.dart';
 
-class ArtisanHomeScreen extends StatefulWidget {
+class ArtisanHomeScreen extends ConsumerStatefulWidget {
   const ArtisanHomeScreen({super.key});
 
   @override
-  State<ArtisanHomeScreen> createState() => _ArtisanHomeScreenState();
+  ConsumerState<ArtisanHomeScreen> createState() => _ArtisanHomeScreenState();
 }
 
-class _ArtisanHomeScreenState extends State<ArtisanHomeScreen> {
+class _ArtisanHomeScreenState extends ConsumerState<ArtisanHomeScreen> {
   int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(authStateProvider).valueOrNull;
+    final chatService = ref.watch(chatServiceProvider);
     final pages = [
       ArtisanDashboardScreen(
         onOpenListings: () => setState(() => _currentIndex = 1),
@@ -55,22 +59,47 @@ class _ArtisanHomeScreenState extends State<ArtisanHomeScreen> {
           ),
         ],
         body: pages[_currentIndex],
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) => setState(() => _currentIndex = index),
-          type: BottomNavigationBarType.fixed,
-          items: const [
-            BottomNavigationBarItem(
-                icon: Icon(Icons.dashboard), label: 'Artisan'),
-            BottomNavigationBarItem(icon: Icon(Icons.store), label: 'Listings'),
-            BottomNavigationBarItem(icon: Icon(Icons.work), label: 'Jobs'),
-            BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chats'),
-            BottomNavigationBarItem(
-                icon: Icon(Icons.settings), label: 'Settings'),
-          ],
+        bottomNavigationBar: StreamBuilder(
+          stream: user == null ? null : chatService.watchThreads(user.id),
+          builder: (context, snapshot) {
+            final unread = (snapshot.data ?? const [])
+                .fold<int>(0, (sum, thread) => sum + thread.unreadCount);
+            return BottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: (index) => setState(() => _currentIndex = index),
+              type: BottomNavigationBarType.fixed,
+              items: [
+                const BottomNavigationBarItem(
+                    icon: Icon(Icons.dashboard), label: 'Artisan'),
+                const BottomNavigationBarItem(
+                    icon: Icon(Icons.store), label: 'Listings'),
+                const BottomNavigationBarItem(
+                    icon: Icon(Icons.work), label: 'Jobs'),
+                BottomNavigationBarItem(
+                  icon: _NavIconWithBadge(icon: Icons.chat, count: unread),
+                  label: 'Chats',
+                ),
+                const BottomNavigationBarItem(
+                    icon: Icon(Icons.settings), label: 'Settings'),
+              ],
+            );
+          },
         ),
       ),
     );
+  }
+}
+
+class _NavIconWithBadge extends StatelessWidget {
+  const _NavIconWithBadge({required this.icon, required this.count});
+
+  final IconData icon;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    if (count <= 0) return Icon(icon);
+    return Badge.count(count: count, child: Icon(icon));
   }
 }
 

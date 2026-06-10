@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'config/supabase_options.dart';
 import 'services/app_launch_service.dart';
+import 'services/app_settings_controller.dart';
 import 'services/chat_sync_service.dart';
 import 'services/db_service.dart';
+import 'services/notification_service.dart';
 import 'services/service_providers.dart';
 import 'services/theme_mode_controller.dart';
 
@@ -16,6 +18,8 @@ Future<void> main() async {
   await LocalDbService.instance.init();
   await AppLaunchService.init();
   await ThemeModeController.init();
+  await AppSettingsController.init();
+  await NotificationService().initialize();
   if (shouldUseSupabase()) {
     await ChatSyncService.syncPending(
       supabase: supabaseClient,

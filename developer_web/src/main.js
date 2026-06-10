@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import readXlsxFile from 'read-excel-file/browser';
 import './styles.css';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -20,6 +21,7 @@ const state = {
   profile: null,
   tab: 'overview',
   loading: true,
+  checkingAccess: false,
   busy: false,
   error: '',
   notice: '',
@@ -42,7 +44,6 @@ const supabase = hasConfig
 const tabs = [
   ['overview', 'Overview'],
   ['users', 'Users'],
-  ['artisans', 'Artisans'],
   ['verifications', 'Verifications'],
   ['reports', 'Reports'],
   ['jobs', 'Jobs'],
@@ -158,13 +159,14 @@ async function init() {
 async function loadDashboard() {
   if (!state.session?.user) {
     state.loading = false;
+    state.checkingAccess = false;
     render();
     return;
   }
 
   state.loading = true;
+  state.checkingAccess = true;
   state.error = '';
-  render();
 
   const userId = state.session.user.id;
   const { data: profile, error: profileError } = await supabase
@@ -180,6 +182,7 @@ async function loadDashboard() {
     state.data = emptyData();
     state.error = `Could not verify developer access: ${profileError.message}`;
     state.loading = false;
+    state.checkingAccess = false;
     render();
     return;
   }
@@ -192,12 +195,14 @@ async function loadDashboard() {
     state.profile = null;
     state.error = 'Only developer accounts can open this dashboard.';
     state.loading = false;
+    state.checkingAccess = false;
     render();
     return;
   }
 
   await refreshData();
   state.loading = false;
+  state.checkingAccess = false;
   render();
 }
 
@@ -272,7 +277,11 @@ async function developerAction(action, payload = {}) {
   const { data, error } = await supabase.functions.invoke('developer-admin', {
     body: { action, ...payload },
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    throw new Error(
+      `${error.message}. Confirm the developer-admin Edge Function is deployed and its SUPABASE_SERVICE_ROLE_KEY secret is set.`
+    );
+  }
   if (data?.error) throw new Error(data.error);
   return data;
 }
@@ -343,16 +352,28 @@ async function updateTableRow(table, id, patch, message) {
   state.busy = true;
   state.error = '';
   render();
-  const { error } = await supabase.from(table).update(patch).eq('id', id);
-  state.busy = false;
 
-  if (error) {
-    state.error = error.message;
-  } else {
+  try {
+    const actionByTable = {
+      profiles: 'updateProfile',
+      listings: 'upsertListing',
+      jobs: 'upsertJob',
+    };
+    const action = actionByTable[table];
+    if (action) {
+      await developerAction(action, { id, patch });
+    } else {
+      const { error } = await supabase.from(table).update(patch).eq('id', id);
+      if (error) throw new Error(error.message);
+    }
     setNotice(message);
     await refreshData();
+  } catch (error) {
+    state.error = error.message || String(error);
+  } finally {
+    state.busy = false;
+    render();
   }
-  render();
 }
 
 async function deleteTableRow(table, id) {
@@ -360,16 +381,27 @@ async function deleteTableRow(table, id) {
   state.busy = true;
   state.error = '';
   render();
-  const { error } = await supabase.from(table).delete().eq('id', id);
-  state.busy = false;
 
-  if (error) {
-    state.error = error.message;
-  } else {
+  try {
+    const actionByTable = {
+      listings: 'deleteListing',
+      jobs: 'deleteJob',
+    };
+    const action = actionByTable[table];
+    if (action) {
+      await developerAction(action, { id });
+    } else {
+      const { error } = await supabase.from(table).delete().eq('id', id);
+      if (error) throw new Error(error.message);
+    }
     setNotice('Record deleted.');
     await refreshData();
+  } catch (error) {
+    state.error = error.message || String(error);
+  } finally {
+    state.busy = false;
+    render();
   }
-  render();
 }
 
 async function createAccount(role) {
@@ -388,6 +420,128 @@ async function createAccount(role) {
     setNotice(`${role} created. Temporary password: ${randomPassword}`);
     await refreshData();
   });
+}
+
+async function importAccounts(file) {
+  if (!file) return;
+  await runAction(async () => {
+    const rows = file.name.toLowerCase().endsWith('.csv')
+      ? parseCsvRows(await file.text())
+      : rowsToObjects(await readXlsxFile(file));
+    const accounts = rows
+      .map((row) => {
+        const normalized = Object.fromEntries(
+          Object.entries(row).map(([key, value]) => [lower(key).replace(/\s+/g, '_'), value])
+        );
+        const email = normalize(normalized.email).toLowerCase();
+        const role = lower(normalized.role || normalized.account_type || 'customer');
+        return {
+          email,
+          role: role === 'user' ? 'customer' : role,
+          full_name: normalize(normalized.full_name || normalized.name || email.split('@')[0]),
+          phone: normalize(normalized.phone || normalized.phone_number),
+          location: normalize(normalized.location || normalized.city),
+          country: normalize(normalized.country),
+          password: normalize(normalized.password),
+        };
+      })
+      .filter((account) => account.email);
+
+    if (!accounts.length) throw new Error('No rows with an email column were found.');
+    const result = await developerAction('bulkCreateUsers', { accounts });
+    const created = result.created?.length || 0;
+    const failed = result.failed?.length || 0;
+    setNotice(`Imported ${created} account${created === 1 ? '' : 's'}${failed ? `, ${failed} failed` : ''}.`);
+    if (failed) {
+      state.error = result.failed.map((item) => `${item.email}: ${item.error}`).join('\n');
+    }
+    await refreshData();
+  });
+}
+
+function rowsToObjects(rows) {
+  const [header = [], ...records] = rows;
+  const keys = header.map((value) => normalize(value));
+  return records.map((record) =>
+    Object.fromEntries(keys.map((key, index) => [key, record[index] ?? '']))
+  );
+}
+
+function parseCsvRows(text) {
+  const lines = text.split(/\r?\n/).filter((line) => line.trim().length);
+  if (!lines.length) return [];
+  const parseLine = (line) => {
+    const values = [];
+    let value = '';
+    let quoted = false;
+    for (let i = 0; i < line.length; i += 1) {
+      const char = line[i];
+      if (char === '"' && line[i + 1] === '"') {
+        value += '"';
+        i += 1;
+      } else if (char === '"') {
+        quoted = !quoted;
+      } else if (char === ',' && !quoted) {
+        values.push(value);
+        value = '';
+      } else {
+        value += char;
+      }
+    }
+    values.push(value);
+    return values;
+  };
+  return rowsToObjects(lines.map(parseLine));
+}
+
+async function createListing() {
+  const artisanId = await chooseProfileId('artisan', 'Artisan owner email or user id');
+  if (!artisanId) return;
+  const title = normalize(window.prompt('Listing title', ''));
+  if (!title) return;
+  const description = normalize(window.prompt('Description', ''));
+  const category = normalize(window.prompt('Category', 'General')) || 'General';
+  const location = normalize(window.prompt('Location', ''));
+  const priceMin = Number(window.prompt('Minimum price', '0') || 0);
+  const priceMax = Number(window.prompt('Maximum price', String(priceMin || 0)) || priceMin || 0);
+  await runAction(async () => {
+    await developerAction('upsertListing', {
+      patch: { artisan_id: artisanId, title, description, category, location, price_min: priceMin, price_max: priceMax },
+    });
+    setNotice('Listing created.');
+    await refreshData();
+  });
+}
+
+async function createJob() {
+  const createdBy = await chooseProfileId(null, 'Customer/artisan owner email or user id');
+  if (!createdBy) return;
+  const title = normalize(window.prompt('Job title', ''));
+  if (!title) return;
+  const description = normalize(window.prompt('Description', ''));
+  const location = normalize(window.prompt('Location', ''));
+  const budget = Number(window.prompt('Budget', '0') || 0);
+  await runAction(async () => {
+    await developerAction('upsertJob', {
+      patch: { created_by: createdBy, title, description, location, budget, status: 'active' },
+    });
+    setNotice('Job created.');
+    await refreshData();
+  });
+}
+
+async function chooseProfileId(role, promptText) {
+  const value = normalize(window.prompt(promptText, ''));
+  if (!value) return '';
+  const profile = state.data.profiles.find(
+    (item) =>
+      (role ? item.role === role : true) &&
+      (lower(item.email) === lower(value) || item.id === value)
+  );
+  if (profile) return profile.id;
+  state.error = role ? `No ${role} found for ${value}.` : `No account found for ${value}.`;
+  render();
+  return '';
 }
 
 async function sendPasswordReset(email) {
@@ -702,21 +856,22 @@ function renderActivityList(items) {
 }
 
 function renderProfiles(filterRole = null) {
-  const source = filterRole
-    ? state.data.profiles.filter((profile) => profile.role === filterRole)
-    : state.data.profiles;
-  const rows = filterRows(source, ['full_name', 'email', 'phone', 'location', 'country', 'tenant_id']);
+  const rows = filterRows(state.data.profiles, ['full_name', 'email', 'phone', 'location', 'country', 'tenant_id']);
   return `
     <section class="panel">
       <div class="panel-head">
-        <h2>${filterRole === 'artisan' ? 'Artisan Accounts' : 'User Accounts'}</h2>
+        <h2>Accounts</h2>
         <div class="row-actions">
           <button class="primary compact-button" data-create-role="customer">Create user</button>
           <button class="primary compact-button" data-create-role="artisan">Create artisan</button>
           <button class="primary compact-button" data-create-role="developer">Create developer</button>
+          <label class="ghost small file-action">
+            Import Excel
+            <input type="file" accept=".xlsx,.csv" data-import-accounts />
+          </label>
         </div>
       </div>
-      ${controls({ roleFilter: !filterRole })}
+      ${controls({ roleFilter: true })}
       <div class="table-wrap">
         <table>
           <thead>
@@ -877,7 +1032,10 @@ function renderJobs() {
     <section class="panel">
       <div class="panel-head">
         <h2>Jobs and Bids</h2>
-        <span class="badge">${rows.length} jobs</span>
+        <div class="row-actions">
+          <span class="badge">${rows.length} jobs</span>
+          <button class="primary compact-button" data-create-job>Create job</button>
+        </div>
       </div>
       ${controls({ roleFilter: false })}
       <div class="table-wrap">
@@ -925,7 +1083,10 @@ function renderListings() {
     <section class="panel">
       <div class="panel-head">
         <h2>Listings</h2>
-        <span class="badge">${rows.length} listings</span>
+        <div class="row-actions">
+          <span class="badge">${rows.length} listings</span>
+          <button class="primary compact-button" data-create-listing>Create listing</button>
+        </div>
       </div>
       ${controls({ roleFilter: false, statusFilter: false })}
       <div class="table-wrap">
@@ -970,7 +1131,10 @@ async function editListing(id) {
   const title = window.prompt('Listing title', listing.title || '') ?? listing.title;
   const category = window.prompt('Category', listing.category || '') ?? listing.category;
   const location = window.prompt('Location', listing.location || '') ?? listing.location;
-  await updateTableRow('listings', id, { title, category, location }, 'Listing updated.');
+  const description = window.prompt('Description', listing.description || '') ?? listing.description;
+  const price_min = Number(window.prompt('Minimum price', listing.price_min ?? 0) ?? listing.price_min ?? 0);
+  const price_max = Number(window.prompt('Maximum price', listing.price_max ?? price_min) ?? listing.price_max ?? price_min);
+  await updateTableRow('listings', id, { title, category, location, description, price_min, price_max }, 'Listing updated.');
 }
 
 async function editJob(id) {
@@ -979,7 +1143,9 @@ async function editJob(id) {
   const title = window.prompt('Job title', job.title || '') ?? job.title;
   const status = window.prompt('Status', job.status || 'active') ?? job.status;
   const location = window.prompt('Location', job.location || '') ?? job.location;
-  await updateTableRow('jobs', id, { title, status, location }, 'Job updated.');
+  const description = window.prompt('Description', job.description || '') ?? job.description;
+  const budget = Number(window.prompt('Budget', job.budget ?? 0) ?? job.budget ?? 0);
+  await updateTableRow('jobs', id, { title, status, location, description, budget }, 'Job updated.');
 }
 
 function renderSettings() {
@@ -1040,8 +1206,6 @@ function renderContent() {
   switch (state.tab) {
     case 'users':
       return renderShell(renderProfiles());
-    case 'artisans':
-      return renderShell(renderProfiles('artisan'));
     case 'verifications':
       return renderShell(renderVerifications());
     case 'reports':
@@ -1058,7 +1222,7 @@ function renderContent() {
 }
 
 function render() {
-  if (!hasConfig || !state.session) {
+  if (!hasConfig || !state.session || state.profile?.role !== 'developer') {
     app.innerHTML = renderLogin();
   } else {
     app.innerHTML = renderContent();
@@ -1142,6 +1306,14 @@ function bindEvents() {
   document.querySelectorAll('[data-create-role]').forEach((button) => {
     button.addEventListener('click', () => createAccount(button.dataset.createRole));
   });
+
+  document.querySelector('[data-import-accounts]')?.addEventListener('change', (event) => {
+    importAccounts(event.target.files?.[0]);
+    event.target.value = '';
+  });
+
+  document.querySelector('[data-create-listing]')?.addEventListener('click', createListing);
+  document.querySelector('[data-create-job]')?.addEventListener('click', createJob);
 
   document.querySelectorAll('[data-edit-listing]').forEach((button) => {
     button.addEventListener('click', () => editListing(button.dataset.editListing));

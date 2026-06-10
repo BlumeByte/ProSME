@@ -13,6 +13,9 @@ class Listing {
     required this.location,
     required this.verifiedOnly,
     required this.createdAt,
+    this.ratingAverage = 0,
+    this.ratingCount = 0,
+    this.wonBidCount = 0,
   });
 
   final String id;
@@ -28,6 +31,9 @@ class Listing {
   final String location;
   final bool verifiedOnly;
   final DateTime createdAt;
+  final double ratingAverage;
+  final int ratingCount;
+  final int wonBidCount;
 
   factory Listing.fromJson(Map<String, dynamic> json) {
     final artisanRaw = json['artisan'];
@@ -60,6 +66,13 @@ class Listing {
             (json['createdAt'] ?? json['created_at'] ?? '').toString(),
           ) ??
           DateTime.now(),
+      ratingAverage:
+          ((json['ratingAverage'] ?? json['rating_average'] ?? 0) as num)
+              .toDouble(),
+      ratingCount:
+          ((json['ratingCount'] ?? json['rating_count'] ?? 0) as num).toInt(),
+      wonBidCount:
+          ((json['wonBidCount'] ?? json['won_bid_count'] ?? 0) as num).toInt(),
     );
   }
 
@@ -78,6 +91,9 @@ class Listing {
       'location': location,
       'verifiedOnly': verifiedOnly,
       'createdAt': createdAt.toIso8601String(),
+      'ratingAverage': ratingAverage,
+      'ratingCount': ratingCount,
+      'wonBidCount': wonBidCount,
     };
   }
 }

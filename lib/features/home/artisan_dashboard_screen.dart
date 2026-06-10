@@ -4,10 +4,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/constants.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
+import '../../services/notification_service.dart';
 import '../../services/service_providers.dart';
 import '../jobs/jobs_repository.dart';
 
-class ArtisanDashboardScreen extends ConsumerWidget {
+class ArtisanDashboardScreen extends ConsumerStatefulWidget {
   const ArtisanDashboardScreen({
     super.key,
     required this.onOpenListings,
@@ -22,7 +24,17 @@ class ArtisanDashboardScreen extends ConsumerWidget {
   final VoidCallback onOpenSettings;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ArtisanDashboardScreen> createState() =>
+      _ArtisanDashboardScreenState();
+}
+
+class _ArtisanDashboardScreenState
+    extends ConsumerState<ArtisanDashboardScreen> {
+  bool _seenInitialJobs = false;
+  String? _latestJobId;
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
     final jobsAsync = ref.watch(jobsStreamProvider);
     final bidsAsync = user == null
@@ -58,25 +70,25 @@ class ArtisanDashboardScreen extends ConsumerWidget {
                 listings: myListings.length,
                 bids: bidsAsync.valueOrNull?.length ?? 0,
                 won: _wonBidCount(bidsAsync.valueOrNull ?? const []),
-                onOpenListings: onOpenListings,
-                onOpenRequests: onOpenJobs,
-                onOpenPending: onOpenChats,
+                onOpenListings: widget.onOpenListings,
+                onOpenRequests: widget.onOpenJobs,
+                onOpenPending: widget.onOpenChats,
               ),
               error: (_, __) => _StatRow(
                 listings: myListings.length,
                 bids: bidsAsync.valueOrNull?.length ?? 0,
                 won: _wonBidCount(bidsAsync.valueOrNull ?? const []),
-                onOpenListings: onOpenListings,
-                onOpenRequests: onOpenJobs,
-                onOpenPending: onOpenChats,
+                onOpenListings: widget.onOpenListings,
+                onOpenRequests: widget.onOpenJobs,
+                onOpenPending: widget.onOpenChats,
               ),
               data: (jobs) => _StatRow(
                 listings: myListings.length,
                 bids: bidsAsync.valueOrNull?.length ?? 0,
                 won: _wonBidCount(bidsAsync.valueOrNull ?? const []),
-                onOpenListings: onOpenListings,
-                onOpenRequests: onOpenJobs,
-                onOpenPending: onOpenChats,
+                onOpenListings: widget.onOpenListings,
+                onOpenRequests: widget.onOpenJobs,
+                onOpenPending: widget.onOpenChats,
               ),
             );
           },
@@ -92,7 +104,7 @@ class ArtisanDashboardScreen extends ConsumerWidget {
                 Text(isVerified ? 'Verified artisan' : 'Verification needed'),
             subtitle: Text(
               isVerified
-                ? 'Customers can see your verified badge.'
+                  ? 'Customers can see your verified badge.'
                   : 'Upload ID documents so Support can verify your profile.',
             ),
             trailing: isVerified ? null : const Icon(Icons.info_outline),
@@ -105,7 +117,7 @@ class ArtisanDashboardScreen extends ConsumerWidget {
               child: _DashboardAction(
                 icon: Icons.storefront,
                 label: 'My listings',
-                onTap: onOpenListings,
+                onTap: widget.onOpenListings,
               ),
             ),
             const SizedBox(width: 8),
@@ -113,7 +125,7 @@ class ArtisanDashboardScreen extends ConsumerWidget {
               child: _DashboardAction(
                 icon: Icons.work_outline,
                 label: 'Requests',
-                onTap: onOpenJobs,
+                onTap: widget.onOpenJobs,
               ),
             ),
           ],
@@ -125,7 +137,7 @@ class ArtisanDashboardScreen extends ConsumerWidget {
               child: _DashboardAction(
                 icon: Icons.chat_bubble_outline,
                 label: 'Negotiations',
-                onTap: onOpenChats,
+                onTap: widget.onOpenChats,
               ),
             ),
             const SizedBox(width: 8),
@@ -133,7 +145,7 @@ class ArtisanDashboardScreen extends ConsumerWidget {
               child: _DashboardAction(
                 icon: Icons.settings_outlined,
                 label: 'Settings',
-                onTap: onOpenSettings,
+                onTap: widget.onOpenSettings,
               ),
             ),
           ],
@@ -147,7 +159,8 @@ class ArtisanDashboardScreen extends ConsumerWidget {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
-            TextButton(onPressed: onOpenJobs, child: const Text('View All')),
+            TextButton(
+                onPressed: widget.onOpenJobs, child: const Text('View All')),
           ],
         ),
         const SizedBox(height: 8),
@@ -160,6 +173,7 @@ class ArtisanDashboardScreen extends ConsumerWidget {
           ),
           error: (error, _) => Text('Could not load requests: $error'),
           data: (jobs) {
+            _notifyOnNewJob(jobs);
             if (jobs.isEmpty) {
               return const Card(
                 child: ListTile(
@@ -195,6 +209,24 @@ class ArtisanDashboardScreen extends ConsumerWidget {
           },
         ),
       ],
+    );
+  }
+
+  void _notifyOnNewJob(List<JobFeedItem> jobs) {
+    if (jobs.isEmpty) return;
+    final latest = jobs.first;
+    if (!_seenInitialJobs) {
+      _seenInitialJobs = true;
+      _latestJobId = latest.id;
+      return;
+    }
+    if (_latestJobId == latest.id) return;
+    _latestJobId = latest.id;
+    final settings = ref.read(appSettingsControllerProvider);
+    if (!settings.phoneNotifications) return;
+    NotificationService().showSimpleNotification(
+      title: 'New job request',
+      body: latest.title,
     );
   }
 }

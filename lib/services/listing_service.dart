@@ -66,17 +66,29 @@ class SupabaseListingService implements ListingService {
 
     Map<String, String> artisanNames = {};
     Map<String, String> artisanAvatars = {};
+    Map<String, double> ratingAverages = {};
+    Map<String, int> ratingCounts = {};
+    Map<String, int> wonBidCounts = {};
     if (artisanIds.isNotEmpty) {
       try {
         final List<dynamic> profiles = await _supabase
             .from('profiles')
-            .select('id,full_name,avatar_url,verification_status')
+            .select('id,username,full_name,avatar_url,verification_status')
             .inFilter('id', artisanIds);
+        final List<dynamic> ratings = await _supabase
+            .from('job_ratings')
+            .select('artisan_id,stars')
+            .inFilter('artisan_id', artisanIds);
+        final List<dynamic> acceptedBids = await _supabase
+            .from('job_bids')
+            .select('artisan_id')
+            .inFilter('artisan_id', artisanIds)
+            .eq('status', 'accepted');
 
         artisanNames = {
           for (final profile in profiles)
             (profile['id'] ?? '').toString():
-                ((profile['full_name'] ?? '') as String),
+                ((profile['username'] ?? profile['full_name'] ?? '') as String),
         };
         artisanAvatars = {
           for (final profile in profiles)
@@ -95,6 +107,28 @@ class SupabaseListingService implements ListingService {
             row['verified_only'] = artisanVerified[artisanId] ?? false;
           }
         }
+        final ratingTotals = <String, int>{};
+        for (final row in ratings) {
+          final rating = Map<String, dynamic>.from(row as Map);
+          final artisanId = (rating['artisan_id'] ?? '').toString();
+          final stars = (rating['stars'] as num?)?.toInt() ?? 0;
+          if (artisanId.isEmpty || stars <= 0) continue;
+          ratingTotals.update(artisanId, (value) => value + stars,
+              ifAbsent: () => stars);
+          ratingCounts.update(artisanId, (value) => value + 1,
+              ifAbsent: () => 1);
+        }
+        ratingAverages = {
+          for (final entry in ratingTotals.entries)
+            entry.key: entry.value / (ratingCounts[entry.key] ?? 1),
+        };
+        for (final row in acceptedBids) {
+          final bid = Map<String, dynamic>.from(row as Map);
+          final artisanId = (bid['artisan_id'] ?? '').toString();
+          if (artisanId.isEmpty) continue;
+          wonBidCounts.update(artisanId, (value) => value + 1,
+              ifAbsent: () => 1);
+        }
       } catch (error, stackTrace) {
         debugPrint('Failed to load artisan profiles for listings: $error');
         debugPrintStack(stackTrace: stackTrace);
@@ -111,6 +145,11 @@ class SupabaseListingService implements ListingService {
       }
       if (artisanId != null && artisanAvatars.containsKey(artisanId)) {
         hydratedRow['artisanPhotoUrl'] = artisanAvatars[artisanId];
+      }
+      if (artisanId != null) {
+        hydratedRow['ratingAverage'] = ratingAverages[artisanId] ?? 0;
+        hydratedRow['ratingCount'] = ratingCounts[artisanId] ?? 0;
+        hydratedRow['wonBidCount'] = wonBidCounts[artisanId] ?? 0;
       }
       return Listing.fromJson(hydratedRow);
     }).toList();
@@ -134,7 +173,10 @@ class SupabaseListingService implements ListingService {
 
   @override
   Future<List<Listing>> fetchListings() async {
-    final List<dynamic> response = await _supabase.from('listings').select();
+    final List<dynamic> response = await _supabase
+        .from('listings')
+        .select()
+        .order('created_at', ascending: false);
     return _hydrateListings(
       response
           .map((row) => Map<String, dynamic>.from(row as Map<String, dynamic>))

@@ -60,6 +60,11 @@ class ListingCard extends StatelessWidget {
                   Text(
                     'Artisan: $displayArtisan',
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${listing.ratingAverage.toStringAsFixed(1)}/5 (${listing.ratingCount}) - ${listing.wonBidCount} won bids',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ],
               ),
             ),

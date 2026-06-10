@@ -95,6 +95,12 @@ class ChatListScreen extends ConsumerWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+              trailing: thread.unreadCount <= 0
+                  ? null
+                  : Badge.count(
+                      count: thread.unreadCount,
+                      child: const Icon(Icons.mark_chat_unread_outlined),
+                    ),
               onTap: () =>
                   context.push('${RouteNames.chatThread}/${thread.id}'),
             );

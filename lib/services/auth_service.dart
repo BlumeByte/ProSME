@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
@@ -218,7 +217,8 @@ class MockAuthService implements AuthService {
   }
 
   @override
-  Future<void> updatePhoto(Uint8List bytes, {required String contentType}) async {
+  Future<void> updatePhoto(Uint8List bytes,
+      {required String contentType}) async {
     if (_currentUser == null) {
       throw StateError('No signed-in user.');
     }
@@ -292,7 +292,7 @@ class SupabaseAuthService implements AuthService {
       final response = await _supabase
           .from('profiles')
           .select(
-            'id,username,full_name,phone,email,avatar_url,role,verification_status,country,country_code,description,created_at',
+            'id,username,full_name,phone,email,avatar_url,role,verification_status,country,country_code,description,username_updated_at,created_at,updated_at',
           )
           .eq('id', userId)
           .maybeSingle();
@@ -315,7 +315,9 @@ class SupabaseAuthService implements AuthService {
     final existingAvatarUrl = (existingProfile?['avatar_url'] ?? '').toString();
     final avatarUrl =
         metadataAvatarUrl.isNotEmpty ? metadataAvatarUrl : existingAvatarUrl;
-    final role = (metadata['role'] ?? UserRole.customer.name).toString();
+    final role =
+        (existingProfile?['role'] ?? metadata['role'] ?? UserRole.customer.name)
+            .toString();
 
     final payload = <String, dynamic>{
       'id': user.id,
@@ -632,10 +634,21 @@ class SupabaseAuthService implements AuthService {
     if ((emailOtp ?? '').trim().isEmpty) {
       throw StateError('Enter the email verification code.');
     }
+    final profile = await _fetchProfile(user.id);
+    final lastChangedRaw =
+        (profile?['username_updated_at'] ?? profile?['updated_at'])
+            ?.toString();
+    final lastChanged = DateTime.tryParse(lastChangedRaw ?? '');
+    if (lastChanged != null &&
+        DateTime.now().toUtc().difference(lastChanged.toUtc()) <
+            const Duration(days: 14)) {
+      throw StateError('Username can only be changed once every 14 days.');
+    }
 
     await _updateProfile(user.id, {
       'username': normalized,
       'full_name': normalized,
+      'username_updated_at': DateTime.now().toUtc().toIso8601String(),
     });
 
     await _supabase.auth.updateUser(
@@ -692,7 +705,8 @@ class SupabaseAuthService implements AuthService {
   }
 
   @override
-  Future<void> updatePhoto(Uint8List bytes, {required String contentType}) async {
+  Future<void> updatePhoto(Uint8List bytes,
+      {required String contentType}) async {
     final user = _supabase.auth.currentUser;
     if (user == null) {
       throw StateError('No signed-in user.');

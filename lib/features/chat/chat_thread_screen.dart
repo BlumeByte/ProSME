@@ -479,6 +479,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
                 final messages = snapshot.data!;
                 _latestMessages = messages;
+                if (user != null &&
+                    messages.any((message) =>
+                        message.senderId != user.id &&
+                        message.readAt == null)) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    ref
+                        .read(chatServiceProvider)
+                        .markThreadRead(widget.threadId, user.id);
+                  });
+                }
                 if (messages.isEmpty) {
                   return const Center(child: Text('Start the conversation.'));
                 }

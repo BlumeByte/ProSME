@@ -6,11 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/constants.dart';
 import '../../core/utils/location_data.dart';
 import '../../models/app_user.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/auth_service.dart';
 import '../../services/service_providers.dart';
 import '../../services/theme_mode_controller.dart';
@@ -65,7 +65,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           user: user,
           uploading: _uploadingPhoto,
           onChangePhoto: () => _changeProfilePhoto(authService),
-          onOpenSettings: () => _showSettingsSheet(context, ref),
+          onOpenSettings: () => _showSettingsSheet(
+            context,
+            ref,
+            authService,
+            user,
+          ),
         ),
         const SizedBox(height: 20),
         const _SectionTitle(title: 'Favourites'),
@@ -95,100 +100,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           const Divider(),
         ],
         _SettingsTile(
-          icon: Icons.person_outline,
-          title: user.name,
-          trailingText: 'Edit',
-          onTap: () => _showChangeUsernameDialog(
-            context,
-            authService,
-            user.name,
-          ),
-        ),
-        const Divider(),
-        _SettingsTile(
-          icon: Icons.phone_outlined,
-          title: user.phone.isNotEmpty ? user.phone : 'Add phone',
-          subtitle: 'A verification notification is sent after update.',
-          trailingText: 'Edit',
-          onTap: () => _showChangePhoneDialog(
-            context,
-            authService,
-            user.phone,
-            user.country,
-          ),
-        ),
-        const Divider(),
-        _SettingsTile(
-          icon: Icons.public_outlined,
-          title: user.country,
-          subtitle: 'Country code ${user.countryCode}',
-          trailingText: 'Edit',
-          onTap: () => _showCountryDialog(context, authService, user.country),
-        ),
-        const Divider(),
-        _SettingsTile(
-          icon: Icons.badge_outlined,
-          title: user.description.isEmpty
-              ? 'Add profile description'
-              : user.description,
-          subtitle: user.role == UserRole.artisan
-              ? 'Tell customers what you do.'
-              : 'Tell artisans a little about yourself.',
-          trailingText: 'Edit',
-          onTap: () => _showDescriptionDialog(
-            context,
-            authService,
-            user.description,
-          ),
-        ),
-        const Divider(),
-        _SettingsTile(
-          icon: Icons.alternate_email_outlined,
-          title: user.email,
-          trailingText: 'Edit',
-          onTap: () => _showChangeEmailDialog(context, authService, user.email),
-        ),
-        const SizedBox(height: 26),
-        const _SectionTitle(title: 'Other'),
-        const SizedBox(height: 8),
-        _SettingsTile(
           icon: Icons.settings_outlined,
-          title: 'Settings',
-          onTap: () => _showSettingsSheet(context, ref),
-        ),
-        const Divider(),
-        _SettingsTile(
-          icon: Icons.shield_outlined,
-          title: 'Privacy',
-          onTap: () => context.push(RouteNames.privacy),
-        ),
-        const Divider(),
-        _SettingsTile(
-          icon: Icons.info_outline,
-          title: 'About',
-          onTap: () => _showInfoSheet(
-            context,
-            'About Pro SME',
-            'Pro SME helps customers connect with verified SMEs and artisans.',
-          ),
-        ),
-        const Divider(),
-        _SettingsTile(
-          icon: Icons.support_agent_outlined,
-          title: 'Support',
-          onTap: () => context.push(RouteNames.aiSupport),
-        ),
-        const Divider(),
-        _SettingsTile(
-          icon: Icons.description_outlined,
-          title: 'Terms of Service',
-          onTap: () => context.push(RouteNames.terms),
-        ),
-        const Divider(),
-        _SettingsTile(
-          icon: Icons.security_outlined,
-          title: 'Security',
-          onTap: () => _showSecuritySheet(context, authService),
+          title: 'Account and app settings',
+          subtitle: 'Username, phone, email, language, notifications, privacy.',
+          trailingText: 'Open',
+          onTap: () => _showSettingsSheet(context, ref, authService, user),
         ),
         const SizedBox(height: 8),
         ListTile(
@@ -229,7 +145,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         Uint8List.fromList(compressed),
         contentType: 'image/jpeg',
       );
-      ref.invalidate(authStateProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile image updated.')),
@@ -497,12 +412,16 @@ Future<void> _showChangePhoneDialog(
             children: [
               DropdownButtonFormField<CountryOption>(
                 initialValue: selectedCountry,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Country'),
                 items: kCountries
                     .map(
                       (country) => DropdownMenuItem(
                         value: country,
-                        child: Text('${country.name} (${country.dialCode})'),
+                        child: Text(
+                          '${country.name} (${country.dialCode})',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     )
                     .toList(growable: false),
@@ -790,12 +709,17 @@ Future<void> _showInfoSheet(
   );
 }
 
-Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
-  final prefs = await SharedPreferences.getInstance();
+Future<void> _showSettingsSheet(
+  BuildContext context,
+  WidgetRef ref,
+  AuthService authService,
+  AppUser user,
+) async {
   var isDarkMode = ref.read(themeModeControllerProvider) == ThemeMode.dark;
-  var emailNotifications =
-      prefs.getBool('settings_email_notifications') ?? true;
-  var language = prefs.getString('settings_language') ?? 'English';
+  var settings = ref.read(appSettingsControllerProvider);
+  var emailNotifications = settings.emailNotifications;
+  var phoneNotifications = settings.phoneNotifications;
+  var language = settings.language;
   const languages = [
     'English',
     'Arabic',
@@ -878,11 +802,28 @@ Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
                   value: emailNotifications,
                   onChanged: (value) async {
                     setSheetState(() => emailNotifications = value);
-                    await prefs.setBool('settings_email_notifications', value);
+                    await ref
+                        .read(appSettingsControllerProvider.notifier)
+                        .setEmailNotifications(value);
+                    await _saveRemoteSettings(ref, user);
+                  },
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.notifications_active_outlined),
+                  title: const Text('Phone notifications'),
+                  value: phoneNotifications,
+                  onChanged: (value) async {
+                    setSheetState(() => phoneNotifications = value);
+                    await ref
+                        .read(appSettingsControllerProvider.notifier)
+                        .setPhoneNotifications(value);
+                    await _saveRemoteSettings(ref, user);
                   },
                 ),
                 DropdownButtonFormField<String>(
                   initialValue: language,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Language',
                     prefixIcon: Icon(Icons.language_outlined),
@@ -898,10 +839,88 @@ Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
                   onChanged: (value) async {
                     if (value == null) return;
                     setSheetState(() => language = value);
-                    await prefs.setString('settings_language', value);
+                    await ref
+                        .read(appSettingsControllerProvider.notifier)
+                        .setLanguage(value);
+                    await _saveRemoteSettings(ref, user);
                   },
                 ),
                 const SizedBox(height: 10),
+                const Divider(),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.person_outline),
+                  title: Text(user.name),
+                  subtitle: const Text('Username or company display name'),
+                  trailing: const Text('Edit'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showChangeUsernameDialog(context, authService, user.name);
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.phone_outlined),
+                  title: Text(user.phone.isEmpty ? 'Add phone' : user.phone),
+                  subtitle: const Text('Phone number and country code'),
+                  trailing: const Text('Edit'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showChangePhoneDialog(
+                      context,
+                      authService,
+                      user.phone,
+                      user.country,
+                    );
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.public_outlined),
+                  title: Text(user.country),
+                  subtitle: Text('Country code ${user.countryCode}'),
+                  trailing: const Text('Edit'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showCountryDialog(context, authService, user.country);
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.badge_outlined),
+                  title: Text(
+                    user.description.isEmpty
+                        ? 'Add profile description'
+                        : user.description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    user.role == UserRole.artisan
+                        ? 'Company or artisan profile description'
+                        : 'Customer profile description',
+                  ),
+                  trailing: const Text('Edit'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showDescriptionDialog(
+                      context,
+                      authService,
+                      user.description,
+                    );
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.alternate_email_outlined),
+                  title: Text(user.email),
+                  trailing: const Text('Edit'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showChangeEmailDialog(context, authService, user.email);
+                  },
+                ),
+                const Divider(),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.security_outlined),
@@ -911,10 +930,46 @@ Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
                   ),
                   onTap: () {
                     Navigator.of(context).pop();
+                    _showSecuritySheet(context, authService);
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.privacy_tip_outlined),
+                  title: const Text('Privacy'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    context.push(RouteNames.privacy);
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.support_agent_outlined),
+                  title: const Text('Support'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    context.push(RouteNames.aiSupport);
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.description_outlined),
+                  title: const Text('Terms of Service'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    context.push(RouteNames.terms);
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text('About'),
+                  onTap: () {
+                    Navigator.of(context).pop();
                     _showInfoSheet(
                       context,
-                      'Account security',
-                      'Use verified email codes for sensitive account changes. Google sign-in uses Supabase OAuth.',
+                      'About Pro SME',
+                      'Pro SME helps customers connect with verified SMEs and artisans.',
                     );
                   },
                 ),
@@ -925,6 +980,20 @@ Future<void> _showSettingsSheet(BuildContext context, WidgetRef ref) async {
       ),
     ),
   );
+}
+
+Future<void> _saveRemoteSettings(WidgetRef ref, AppUser user) async {
+  if (!shouldUseSupabase()) return;
+  final settings = ref.read(appSettingsControllerProvider);
+  try {
+    await ref.read(supabaseClientProvider).from('profiles').update({
+      'email_notifications': settings.emailNotifications,
+      'phone_notifications': settings.phoneNotifications,
+      'app_language': settings.language,
+    }).eq('id', user.id);
+  } catch (_) {
+    // Local settings still apply immediately; remote sync can retry next edit.
+  }
 }
 
 Future<void> _confirmDeleteAccount(

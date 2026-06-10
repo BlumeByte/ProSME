@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.106.2",
+    "read-excel-file": "9.1.1",
     "vite": "6.4.3"
-  },
-  "devDependencies": {}
+  }
 }

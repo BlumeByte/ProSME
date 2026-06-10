@@ -15,6 +15,7 @@ class JobFeedItem {
     required this.budget,
     required this.createdBy,
     required this.createdAt,
+    this.images = const [],
   });
 
   final String id;
@@ -24,6 +25,7 @@ class JobFeedItem {
   final double budget;
   final String createdBy;
   final DateTime createdAt;
+  final List<String> images;
 }
 
 class JobBid {
@@ -89,6 +91,16 @@ abstract class JobsRepository {
     required String location,
     required double budget,
     required String createdBy,
+    List<String> images = const [],
+  });
+
+  Future<JobFeedItem> updateJob({
+    required String jobId,
+    required String title,
+    required String description,
+    required String location,
+    required double budget,
+    List<String> images = const [],
   });
 
   Future<JobBid> createBid({
@@ -228,7 +240,8 @@ class SupabaseJobsRepository implements JobsRepository {
       final acceptedCounts = <String, int>{};
       for (final row in acceptedRows) {
         final artisanId = (row['artisan_id'] ?? '').toString();
-        acceptedCounts.update(artisanId, (value) => value + 1, ifAbsent: () => 1);
+        acceptedCounts.update(artisanId, (value) => value + 1,
+            ifAbsent: () => 1);
       }
 
       return bids.map((bid) {
@@ -265,6 +278,7 @@ class SupabaseJobsRepository implements JobsRepository {
     required String location,
     required double budget,
     required String createdBy,
+    List<String> images = const [],
   }) async {
     final row = await _client
         .from('jobs')
@@ -274,7 +288,33 @@ class SupabaseJobsRepository implements JobsRepository {
           'location': location,
           'budget': budget,
           'created_by': createdBy,
+          'images': images,
         })
+        .select()
+        .single();
+
+    return _mapJob(row);
+  }
+
+  @override
+  Future<JobFeedItem> updateJob({
+    required String jobId,
+    required String title,
+    required String description,
+    required String location,
+    required double budget,
+    List<String> images = const [],
+  }) async {
+    final row = await _client
+        .from('jobs')
+        .update({
+          'title': title,
+          'description': description,
+          'location': location,
+          'budget': budget,
+          'images': images,
+        })
+        .eq('id', jobId)
         .select()
         .single();
 
@@ -349,6 +389,9 @@ class SupabaseJobsRepository implements JobsRepository {
       createdBy: (row['created_by'] as String?) ?? '',
       createdAt: DateTime.tryParse((row['created_at'] as String?) ?? '') ??
           DateTime.now(),
+      images: List<String>.from(
+        (row['images'] ?? const <dynamic>[]) as List<dynamic>,
+      ),
     );
   }
 
@@ -429,6 +472,7 @@ class MockJobsRepository implements JobsRepository {
     required String location,
     required double budget,
     required String createdBy,
+    List<String> images = const [],
   }) async {
     final job = JobFeedItem(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -438,10 +482,47 @@ class MockJobsRepository implements JobsRepository {
       budget: budget,
       createdBy: createdBy,
       createdAt: DateTime.now(),
+      images: images,
     );
     _jobs.insert(0, job);
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
     return job;
+  }
+
+  @override
+  Future<JobFeedItem> updateJob({
+    required String jobId,
+    required String title,
+    required String description,
+    required String location,
+    required double budget,
+    List<String> images = const [],
+  }) async {
+    final index = _jobs.indexWhere((job) => job.id == jobId);
+    if (index == -1) {
+      return createJob(
+        title: title,
+        description: description,
+        location: location,
+        budget: budget,
+        createdBy: '',
+        images: images,
+      );
+    }
+    final current = _jobs[index];
+    final updated = JobFeedItem(
+      id: current.id,
+      title: title,
+      description: description,
+      location: location,
+      budget: budget,
+      createdBy: current.createdBy,
+      createdAt: current.createdAt,
+      images: images,
+    );
+    _jobs[index] = updated;
+    _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
+    return updated;
   }
 
   @override

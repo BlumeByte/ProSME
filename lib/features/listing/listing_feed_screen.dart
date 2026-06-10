@@ -8,6 +8,8 @@ import '../../config/constants.dart';
 import '../../core/utils/location_data.dart';
 import '../../core/utils/service_categories.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
+import '../../services/notification_service.dart';
 import '../../services/service_providers.dart';
 import '../../models/listing.dart';
 import '../jobs/jobs_repository.dart';
@@ -39,12 +41,15 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   String _serviceQuery = '';
   String _locationQuery = '';
   String? _selectedCategory;
-  CountryOption? _selectedCountry = kCountries.first;
+  CountryOption? _selectedCountry;
   RegionOption? _selectedRegion;
   CityOption? _selectedCity;
   String? _selectedTown;
+  bool _appliedUserCountry = false;
   bool _showSearchResults = false;
   bool _locating = false;
+  bool _seenInitialListings = false;
+  String? _latestListingId;
   List<String> _recentSearches = const [];
 
   @override
@@ -99,7 +104,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   Future<void> _saveRecentSearch() async {
     final query = [
       _serviceController.text.trim(),
-          _selectedTown ??
+      _selectedTown ??
           _selectedCity?.name ??
           _selectedRegion?.name ??
           _selectedCountry?.name ??
@@ -240,6 +245,13 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     final listingService = ref.watch(listingServiceProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final scheme = Theme.of(context).colorScheme;
+    if (!_appliedUserCountry && user != null) {
+      _appliedUserCountry = true;
+      final country = countryByName(user.country);
+      if (country.name == user.country) {
+        _selectedCountry = country;
+      }
+    }
 
     return StreamBuilder<List<Listing>>(
       stream: listingService.watchListings(),
@@ -259,6 +271,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         final listings = snapshot.data!;
+        _notifyOnNewListing(listings);
         final filtered = listings.where((listing) {
           final serviceText =
               '${listing.title} ${listing.description} ${listing.category}'
@@ -305,6 +318,9 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               categories: {normalizeServiceCategory(listing.category)},
               isVerified: listing.verifiedOnly,
               listingCount: 1,
+              ratingAverage: listing.ratingAverage,
+              ratingCount: listing.ratingCount,
+              wonBidCount: listing.wonBidCount,
             );
             continue;
           }
@@ -321,6 +337,15 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             },
             isVerified: existing.isVerified || listing.verifiedOnly,
             listingCount: existing.listingCount + 1,
+            ratingAverage: listing.ratingAverage > existing.ratingAverage
+                ? listing.ratingAverage
+                : existing.ratingAverage,
+            ratingCount: listing.ratingCount > existing.ratingCount
+                ? listing.ratingCount
+                : existing.ratingCount,
+            wonBidCount: listing.wonBidCount > existing.wonBidCount
+                ? listing.wonBidCount
+                : existing.wonBidCount,
           );
         }
 
@@ -595,6 +620,24 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
           ],
         );
       },
+    );
+  }
+
+  void _notifyOnNewListing(List<Listing> listings) {
+    if (listings.isEmpty) return;
+    final latest = listings.first;
+    if (!_seenInitialListings) {
+      _seenInitialListings = true;
+      _latestListingId = latest.id;
+      return;
+    }
+    if (_latestListingId == latest.id) return;
+    _latestListingId = latest.id;
+    final settings = ref.read(appSettingsControllerProvider);
+    if (!settings.phoneNotifications) return;
+    NotificationService().showSimpleNotification(
+      title: 'New listing',
+      body: latest.title,
     );
   }
 }
@@ -1041,6 +1084,11 @@ class _ProfessionalCard extends StatelessWidget {
                         '${pro.listingCount} active service${pro.listingCount == 1 ? '' : 's'}',
                         style: TextStyle(color: scheme.onSurfaceVariant),
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${pro.ratingAverage.toStringAsFixed(1)}/5 (${pro.ratingCount}) - ${pro.wonBidCount} won bids',
+                        style: TextStyle(color: scheme.onSurfaceVariant),
+                      ),
                     ],
                   ),
                 ),
@@ -1098,6 +1146,9 @@ class _ProfessionalPreview {
     required this.categories,
     required this.isVerified,
     required this.listingCount,
+    required this.ratingAverage,
+    required this.ratingCount,
+    required this.wonBidCount,
   });
 
   final String artisanId;
@@ -1109,6 +1160,9 @@ class _ProfessionalPreview {
   final Set<String> categories;
   final bool isVerified;
   final int listingCount;
+  final double ratingAverage;
+  final int ratingCount;
+  final int wonBidCount;
 
   _ProfessionalPreview copyWith({
     String? location,
@@ -1116,6 +1170,9 @@ class _ProfessionalPreview {
     Set<String>? categories,
     bool? isVerified,
     int? listingCount,
+    double? ratingAverage,
+    int? ratingCount,
+    int? wonBidCount,
   }) {
     return _ProfessionalPreview(
       artisanId: artisanId,
@@ -1127,6 +1184,9 @@ class _ProfessionalPreview {
       categories: categories ?? this.categories,
       isVerified: isVerified ?? this.isVerified,
       listingCount: listingCount ?? this.listingCount,
+      ratingAverage: ratingAverage ?? this.ratingAverage,
+      ratingCount: ratingCount ?? this.ratingCount,
+      wonBidCount: wonBidCount ?? this.wonBidCount,
     );
   }
 }

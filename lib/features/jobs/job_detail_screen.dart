@@ -77,9 +77,11 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                   onPressed: () => context.go(RouteNames.auth),
                   child: const Text('Sign in to bid or chat'),
                 )
-              else if (isOwner)
-                _BidsForOwner(job: job)
-              else if (isArtisan)
+              else if (isOwner) ...[
+                _EditJobCard(job: job),
+                const SizedBox(height: 12),
+                _BidsForOwner(job: job),
+              ] else if (isArtisan)
                 _BidForm(
                   formKey: _formKey,
                   amountController: _amountController,
@@ -185,10 +187,151 @@ class _JobSummary extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(job.description),
+            if (job.images.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  job.images.first,
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+}
+
+class _EditJobCard extends ConsumerWidget {
+  const _EditJobCard({required this.job});
+
+  final JobFeedItem job;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.edit_outlined),
+        title: const Text('Edit job'),
+        subtitle: const Text('Update details or add an image URL.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => _editJob(context, ref),
+      ),
+    );
+  }
+
+  Future<void> _editJob(BuildContext context, WidgetRef ref) async {
+    final titleController = TextEditingController(text: job.title);
+    final descriptionController = TextEditingController(text: job.description);
+    final locationController = TextEditingController(text: job.location);
+    final budgetController =
+        TextEditingController(text: job.budget.toStringAsFixed(0));
+    final imageController =
+        TextEditingController(text: job.images.isEmpty ? '' : job.images.first);
+    final formKey = GlobalKey<FormState>();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit job'),
+        content: SingleChildScrollView(
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: titleController,
+                  decoration: const InputDecoration(labelText: 'Title'),
+                  validator: _required,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: descriptionController,
+                  minLines: 3,
+                  maxLines: 4,
+                  decoration: const InputDecoration(labelText: 'Description'),
+                  validator: _required,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: locationController,
+                  decoration: const InputDecoration(labelText: 'Location'),
+                  validator: _required,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: budgetController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Budget'),
+                  validator: (value) {
+                    final parsed = double.tryParse((value ?? '').trim());
+                    if (parsed == null || parsed <= 0) return 'Required';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: imageController,
+                  decoration:
+                      const InputDecoration(labelText: 'Image URL (optional)'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.of(context).pop(true);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved == true) {
+      final image = imageController.text.trim();
+      try {
+        await ref.read(jobsRepositoryProvider).updateJob(
+              jobId: job.id,
+              title: titleController.text.trim(),
+              description: descriptionController.text.trim(),
+              location: locationController.text.trim(),
+              budget: double.parse(budgetController.text.trim()),
+              images: image.isEmpty ? const [] : [image],
+            );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Job updated.')),
+          );
+        }
+      } catch (error) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not update job: $error')),
+          );
+        }
+      }
+    }
+
+    titleController.dispose();
+    descriptionController.dispose();
+    locationController.dispose();
+    budgetController.dispose();
+    imageController.dispose();
   }
 }
 
@@ -552,4 +695,8 @@ class _MessageState extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _required(String? value) {
+  return value == null || value.trim().isEmpty ? 'Required' : null;
 }

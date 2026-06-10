@@ -9,6 +9,7 @@ import 'db_service.dart';
 abstract class ChatService {
   Stream<List<ChatThread>> watchThreads(String userId);
   Stream<List<ChatMessage>> watchMessages(String threadId);
+  Future<void> markThreadRead(String threadId, String userId);
   Future<ChatThread> createOrOpenThread({
     required String userId,
     required String artisanId,
@@ -38,6 +39,20 @@ class MockChatService implements ChatService {
     );
     yield List<ChatThread>.from(_threadsByUser[userId] ?? const []);
     yield* controller.stream;
+  }
+
+  @override
+  Future<void> markThreadRead(String threadId, String userId) async {
+    final messages = _messagesByThread[threadId];
+    if (messages == null) return;
+    final now = DateTime.now();
+    for (var index = 0; index < messages.length; index += 1) {
+      final message = messages[index];
+      if (message.senderId != userId && message.readAt == null) {
+        messages[index] = message.copyWith(readAt: now);
+      }
+    }
+    _messageControllers[threadId]?.add(List<ChatMessage>.from(messages));
   }
 
   @override
@@ -194,9 +209,12 @@ class SupabaseChatService implements ChatService {
             .select()
             .or('user_id.eq.$userId,artisan_id.eq.$userId')
             .order('updated_at', ascending: false);
-        lastGood = await _hydrateThreads(rows
-            .map((row) => ChatThread.fromJson(Map<String, dynamic>.from(row)))
-            .toList(growable: false));
+        lastGood = await _hydrateThreads(
+            userId,
+            rows
+                .map((row) =>
+                    ChatThread.fromJson(Map<String, dynamic>.from(row)))
+                .toList(growable: false));
         await _localDb.cacheThreadsForUser(userId, lastGood);
         yield lastGood;
       } catch (error, stackTrace) {
@@ -209,7 +227,8 @@ class SupabaseChatService implements ChatService {
     }
   }
 
-  Future<List<ChatThread>> _hydrateThreads(List<ChatThread> threads) async {
+  Future<List<ChatThread>> _hydrateThreads(
+      String userId, List<ChatThread> threads) async {
     if (threads.isEmpty) return threads;
     final profileIds = <String>{};
     for (final thread in threads) {
@@ -221,7 +240,7 @@ class SupabaseChatService implements ChatService {
     try {
       final rows = await _supabase
           .from('profiles')
-          .select('id,full_name,email,avatar_url')
+          .select('id,username,full_name,email,avatar_url')
           .inFilter('id', profileIds.toList());
       final profiles = <String, Map<String, dynamic>>{};
       for (final row in rows) {
@@ -231,7 +250,9 @@ class SupabaseChatService implements ChatService {
 
       String? nameFor(String id) {
         final profile = profiles[id];
-        final fullName = (profile?['full_name'] ?? '').toString().trim();
+        final fullName = (profile?['username'] ?? profile?['full_name'] ?? '')
+            .toString()
+            .trim();
         if (fullName.isNotEmpty) return fullName;
         final email = (profile?['email'] ?? '').toString().trim();
         if (email.isEmpty) return null;
@@ -243,6 +264,18 @@ class SupabaseChatService implements ChatService {
         return value.isEmpty ? null : value;
       }
 
+      final unreadRows = await _supabase
+          .from('messages')
+          .select('thread_id')
+          .neq('sender_id', userId)
+          .isFilter('read_at', null)
+          .inFilter('thread_id', threads.map((thread) => thread.id).toList());
+      final unreadCounts = <String, int>{};
+      for (final row in unreadRows) {
+        final threadId = (row['thread_id'] ?? '').toString();
+        unreadCounts.update(threadId, (value) => value + 1, ifAbsent: () => 1);
+      }
+
       return threads
           .map(
             (thread) => thread.copyWith(
@@ -250,6 +283,7 @@ class SupabaseChatService implements ChatService {
               userPhotoUrl: photoFor(thread.userId),
               artisanName: nameFor(thread.artisanId),
               artisanPhotoUrl: photoFor(thread.artisanId),
+              unreadCount: unreadCounts[thread.id] ?? 0,
             ),
           )
           .toList(growable: false);
@@ -362,6 +396,16 @@ class SupabaseChatService implements ChatService {
         ),
       );
     }
+  }
+
+  @override
+  Future<void> markThreadRead(String threadId, String userId) async {
+    await _supabase
+        .from('messages')
+        .update({'read_at': DateTime.now().toUtc().toIso8601String()})
+        .eq('thread_id', threadId)
+        .neq('sender_id', userId)
+        .isFilter('read_at', null);
   }
 
   @override
