@@ -26,14 +26,64 @@ class AppSettings {
     switch (language) {
       case 'Arabic':
         return const Locale('ar');
+      case 'Bengali':
+        return const Locale('bn');
+      case 'Chinese':
+        return const Locale('zh');
+      case 'Dutch':
+        return const Locale('nl');
+      case 'Ewe':
+        return const Locale('ee');
       case 'French':
         return const Locale('fr');
+      case 'Ga':
+        return const Locale('gaa');
+      case 'German':
+        return const Locale('de');
+      case 'Greek':
+        return const Locale('el');
+      case 'Hausa':
+        return const Locale('ha');
+      case 'Hindi':
+        return const Locale('hi');
+      case 'Indonesian':
+        return const Locale('id');
+      case 'Italian':
+        return const Locale('it');
+      case 'Japanese':
+        return const Locale('ja');
+      case 'Korean':
+        return const Locale('ko');
+      case 'Malay':
+        return const Locale('ms');
       case 'Spanish':
         return const Locale('es');
       case 'Portuguese':
         return const Locale('pt');
+      case 'Russian':
+        return const Locale('ru');
+      case 'Swahili':
+        return const Locale('sw');
+      case 'Tamil':
+        return const Locale('ta');
+      case 'Thai':
+        return const Locale('th');
+      case 'Twi':
+        return const Locale('ak');
+      case 'Turkish':
+        return const Locale('tr');
+      case 'Ukrainian':
+        return const Locale('uk');
+      case 'Urdu':
+        return const Locale('ur');
+      case 'Vietnamese':
+        return const Locale('vi');
+      case 'Yoruba':
+        return const Locale('yo');
+      case 'Zulu':
+        return const Locale('zu');
       default:
-        return null;
+        return const Locale('en');
     }
   }
 

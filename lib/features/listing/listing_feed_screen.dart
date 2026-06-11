@@ -49,7 +49,10 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   RegionOption? _selectedRegion;
   CityOption? _selectedCity;
   String? _selectedTown;
+  List<CountryOption> _countries = kCountries;
   bool _appliedUserCountry = false;
+  bool _loadingCountries = false;
+  bool _loadingRegions = false;
   bool _showSearchResults = false;
   bool _locating = false;
   bool _locationLookupBusy = false;
@@ -62,6 +65,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   void initState() {
     super.initState();
     _loadRecentSearches();
+    _loadCountries();
   }
 
   @override
@@ -137,6 +141,33 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     if (!mounted) return;
     setState(() {
       _recentSearches = prefs.getStringList('recent_searches') ?? const [];
+    });
+  }
+
+  Future<void> _loadCountries() async {
+    setState(() => _loadingCountries = true);
+    final countries = await loadWorldCountries();
+    if (!mounted) return;
+    setState(() {
+      _countries = countries;
+      _loadingCountries = false;
+    });
+  }
+
+  Future<void> _selectCountry(CountryOption? country) async {
+    setState(() {
+      _selectedCountry = country;
+      _selectedRegion = null;
+      _selectedCity = null;
+      _selectedTown = null;
+    });
+    if (country == null) return;
+    setState(() => _loadingRegions = true);
+    final hydrated = await loadCountryRegions(country);
+    if (!mounted) return;
+    setState(() {
+      _selectedCountry = hydrated;
+      _loadingRegions = false;
     });
   }
 
@@ -232,6 +263,10 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   }
 
   Future<void> _startChat(_ProfessionalPreview pro) async {
+    if (pro.isBusy) {
+      _showUnavailable();
+      return;
+    }
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) {
       context.go(RouteNames.auth);
@@ -262,6 +297,10 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   }
 
   Future<void> _bookProfessional(_ProfessionalPreview pro) async {
+    if (pro.isBusy) {
+      _showUnavailable();
+      return;
+    }
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) {
       context.go(RouteNames.auth);
@@ -279,6 +318,12 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     }
   }
 
+  void _showUnavailable() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('This artisan is currently unavailable.')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final listingService = ref.watch(listingServiceProvider);
@@ -286,10 +331,11 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     final scheme = Theme.of(context).colorScheme;
     if (!_appliedUserCountry && user != null) {
       _appliedUserCountry = true;
-      final country = countryByName(user.country);
-      if (country.name == user.country) {
-        _selectedCountry = country;
-      }
+      final country = _countries.firstWhere(
+        (item) => item.name == user.country,
+        orElse: () => countryByName(user.country),
+      );
+      if (country.name == user.country) unawaited(_selectCountry(country));
     }
 
     return StreamBuilder<List<Listing>>(
@@ -360,6 +406,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               ratingAverage: listing.ratingAverage,
               ratingCount: listing.ratingCount,
               wonBidCount: listing.wonBidCount,
+              isBusy: listing.artisanBusy,
             );
             continue;
           }
@@ -385,6 +432,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             wonBidCount: listing.wonBidCount > existing.wonBidCount
                 ? listing.wonBidCount
                 : existing.wonBidCount,
+            isBusy: existing.isBusy || listing.artisanBusy,
           );
         }
 
@@ -423,14 +471,11 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   selectedRegion: _selectedRegion,
                   selectedCity: _selectedCity,
                   selectedTown: _selectedTown,
+                  countries: _countries,
                   locating: _locating,
                   lookingUpLocation: _locationLookupBusy,
-                  onCountryChanged: (country) => setState(() {
-                    _selectedCountry = country;
-                    _selectedRegion = null;
-                    _selectedCity = null;
-                    _selectedTown = null;
-                  }),
+                  loadingLocations: _loadingCountries || _loadingRegions,
+                  onCountryChanged: _selectCountry,
                   onRegionChanged: (region) => setState(() {
                     _selectedRegion = region;
                     _selectedCity = null;
@@ -472,6 +517,9 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                 else
                   ...featured.map((pro) => _ProfessionalCard(
                         pro: pro,
+                        onOpenProfile: () => context.push(
+                          '${RouteNames.artisanProfile}/${pro.artisanId}',
+                        ),
                         onChat: () => _startChat(pro),
                         onBook: () => _bookProfessional(pro),
                       )),
@@ -490,14 +538,11 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               selectedRegion: _selectedRegion,
               selectedCity: _selectedCity,
               selectedTown: _selectedTown,
+              countries: _countries,
               locating: _locating,
               lookingUpLocation: _locationLookupBusy,
-              onCountryChanged: (country) => setState(() {
-                _selectedCountry = country;
-                _selectedRegion = null;
-                _selectedCity = null;
-                _selectedTown = null;
-              }),
+              loadingLocations: _loadingCountries || _loadingRegions,
+              onCountryChanged: _selectCountry,
               onRegionChanged: (region) => setState(() {
                 _selectedRegion = region;
                 _selectedCity = null;
@@ -640,6 +685,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                       _serviceQuery = '';
                       _locationQuery = '';
                       _selectedCategory = null;
+                      _showSearchResults = true;
                     });
                   },
                   child: const Text('View All'),
@@ -653,6 +699,9 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               ...featured.take(5).map(
                     (pro) => _ProfessionalCard(
                       pro: pro,
+                      onOpenProfile: () => context.push(
+                        '${RouteNames.artisanProfile}/${pro.artisanId}',
+                      ),
                       onChat: () => _startChat(pro),
                       onBook: () => _bookProfessional(pro),
                     ),
@@ -699,8 +748,10 @@ class _SearchControls extends StatelessWidget {
     required this.selectedRegion,
     required this.selectedCity,
     required this.selectedTown,
+    required this.countries,
     required this.locating,
     required this.lookingUpLocation,
+    required this.loadingLocations,
     required this.onCountryChanged,
     required this.onRegionChanged,
     required this.onCityChanged,
@@ -715,8 +766,10 @@ class _SearchControls extends StatelessWidget {
   final RegionOption? selectedRegion;
   final CityOption? selectedCity;
   final String? selectedTown;
+  final List<CountryOption> countries;
   final bool locating;
   final bool lookingUpLocation;
+  final bool loadingLocations;
   final ValueChanged<CountryOption?> onCountryChanged;
   final ValueChanged<RegionOption?> onRegionChanged;
   final ValueChanged<CityOption?> onCityChanged;
@@ -770,7 +823,7 @@ class _SearchControls extends StatelessWidget {
                   final selected = await _pickOption<CountryOption?>(
                     context,
                     title: 'Country',
-                    options: <CountryOption?>[null, ...kCountries],
+                    options: <CountryOption?>[null, ...countries],
                     labelFor: (country) => country?.name ?? 'Any',
                   );
                   if (selected != null) onCountryChanged(selected.value);
@@ -781,19 +834,23 @@ class _SearchControls extends StatelessWidget {
             Expanded(
               child: _PickerField(
                 label: 'Region',
-                value: selectedRegion?.name ?? 'Any',
-                onTap: () async {
-                  final selected = await _pickOption<RegionOption?>(
-                    context,
-                    title: 'Region',
-                    options: <RegionOption?>[
-                      null,
-                      ...regions,
-                    ],
-                    labelFor: (region) => region?.name ?? 'Any',
-                  );
-                  if (selected != null) onRegionChanged(selected.value);
-                },
+                value: loadingLocations
+                    ? 'Loading...'
+                    : selectedRegion?.name ?? 'Any',
+                onTap: loadingLocations
+                    ? () {}
+                    : () async {
+                        final selected = await _pickOption<RegionOption?>(
+                          context,
+                          title: 'Region',
+                          options: <RegionOption?>[
+                            null,
+                            ...regions,
+                          ],
+                          labelFor: (region) => region?.name ?? 'Any',
+                        );
+                        if (selected != null) onRegionChanged(selected.value);
+                      },
               ),
             ),
           ],
@@ -1040,138 +1097,168 @@ class _OpenJobsPreview extends ConsumerWidget {
 class _ProfessionalCard extends StatelessWidget {
   const _ProfessionalCard({
     required this.pro,
+    required this.onOpenProfile,
     required this.onChat,
     required this.onBook,
   });
 
   final _ProfessionalPreview pro;
+  final VoidCallback onOpenProfile;
   final VoidCallback onChat;
   final VoidCallback onBook;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final unavailableColor = Colors.red.shade700;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 24,
-                  backgroundImage: (pro.avatarUrl?.isNotEmpty ?? false)
-                      ? NetworkImage(pro.avatarUrl!)
-                      : null,
-                  child: (pro.avatarUrl?.isNotEmpty ?? false)
-                      ? null
-                      : Text(
-                          (pro.name.trim().isNotEmpty
-                                  ? pro.name.trim()[0]
-                                  : 'P')
-                              .toUpperCase(),
+      child: InkWell(
+        onTap: onOpenProfile,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundImage: (pro.avatarUrl?.isNotEmpty ?? false)
+                        ? NetworkImage(pro.avatarUrl!)
+                        : null,
+                    child: (pro.avatarUrl?.isNotEmpty ?? false)
+                        ? null
+                        : Text(
+                            (pro.name.trim().isNotEmpty
+                                    ? pro.name.trim()[0]
+                                    : 'P')
+                                .toUpperCase(),
+                          ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                pro.name,
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                            ),
+                            if (pro.isVerified)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.verified,
+                                        size: 14, color: Colors.blue),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Verified',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.blue,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
                         ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              pro.name,
-                              style: Theme.of(context).textTheme.titleMedium,
+                        const SizedBox(height: 4),
+                        Text(
+                          pro.location,
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${pro.listingCount} active service${pro.listingCount == 1 ? '' : 's'}',
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${pro.ratingAverage.toStringAsFixed(1)}/5 (${pro.ratingCount}) - ${pro.wonBidCount} won bids',
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                        if (pro.isBusy) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Unavailable',
+                            style: TextStyle(
+                              color: unavailableColor,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          if (pro.isVerified)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.verified,
-                                      size: 14, color: Colors.blue),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'Verified',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.blue,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
                         ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        pro.location,
-                        style: TextStyle(color: scheme.onSurfaceVariant),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${pro.listingCount} active service${pro.listingCount == 1 ? '' : 's'}',
-                        style: TextStyle(color: scheme.onSurfaceVariant),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${pro.ratingAverage.toStringAsFixed(1)}/5 (${pro.ratingCount}) - ${pro.wonBidCount} won bids',
-                        style: TextStyle(color: scheme.onSurfaceVariant),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: pro.categories
-                  .where((item) => item.trim().isNotEmpty)
-                  .take(3)
-                  .map((item) => Chip(label: Text(item)))
-                  .toList(growable: false),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'From $kCurrencySymbol ${pro.minPrice.toStringAsFixed(2)}',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onChat,
-                    icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                    label: const Text('Chat'),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: pro.categories
+                    .where((item) => item.trim().isNotEmpty)
+                    .take(3)
+                    .map((item) => Chip(label: Text(item)))
+                    .toList(growable: false),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'From $kCurrencySymbol ${pro.minPrice.toStringAsFixed(2)}',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: pro.isBusy ? null : onChat,
+                      icon: Icon(
+                        pro.isBusy ? Icons.block : Icons.chat_bubble_outline,
+                        size: 18,
+                      ),
+                      label: Text(pro.isBusy ? 'Unavailable' : 'Chat'),
+                      style: pro.isBusy
+                          ? OutlinedButton.styleFrom(
+                              foregroundColor: unavailableColor,
+                            )
+                          : null,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: onBook,
-                    child: const Text('Book Now'),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: pro.isBusy ? null : onBook,
+                      style: pro.isBusy
+                          ? FilledButton.styleFrom(
+                              backgroundColor: unavailableColor,
+                            )
+                          : null,
+                      child: Text(pro.isBusy ? 'Busy' : 'Book Now'),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1192,6 +1279,7 @@ class _ProfessionalPreview {
     required this.ratingAverage,
     required this.ratingCount,
     required this.wonBidCount,
+    required this.isBusy,
   });
 
   final String artisanId;
@@ -1206,6 +1294,7 @@ class _ProfessionalPreview {
   final double ratingAverage;
   final int ratingCount;
   final int wonBidCount;
+  final bool isBusy;
 
   _ProfessionalPreview copyWith({
     String? location,
@@ -1216,6 +1305,7 @@ class _ProfessionalPreview {
     double? ratingAverage,
     int? ratingCount,
     int? wonBidCount,
+    bool? isBusy,
   }) {
     return _ProfessionalPreview(
       artisanId: artisanId,
@@ -1230,6 +1320,7 @@ class _ProfessionalPreview {
       ratingAverage: ratingAverage ?? this.ratingAverage,
       ratingCount: ratingCount ?? this.ratingCount,
       wonBidCount: wonBidCount ?? this.wonBidCount,
+      isBusy: isBusy ?? this.isBusy,
     );
   }
 }

@@ -74,25 +74,65 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         const _SectionTitle(title: 'Profile'),
         const SizedBox(height: 8),
         if (user.role == UserRole.artisan) ...[
-          _SettingsTile(
-            icon: user.verificationStatus == VerificationStatus.verified
-                ? Icons.verified
-                : Icons.pending_actions_outlined,
-            title: user.verificationStatus == VerificationStatus.verified
-                ? 'Verified artisan'
-                : 'Verification ${user.verificationStatus.name}',
-            subtitle: user.verificationStatus == VerificationStatus.verified
-                ? 'Your profile shows a public verified checkmark.'
-                : 'Submit or update your ID for Support review.',
-            trailingText: user.verificationStatus == VerificationStatus.verified
-                ? null
-                : 'Upload',
-            onTap: user.verificationStatus == VerificationStatus.verified
-                ? null
-                : () => context.go(RouteNames.artisanVerification),
+          SwitchListTile(
+            secondary: Icon(
+              user.isBusy ? Icons.block : Icons.check_circle_outline,
+              color: user.isBusy ? Colors.red : Colors.green,
+            ),
+            title: const Text('Mark services unavailable'),
+            subtitle: Text(
+              user.isBusy
+                  ? 'Chat and booking buttons show unavailable to users.'
+                  : 'Users can chat and book your active services.',
+            ),
+            value: user.isBusy,
+            onChanged: (value) async {
+              try {
+                await authService.updateAvailability(isBusy: value);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      value
+                          ? 'Services marked unavailable.'
+                          : 'Services marked available.',
+                    ),
+                  ),
+                );
+              } catch (error) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Could not update status: $error')),
+                );
+              }
+            },
           ),
           const Divider(),
         ],
+        _SettingsTile(
+          icon: user.verificationStatus == VerificationStatus.verified
+              ? Icons.verified
+              : Icons.pending_actions_outlined,
+          title: user.verificationStatus == VerificationStatus.verified
+              ? (user.role == UserRole.artisan
+                  ? 'Verified artisan'
+                  : 'Verified account')
+              : 'Verification ${user.verificationStatus.name}',
+          subtitle: user.verificationStatus == VerificationStatus.verified
+              ? 'Your profile shows a public verified checkmark.'
+              : 'Submit or update your ID for Support review.',
+          trailingText: user.verificationStatus == VerificationStatus.verified
+              ? null
+              : 'Upload',
+          onTap: user.verificationStatus == VerificationStatus.verified
+              ? () => ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Your account is already verified.'),
+                    ),
+                  )
+              : () => context.go(RouteNames.artisanVerification),
+        ),
+        const Divider(),
         _SettingsTile(
           icon: Icons.manage_accounts_outlined,
           title: 'Account settings',
@@ -108,6 +148,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           subtitle: 'Language, dark mode, and notifications.',
           trailingText: 'Open',
           onTap: () => _showAppSettingsSheet(context, ref, user),
+        ),
+        const Divider(),
+        _SettingsTile(
+          icon: Icons.notifications_active_outlined,
+          title: 'Notifications',
+          subtitle: 'History, bid, chat, and account alerts.',
+          trailingText: 'Open',
+          onTap: () => context.push(RouteNames.notifications),
         ),
         const SizedBox(height: 8),
         ListTile(
@@ -402,7 +450,13 @@ Future<void> _showChangePhoneDialog(
   String currentPhone,
   String currentCountry,
 ) async {
-  var selectedCountry = countryByName(currentCountry);
+  final countries = await loadWorldCountries();
+  if (!context.mounted) return;
+  var selectedCountry = countries.firstWhere(
+    (country) => country.name == currentCountry,
+    orElse: () =>
+        countries.isNotEmpty ? countries.first : countryByName(currentCountry),
+  );
   final controller = TextEditingController(text: currentPhone);
   final nextPhone = await showDialog<String>(
     context: context,
@@ -417,7 +471,7 @@ Future<void> _showChangePhoneDialog(
                 initialValue: selectedCountry,
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Country'),
-                items: kCountries
+                items: countries
                     .map(
                       (country) => DropdownMenuItem(
                         value: country,
@@ -554,13 +608,15 @@ Future<void> _showCountryDialog(
   AuthService authService,
   String currentCountry,
 ) async {
+  final countries = await loadWorldCountries();
+  if (!context.mounted) return;
   final selected = await showModalBottomSheet<CountryOption>(
     context: context,
     showDragHandle: true,
     builder: (context) => SafeArea(
       child: ListView(
         shrinkWrap: true,
-        children: kCountries
+        children: countries
             .map(
               (country) => ListTile(
                 leading: const Icon(Icons.public_outlined),
@@ -1048,10 +1104,45 @@ Future<void> _confirmDeleteAccount(
   BuildContext context,
   AuthService authService,
 ) async {
-  final confirmed = await showDialog<bool>(
+  final reasonController = TextEditingController();
+  final reason = await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Delete account'),
+      content: TextField(
+        controller: reasonController,
+        minLines: 3,
+        maxLines: 4,
+        decoration: const InputDecoration(
+          labelText: 'Why are you deleting your account?',
+          hintText: 'Your feedback helps us improve ProSME.',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final value = reasonController.text.trim();
+            if (value.isEmpty) return;
+            Navigator.of(context).pop(value);
+          },
+          child: const Text('Continue'),
+        ),
+      ],
+    ),
+  );
+  reasonController.dispose();
+
+  if (reason == null || reason.trim().isEmpty) return;
+  if (!context.mounted) return;
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Are you sure?'),
       content: const Text(
         'This will permanently remove your account. This action cannot be undone.',
       ),
@@ -1062,7 +1153,7 @@ Future<void> _confirmDeleteAccount(
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Delete'),
+          child: const Text('Delete account'),
         ),
       ],
     ),
@@ -1071,7 +1162,7 @@ Future<void> _confirmDeleteAccount(
   if (confirmed != true) return;
 
   try {
-    await authService.deleteAccount();
+    await authService.deleteAccount(reason: reason);
     if (context.mounted) {
       context.go(RouteNames.home);
       ScaffoldMessenger.of(context).showSnackBar(

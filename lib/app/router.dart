@@ -14,7 +14,9 @@ import '../features/invoice/invoice_screen.dart';
 import '../features/jobs/job_detail_screen.dart';
 import '../features/legal/legal_screen.dart';
 import '../features/listing/listing_detail_screen.dart';
+import '../features/notifications/notifications_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
+import '../features/profile/artisan_profile_screen.dart';
 import '../features/saved/saved_screen.dart';
 import '../features/support/ai_support_screen.dart';
 import '../models/app_user.dart';
@@ -100,6 +102,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ListingDetailScreen(listingId: state.pathParameters['id']!),
       ),
       GoRoute(
+        path: '${RouteNames.artisanProfile}/:id',
+        builder: (context, state) =>
+            ArtisanProfileScreen(artisanId: state.pathParameters['id']!),
+      ),
+      GoRoute(
         path: '${RouteNames.chatThread}/:id',
         builder: (context, state) =>
             ChatThreadScreen(threadId: state.pathParameters['id']!),
@@ -120,6 +127,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.aiSupport,
         builder: (context, state) => const AiSupportScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.notifications,
+        builder: (context, state) => const NotificationsScreen(),
       ),
       GoRoute(
         path: RouteNames.saved,
@@ -152,10 +163,12 @@ bool _requiresAuth(String fullPath) {
     RouteNames.adminHome,
     RouteNames.invoice,
     RouteNames.aiSupport,
+    RouteNames.notifications,
     RouteNames.saved,
   };
   if (protectedExactPaths.contains(fullPath)) return true;
   if (fullPath.startsWith('${RouteNames.listingDetail}/')) return true;
+  if (fullPath.startsWith('${RouteNames.artisanProfile}/')) return true;
   if (fullPath.startsWith('${RouteNames.chatThread}/')) return true;
   if (fullPath.startsWith('${RouteNames.jobDetail}/')) return true;
   return false;

@@ -1,3 +1,5 @@
+import 'package:country_state_city/country_state_city.dart' as csc;
+
 class CountryOption {
   const CountryOption({
     required this.name,
@@ -13,10 +15,11 @@ class CountryOption {
 }
 
 class RegionOption {
-  const RegionOption({required this.name, required this.cities});
+  const RegionOption({required this.name, required this.cities, this.code});
 
   final String name;
   final List<CityOption> cities;
+  final String? code;
 }
 
 class CityOption {
@@ -53,6 +56,84 @@ const kCountries = <CountryOption>[
         cities: [
           CityOption(
               name: 'Takoradi', towns: ['Market Circle', 'Effia', 'Anaji']),
+        ],
+      ),
+      RegionOption(
+        name: 'Ahafo',
+        cities: [
+          CityOption(name: 'Goaso', towns: ['Any'])
+        ],
+      ),
+      RegionOption(
+        name: 'Bono',
+        cities: [
+          CityOption(name: 'Sunyani', towns: ['Any'])
+        ],
+      ),
+      RegionOption(
+        name: 'Bono East',
+        cities: [
+          CityOption(name: 'Techiman', towns: ['Any'])
+        ],
+      ),
+      RegionOption(
+        name: 'Central',
+        cities: [
+          CityOption(name: 'Cape Coast', towns: ['Any'])
+        ],
+      ),
+      RegionOption(
+        name: 'Eastern',
+        cities: [
+          CityOption(name: 'Koforidua', towns: ['Any'])
+        ],
+      ),
+      RegionOption(
+        name: 'North East',
+        cities: [
+          CityOption(name: 'Nalerigu', towns: ['Any'])
+        ],
+      ),
+      RegionOption(
+        name: 'Northern',
+        cities: [
+          CityOption(name: 'Tamale', towns: ['Any'])
+        ],
+      ),
+      RegionOption(
+        name: 'Oti',
+        cities: [
+          CityOption(name: 'Dambai', towns: ['Any'])
+        ],
+      ),
+      RegionOption(
+        name: 'Savannah',
+        cities: [
+          CityOption(name: 'Damongo', towns: ['Any'])
+        ],
+      ),
+      RegionOption(
+        name: 'Upper East',
+        cities: [
+          CityOption(name: 'Bolgatanga', towns: ['Any'])
+        ],
+      ),
+      RegionOption(
+        name: 'Upper West',
+        cities: [
+          CityOption(name: 'Wa', towns: ['Any'])
+        ],
+      ),
+      RegionOption(
+        name: 'Volta',
+        cities: [
+          CityOption(name: 'Ho', towns: ['Any'])
+        ],
+      ),
+      RegionOption(
+        name: 'Western North',
+        cities: [
+          CityOption(name: 'Sefwi Wiawso', towns: ['Any'])
         ],
       ),
     ],
@@ -3317,6 +3398,78 @@ CountryOption countryByName(String? name) {
     (country) => country.name == name,
     orElse: () => kCountries.first,
   );
+}
+
+Future<List<CountryOption>> loadWorldCountries() async {
+  try {
+    final countries = await csc.getAllCountries();
+    final options = countries
+        .map(
+          (country) => CountryOption(
+            name: country.name,
+            code: country.isoCode,
+            dialCode: _formatDialCode(country.phoneCode),
+            regions: const [],
+          ),
+        )
+        .toList(growable: false)
+      ..sort((a, b) => a.name.compareTo(b.name));
+    return options.isEmpty ? kCountries : options;
+  } catch (_) {
+    return kCountries;
+  }
+}
+
+Future<CountryOption> loadCountryRegions(CountryOption country) async {
+  try {
+    final states = await csc.getStatesOfCountry(country.code);
+    if (states.isEmpty) {
+      final cities = await csc.getCountryCities(country.code);
+      return CountryOption(
+        name: country.name,
+        code: country.code,
+        dialCode: country.dialCode,
+        regions: [
+          RegionOption(
+            name: 'Any',
+            cities: cities
+                .map(
+                    (city) => CityOption(name: city.name, towns: const ['Any']))
+                .toList(growable: false),
+          ),
+        ],
+      );
+    }
+
+    final regions = <RegionOption>[];
+    for (final state in states) {
+      final cities = await csc.getStateCities(country.code, state.isoCode);
+      regions.add(
+        RegionOption(
+          name: state.name,
+          code: state.isoCode,
+          cities: cities
+              .map((city) => CityOption(name: city.name, towns: const ['Any']))
+              .toList(growable: false),
+        ),
+      );
+    }
+    regions.sort((a, b) => a.name.compareTo(b.name));
+    return CountryOption(
+      name: country.name,
+      code: country.code,
+      dialCode: country.dialCode,
+      regions: regions,
+    );
+  } catch (_) {
+    return country.regions.isNotEmpty ? country : countryByName(country.name);
+  }
+}
+
+String _formatDialCode(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return '+000';
+  return trimmed.startsWith('+') ? trimmed : '+$trimmed';
 }
 
 bool isValidPhoneForCountry(String phone, CountryOption country) {

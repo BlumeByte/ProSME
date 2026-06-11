@@ -57,6 +57,19 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
 
           final isOwner = user?.id == job.createdBy;
           final isArtisan = user?.role == UserRole.artisan;
+          final existingBid = isArtisan && user != null
+              ? ref
+                  .watch(jobBidsProvider(job.id))
+                  .valueOrNull
+                  ?.where((bid) => bid.artisanId == user.id)
+                  .firstOrNull
+              : null;
+          if (existingBid != null &&
+              _amountController.text.isEmpty &&
+              _messageController.text.isEmpty) {
+            _amountController.text = existingBid.amount.toStringAsFixed(0);
+            _messageController.text = existingBid.message;
+          }
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -87,6 +100,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                   amountController: _amountController,
                   messageController: _messageController,
                   submitting: _submitting,
+                  existingBid: existingBid,
                   onSubmit: () => _submitBid(job),
                 )
               else
@@ -139,7 +153,14 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
       _amountController.clear();
       _messageController.clear();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bid sent. Chat opened for negotiation.')),
+        SnackBar(
+          content: Text(
+            bid.createdAt.isBefore(
+                    DateTime.now().subtract(const Duration(seconds: 2)))
+                ? 'Bid updated. Chat opened for negotiation.'
+                : 'Bid sent. Chat opened for negotiation.',
+          ),
+        ),
       );
       context.go('${RouteNames.chatThread}/${thread.id}');
     } catch (error) {
@@ -341,6 +362,7 @@ class _BidForm extends StatelessWidget {
     required this.amountController,
     required this.messageController,
     required this.submitting,
+    required this.existingBid,
     required this.onSubmit,
   });
 
@@ -348,6 +370,7 @@ class _BidForm extends StatelessWidget {
   final TextEditingController amountController;
   final TextEditingController messageController;
   final bool submitting;
+  final JobBid? existingBid;
   final VoidCallback onSubmit;
 
   @override
@@ -360,7 +383,18 @@ class _BidForm extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Send a bid', style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                existingBid == null ? 'Send a bid' : 'Edit your bid',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              if (existingBid != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  existingBid!.status == 'accepted'
+                      ? 'This bid has been accepted and can no longer be changed.'
+                      : 'You already bid on this job. Update your amount or message here.',
+                ),
+              ],
               const SizedBox(height: 12),
               TextFormField(
                 controller: amountController,
@@ -396,14 +430,20 @@ class _BidForm extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: submitting ? null : onSubmit,
+                  onPressed: submitting || existingBid?.status == 'accepted'
+                      ? null
+                      : onSubmit,
                   icon: submitting
                       ? const SizedBox.square(
                           dimension: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.send),
-                  label: const Text('Send bid and open chat'),
+                  label: Text(
+                    existingBid == null
+                        ? 'Send bid and open chat'
+                        : 'Update bid and open chat',
+                  ),
                 ),
               ),
             ],

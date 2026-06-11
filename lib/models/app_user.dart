@@ -11,6 +11,7 @@ class AppUser {
     this.country = 'Ghana',
     this.countryCode = '+233',
     this.description = '',
+    this.isBusy = false,
     this.verificationStatus = VerificationStatus.pending,
     required this.createdAt,
   });
@@ -24,6 +25,7 @@ class AppUser {
   final String country;
   final String countryCode;
   final String description;
+  final bool isBusy;
   final VerificationStatus verificationStatus;
   final DateTime createdAt;
 
@@ -36,6 +38,7 @@ class AppUser {
     String? country,
     String? countryCode,
     String? description,
+    bool? isBusy,
     VerificationStatus? verificationStatus,
   }) {
     return AppUser(
@@ -48,6 +51,7 @@ class AppUser {
       country: country ?? this.country,
       countryCode: countryCode ?? this.countryCode,
       description: description ?? this.description,
+      isBusy: isBusy ?? this.isBusy,
       verificationStatus: verificationStatus ?? this.verificationStatus,
       createdAt: createdAt,
     );
@@ -67,6 +71,7 @@ class AppUser {
       country: (json['country'] as String?) ?? 'Ghana',
       countryCode: (json['countryCode'] as String?) ?? '+233',
       description: (json['description'] as String?) ?? '',
+      isBusy: (json['isBusy'] as bool?) ?? false,
       verificationStatus: VerificationStatus.values.firstWhere(
         (status) => status.name == json['verificationStatus'],
         orElse: () => VerificationStatus.pending,
@@ -86,6 +91,7 @@ class AppUser {
       'country': country,
       'countryCode': countryCode,
       'description': description,
+      'isBusy': isBusy,
       'verificationStatus': verificationStatus.name,
       'createdAt': createdAt.toIso8601String(),
     };

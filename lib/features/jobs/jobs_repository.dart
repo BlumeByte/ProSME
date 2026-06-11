@@ -16,6 +16,7 @@ class JobFeedItem {
     required this.createdBy,
     required this.createdAt,
     this.images = const [],
+    this.status = 'open',
   });
 
   final String id;
@@ -26,6 +27,7 @@ class JobFeedItem {
   final String createdBy;
   final DateTime createdAt;
   final List<String> images;
+  final String status;
 }
 
 class JobBid {
@@ -85,6 +87,8 @@ abstract class JobsRepository {
 
   Stream<List<JobRating>> watchRatings(String jobId);
 
+  Stream<List<JobRating>> watchRatingsByArtisan(String artisanId);
+
   Future<JobFeedItem> createJob({
     required String title,
     required String description,
@@ -134,6 +138,7 @@ class SupabaseJobsRepository implements JobsRepository {
         final rows = await _client
             .from('jobs')
             .select()
+            .neq('status', 'completed')
             .order('created_at', ascending: false);
         lastGood = rows
             .map((row) => _mapJob(Map<String, dynamic>.from(row as Map)))
@@ -164,6 +169,29 @@ class SupabaseJobsRepository implements JobsRepository {
         yield lastGood;
       } catch (error, stackTrace) {
         debugPrint('Failed to refresh job ratings: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        yield lastGood;
+      }
+      await Future<void>.delayed(const Duration(seconds: 12));
+    }
+  }
+
+  @override
+  Stream<List<JobRating>> watchRatingsByArtisan(String artisanId) async* {
+    var lastGood = const <JobRating>[];
+    while (true) {
+      try {
+        final rows = await _client
+            .from('job_ratings')
+            .select()
+            .eq('artisan_id', artisanId)
+            .order('created_at', ascending: false);
+        lastGood = rows
+            .map((row) => _mapRating(Map<String, dynamic>.from(row as Map)))
+            .toList(growable: false);
+        yield lastGood;
+      } catch (error, stackTrace) {
+        debugPrint('Failed to refresh artisan ratings: $error');
         debugPrintStack(stackTrace: stackTrace);
         yield lastGood;
       }
@@ -348,9 +376,34 @@ class SupabaseJobsRepository implements JobsRepository {
 
   @override
   Future<void> acceptBid(String bidId) async {
-    await _client
+    final accepted = await _client
         .from('job_bids')
-        .update({'status': 'accepted'}).eq('id', bidId);
+        .update({'status': 'accepted'})
+        .eq('id', bidId)
+        .select('job_id')
+        .single();
+    final jobId = (accepted['job_id'] ?? '').toString();
+    if (jobId.isNotEmpty) {
+      await _client
+          .from('jobs')
+          .update({'status': 'completed'}).eq('id', jobId);
+    }
+    final bid = await _client
+        .from('job_bids')
+        .select('artisan_id')
+        .eq('id', bidId)
+        .maybeSingle();
+    final artisanId = (bid?['artisan_id'] ?? '').toString();
+    if (artisanId.isNotEmpty) {
+      await _client.from('admin_notifications').insert({
+        'type': 'bid_accepted',
+        'title': 'Bid accepted',
+        'body': 'Your bid was accepted and the request was moved to history.',
+        'related_user_id': artisanId,
+        'related_table': 'job_bids',
+        'related_id': bidId,
+      });
+    }
   }
 
   @override
@@ -389,6 +442,7 @@ class SupabaseJobsRepository implements JobsRepository {
       createdBy: (row['created_by'] as String?) ?? '',
       createdAt: DateTime.tryParse((row['created_at'] as String?) ?? '') ??
           DateTime.now(),
+      status: (row['status'] as String?) ?? 'open',
       images: List<String>.from(
         (row['images'] ?? const <dynamic>[]) as List<dynamic>,
       ),
@@ -447,6 +501,15 @@ class MockJobsRepository implements JobsRepository {
   }
 
   @override
+  Stream<List<JobRating>> watchRatingsByArtisan(String artisanId) async* {
+    final ratings = _ratingsByJobId.values
+        .expand((items) => items)
+        .where((rating) => rating.artisanId == artisanId)
+        .toList(growable: false);
+    yield List<JobRating>.unmodifiable(ratings);
+  }
+
+  @override
   Stream<List<JobBid>> watchBids(String jobId) async* {
     final controller = _bidControllers.putIfAbsent(
       jobId,
@@ -483,6 +546,7 @@ class MockJobsRepository implements JobsRepository {
       createdBy: createdBy,
       createdAt: DateTime.now(),
       images: images,
+      status: 'open',
     );
     _jobs.insert(0, job);
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
@@ -519,6 +583,7 @@ class MockJobsRepository implements JobsRepository {
       createdBy: current.createdBy,
       createdAt: current.createdAt,
       images: images,
+      status: current.status,
     );
     _jobs[index] = updated;
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
@@ -576,6 +641,8 @@ class MockJobsRepository implements JobsRepository {
         acceptedBidCount: bid.acceptedBidCount + 1,
       );
       _bidControllers[entry.key]?.add(List<JobBid>.unmodifiable(entry.value));
+      _jobs.removeWhere((job) => job.id == bid.jobId);
+      _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
       return;
     }
   }
@@ -638,4 +705,9 @@ final artisanBidsProvider =
 final jobRatingsProvider =
     StreamProvider.family<List<JobRating>, String>((ref, jobId) {
   return ref.watch(jobsRepositoryProvider).watchRatings(jobId);
+});
+
+final artisanRatingsProvider =
+    StreamProvider.family<List<JobRating>, String>((ref, artisanId) {
+  return ref.watch(jobsRepositoryProvider).watchRatingsByArtisan(artisanId);
 });

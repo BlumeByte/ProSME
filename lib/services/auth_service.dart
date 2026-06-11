@@ -43,8 +43,9 @@ abstract class AuthService {
   Future<void> updateCountry(String country, String countryCode);
   Future<void> updatePhoto(Uint8List bytes, {required String contentType});
   Future<void> updateDescription(String description);
+  Future<void> updateAvailability({required bool isBusy});
   Future<void> updateEmail(String email);
-  Future<void> deleteAccount();
+  Future<void> deleteAccount({String? reason});
 }
 
 class PendingEmailVerificationException implements Exception {
@@ -251,6 +252,16 @@ class MockAuthService implements AuthService {
   }
 
   @override
+  Future<void> updateAvailability({required bool isBusy}) async {
+    if (_currentUser == null) {
+      throw StateError('No signed-in user.');
+    }
+    _currentUser = _currentUser!.copyWith(isBusy: isBusy);
+    _accountsByEmail[_currentUser!.email.toLowerCase()] = _currentUser!;
+    _controller.add(_currentUser);
+  }
+
+  @override
   Future<void> updateEmail(String email) async {
     final user = _currentUser;
     if (user == null) {
@@ -278,7 +289,7 @@ class MockAuthService implements AuthService {
   }
 
   @override
-  Future<void> deleteAccount() async {
+  Future<void> deleteAccount({String? reason}) async {
     final user = _currentUser;
     if (user != null) {
       _accountsByEmail.remove(user.email.toLowerCase());
@@ -309,7 +320,7 @@ class SupabaseAuthService implements AuthService {
       final response = await _supabase
           .from('profiles')
           .select(
-            'id,username,full_name,phone,email,avatar_url,role,verification_status,country,country_code,description,username_updated_at,created_at,updated_at',
+            'id,username,full_name,phone,email,avatar_url,role,verification_status,country,country_code,description,is_busy,username_updated_at,created_at,updated_at',
           )
           .eq('id', userId)
           .maybeSingle();
@@ -345,6 +356,7 @@ class SupabaseAuthService implements AuthService {
       'country': existingProfile?['country'] ?? 'Ghana',
       'country_code': existingProfile?['country_code'] ?? '+233',
       'description': existingProfile?['description'] ?? '',
+      'is_busy': existingProfile?['is_busy'] ?? false,
       'role': role,
       'verification_status': (existingProfile?['verification_status'] ??
               (role == UserRole.artisan.name
@@ -405,6 +417,10 @@ class SupabaseAuthService implements AuthService {
               .toString(),
       description:
           (source['description'] ?? metadata['description'] ?? '').toString(),
+      isBusy: source['is_busy'] == true ||
+          source['isBusy'] == true ||
+          metadata['is_busy'] == true ||
+          metadata['isBusy'] == true,
       verificationStatus: VerificationStatus.values.firstWhere(
         (status) =>
             status.name ==
@@ -776,6 +792,18 @@ class SupabaseAuthService implements AuthService {
   }
 
   @override
+  Future<void> updateAvailability({required bool isBusy}) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      throw StateError('No signed-in user.');
+    }
+    await _updateProfile(user.id, {'is_busy': isBusy});
+    if (_resolvedCurrentUser != null) {
+      _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(isBusy: isBusy);
+    }
+  }
+
+  @override
   Future<void> updateEmail(String email) async {
     final user = _supabase.auth.currentUser;
     if (user == null) {
@@ -800,7 +828,22 @@ class SupabaseAuthService implements AuthService {
   }
 
   @override
-  Future<void> deleteAccount() async {
+  Future<void> deleteAccount({String? reason}) async {
+    final user = _supabase.auth.currentUser;
+    final normalizedReason = (reason ?? '').trim();
+    if (user != null && normalizedReason.isNotEmpty) {
+      try {
+        await _supabase.from('admin_notifications').insert({
+          'type': 'account_deletion',
+          'title': 'Account deletion requested',
+          'body': normalizedReason,
+          'actor_id': user.id,
+          'related_user_id': user.id,
+        });
+      } catch (_) {
+        // Account deletion should not be blocked by support-log failures.
+      }
+    }
     await _supabase.rpc('delete_current_user');
     _resolvedCurrentUser = null;
   }

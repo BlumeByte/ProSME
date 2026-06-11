@@ -189,9 +189,16 @@ class _ArtisanVerificationScreenState
         isRetryLocked ? retryAfter.difference(DateTime.now()).inDays + 1 : 0;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Artisan verification'),
-        leading:
-            BackButton(onPressed: () => context.go(RouteNames.artisanHome)),
+        title: Text(user?.role == UserRole.artisan
+            ? 'Artisan verification'
+            : 'Account verification'),
+        leading: BackButton(
+          onPressed: () => context.go(
+            user?.role == UserRole.artisan
+                ? RouteNames.artisanHome
+                : RouteNames.home,
+          ),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(24),
@@ -202,10 +209,12 @@ class _ArtisanVerificationScreenState
               child: Center(child: CircularProgressIndicator()),
             )
           else if (user?.verificationStatus == VerificationStatus.verified)
-            const _StatusPanel(
+            _StatusPanel(
               icon: Icons.verified,
               title: 'Verification approved',
-              message: 'Your artisan profile now shows a verified checkmark.',
+              message: user?.role == UserRole.artisan
+                  ? 'Your artisan profile now shows a verified checkmark.'
+                  : 'Your account now shows a verified checkmark.',
             )
           else if (_hasSubmittedDocuments &&
               user?.verificationStatus == VerificationStatus.pending)

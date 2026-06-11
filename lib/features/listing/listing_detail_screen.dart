@@ -64,6 +64,7 @@ class ListingDetailScreen extends ConsumerWidget {
                 child: Text('This listing is no longer available.'));
           }
           final listingData = listing;
+          final isBusy = listingData.artisanBusy;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -101,6 +102,44 @@ class ListingDetailScreen extends ConsumerWidget {
                   style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),
               Text(listingData.description),
+              const SizedBox(height: 12),
+              Card(
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundImage:
+                        listingData.artisanPhotoUrl?.trim().isNotEmpty == true
+                            ? NetworkImage(listingData.artisanPhotoUrl!)
+                            : null,
+                    child:
+                        listingData.artisanPhotoUrl?.trim().isNotEmpty == true
+                            ? null
+                            : const Icon(Icons.person_outline),
+                  ),
+                  title: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          listingData.artisanName?.trim().isNotEmpty == true
+                              ? listingData.artisanName!
+                              : 'Professional',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (listingData.verifiedOnly)
+                        const Icon(Icons.verified,
+                            color: Colors.blue, size: 18),
+                    ],
+                  ),
+                  subtitle: Text(isBusy
+                      ? 'Unavailable now'
+                      : '${listingData.wonBidCount} won bids'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push(
+                    '${RouteNames.artisanProfile}/${listingData.artisanId}',
+                  ),
+                ),
+              ),
               const SizedBox(height: 16),
               Text(
                 '${formatCurrency(listingData.priceMin)} - ${formatCurrency(listingData.priceMax)}',
@@ -116,9 +155,17 @@ class ListingDetailScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               PrimaryButton(
-                label: 'Chat',
-                icon: Icons.chat,
+                label: isBusy ? 'Artisan unavailable' : 'Chat',
+                icon: isBusy ? Icons.block : Icons.chat,
                 onPressed: () async {
+                  if (isBusy) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('This artisan is currently unavailable.'),
+                      ),
+                    );
+                    return;
+                  }
                   if (user == null) {
                     context.go(RouteNames.auth);
                     return;
@@ -150,19 +197,6 @@ class ListingDetailScreen extends ConsumerWidget {
                       );
                     }
                   }
-                },
-              ),
-              const SizedBox(height: 12),
-              PrimaryButton(
-                label: 'Payments disabled',
-                icon: Icons.money_off,
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                          'Payments are disabled for now. Use chat to agree on service details.'),
-                    ),
-                  );
                 },
               ),
               const SizedBox(height: 12),

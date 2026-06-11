@@ -493,15 +493,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 if (messages.isEmpty) {
                   return const Center(child: Text('Start the conversation.'));
                 }
-                final displayMessages =
-                    messages.reversed.toList(growable: false);
-
                 return ListView.builder(
-                  reverse: true,
+                  reverse: false,
                   padding: const EdgeInsets.all(16),
-                  itemCount: displayMessages.length,
+                  itemCount: messages.length,
                   itemBuilder: (context, index) {
-                    final message = displayMessages[index];
+                    final message = messages[index];
                     final isMine = user?.id == message.senderId;
                     return Align(
                       alignment:

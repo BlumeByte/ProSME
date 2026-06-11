@@ -66,6 +66,7 @@ class SupabaseListingService implements ListingService {
 
     Map<String, String> artisanNames = {};
     Map<String, String> artisanAvatars = {};
+    Map<String, bool> artisanBusy = {};
     Map<String, double> ratingAverages = {};
     Map<String, int> ratingCounts = {};
     Map<String, int> wonBidCounts = {};
@@ -73,7 +74,8 @@ class SupabaseListingService implements ListingService {
       try {
         final List<dynamic> profiles = await _supabase
             .from('profiles')
-            .select('id,username,full_name,avatar_url,verification_status')
+            .select(
+                'id,username,full_name,avatar_url,verification_status,is_busy')
             .inFilter('id', artisanIds);
         final List<dynamic> ratings = await _supabase
             .from('job_ratings')
@@ -94,6 +96,10 @@ class SupabaseListingService implements ListingService {
           for (final profile in profiles)
             (profile['id'] ?? '').toString():
                 ((profile['avatar_url'] ?? '') as String),
+        };
+        artisanBusy = {
+          for (final profile in profiles)
+            (profile['id'] ?? '').toString(): profile['is_busy'] == true,
         };
         final artisanVerified = {
           for (final profile in profiles)
@@ -134,6 +140,7 @@ class SupabaseListingService implements ListingService {
         debugPrintStack(stackTrace: stackTrace);
         artisanNames = {};
         artisanAvatars = {};
+        artisanBusy = {};
       }
     }
 
@@ -145,6 +152,9 @@ class SupabaseListingService implements ListingService {
       }
       if (artisanId != null && artisanAvatars.containsKey(artisanId)) {
         hydratedRow['artisanPhotoUrl'] = artisanAvatars[artisanId];
+      }
+      if (artisanId != null && artisanBusy.containsKey(artisanId)) {
+        hydratedRow['artisanBusy'] = artisanBusy[artisanId] ?? false;
       }
       if (artisanId != null) {
         hydratedRow['ratingAverage'] = ratingAverages[artisanId] ?? 0;
