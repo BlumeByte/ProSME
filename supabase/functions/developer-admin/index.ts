@@ -225,6 +225,20 @@ Deno.serve(async (req) => {
       return ok();
     }
 
+    if (action === 'deleteUser') {
+      const userId = clean(body.userId || body.id);
+      if (!userId) return fail('User id is required.');
+      if (userId === user.id) {
+        return fail('You cannot delete the developer account you are currently using.');
+      }
+
+      const { error } = await adminClient.auth.admin.deleteUser(userId);
+      if (error) return fail(error.message);
+
+      await adminClient.from('profiles').delete().eq('id', userId);
+      return ok({ userId });
+    }
+
     if (action === 'upsertListing') {
       const id = clean(body.id);
       const patch = body.patch && typeof body.patch === 'object' ? body.patch as Record<string, unknown> : {};

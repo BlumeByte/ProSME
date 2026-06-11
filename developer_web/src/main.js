@@ -411,6 +411,23 @@ async function updateRole(userId, role) {
   await updateTableRow('profiles', userId, { role }, `Role changed to ${role}.`);
 }
 
+async function deleteAccount(userId, email) {
+  if (state.session?.user?.id === userId) {
+    state.error = 'You cannot delete the developer account you are currently using.';
+    render();
+    return;
+  }
+  const label = email || userId;
+  if (!window.confirm(`Permanently delete ${label} from the app and database? This cannot be undone.`)) return;
+
+  await runAction(async () => {
+    const result = await developerAction('deleteUser', { userId });
+    if (result?.ok === false) throw new Error(result.error || 'Could not delete account.');
+    setNotice('Account deleted from Auth and database.');
+    await refreshData();
+  });
+}
+
 async function updateTableRow(table, id, patch, message) {
   state.busy = true;
   state.error = '';
@@ -997,6 +1014,7 @@ function renderProfileRow(profile) {
         <button class="ghost small" data-edit-profile="${esc(profile.id)}">Edit</button>
         <button class="ghost small" data-reset-email="${esc(profile.email || '')}">Reset</button>
         <button class="ghost small" data-random-password="${esc(profile.id)}" data-email="${esc(profile.email || '')}">Random password</button>
+        <button class="reject small" data-delete-account="${esc(profile.id)}" data-email="${esc(profile.email || '')}">Delete</button>
         <select data-role-user="${esc(profile.id)}">
           ${['customer', 'artisan', 'developer']
             .map((role) => `<option value="${role}" ${profile.role === role ? 'selected' : ''}>${role}</option>`)
@@ -1386,6 +1404,10 @@ function bindEvents() {
 
   document.querySelectorAll('[data-random-password]').forEach((button) => {
     button.addEventListener('click', () => randomizePassword(button.dataset.randomPassword, button.dataset.email));
+  });
+
+  document.querySelectorAll('[data-delete-account]').forEach((button) => {
+    button.addEventListener('click', () => deleteAccount(button.dataset.deleteAccount, button.dataset.email));
   });
 
   document.querySelectorAll('[data-create-role]').forEach((button) => {
