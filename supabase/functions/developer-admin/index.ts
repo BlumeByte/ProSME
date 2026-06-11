@@ -12,6 +12,14 @@ const json = (status: number, body: Record<string, unknown>) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
+const ok = (body: Record<string, unknown> = {}) => json(200, { ok: true, ...body });
+
+const fail = (error: unknown) =>
+  json(200, {
+    ok: false,
+    error: error instanceof Error ? error.message : String(error),
+  });
+
 const requiredEnv = (key: string) => {
   const value = Deno.env.get(key);
   if (!value) throw new Error(`${key} is not configured`);
@@ -51,9 +59,7 @@ Deno.serve(async (req) => {
     const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY');
     const authorization = req.headers.get('Authorization') || '';
 
-    if (!authorization.startsWith('Bearer ')) {
-      return json(401, { error: 'Missing developer session.' });
-    }
+    if (!authorization.startsWith('Bearer ')) return fail('Missing developer session.');
 
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authorization } },
@@ -64,7 +70,7 @@ Deno.serve(async (req) => {
       error: userError,
     } = await userClient.auth.getUser();
 
-    if (userError || !user) return json(401, { error: 'Invalid developer session.' });
+    if (userError || !user) return fail('Invalid developer session.');
 
     const { data: caller, error: callerError } = await userClient
       .from('profiles')
@@ -72,9 +78,9 @@ Deno.serve(async (req) => {
       .eq('id', user.id)
       .maybeSingle();
 
-    if (callerError) return json(500, { error: callerError.message });
+    if (callerError) return fail(callerError.message);
     if (caller?.role !== 'developer') {
-      return json(403, { error: 'Only developer accounts can use this action.' });
+      return fail('Only developer accounts can use this action.');
     }
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
@@ -94,8 +100,8 @@ Deno.serve(async (req) => {
       const password = clean(body.password) || randomPassword();
       const allowedRoles = new Set(['customer', 'artisan', 'developer']);
 
-      if (!validEmail(email)) return json(400, { error: 'Valid email is required.' });
-      if (!allowedRoles.has(role)) return json(400, { error: 'Invalid role.' });
+      if (!validEmail(email)) return fail('Valid email is required.');
+      if (!allowedRoles.has(role)) return fail('Invalid role.');
 
       const { data, error } = await adminClient.auth.admin.createUser({
         email,
@@ -105,7 +111,7 @@ Deno.serve(async (req) => {
         app_metadata: { role },
       });
 
-      if (error) return json(400, { error: error.message });
+      if (error) return fail(error.message);
       const createdUser = data.user;
 
       const { error: profileError } = await adminClient.from('profiles').upsert({
@@ -119,10 +125,15 @@ Deno.serve(async (req) => {
         verification_status: role === 'artisan' ? 'pending' : 'verified',
       });
 
-      if (profileError) return json(400, { error: profileError.message });
+      if (profileError) return fail(profileError.message);
       const redirectTo = Deno.env.get('PASSWORD_RESET_REDIRECT_URL') || undefined;
-      await adminClient.auth.resetPasswordForEmail(email, { redirectTo });
-      return json(200, { ok: true, userId: createdUser.id, temporaryPassword: password });
+      const { error: resetError } = await adminClient.auth.resetPasswordForEmail(email, { redirectTo });
+      return ok({
+        userId: createdUser.id,
+        temporaryPassword: password,
+        passwordResetSent: !resetError,
+        warning: resetError?.message,
+      });
     }
 
     if (action === 'bulkCreateUsers') {
@@ -177,17 +188,23 @@ Deno.serve(async (req) => {
         }
 
         const redirectTo = Deno.env.get('PASSWORD_RESET_REDIRECT_URL') || undefined;
-        await adminClient.auth.resetPasswordForEmail(email, { redirectTo });
-        created.push({ email, userId: data.user.id, temporaryPassword: password });
+        const { error: resetError } = await adminClient.auth.resetPasswordForEmail(email, { redirectTo });
+        created.push({
+          email,
+          userId: data.user.id,
+          temporaryPassword: password,
+          passwordResetSent: !resetError,
+          warning: resetError?.message,
+        });
       }
 
-      return json(200, { ok: true, created, failed });
+      return ok({ created, failed });
     }
 
     if (action === 'updateProfile') {
       const id = clean(body.id);
       const patch = body.patch && typeof body.patch === 'object' ? body.patch as Record<string, unknown> : {};
-      if (!id) return json(400, { error: 'Profile id is required.' });
+      if (!id) return fail('Profile id is required.');
 
       const sanitized: Record<string, unknown> = {};
       for (const key of [
@@ -204,8 +221,8 @@ Deno.serve(async (req) => {
         if (hasOwn(patch, key)) sanitized[key] = cleanNullable(patch[key]);
       }
       const { error } = await adminClient.from('profiles').update(sanitized).eq('id', id);
-      if (error) return json(400, { error: error.message });
-      return json(200, { ok: true });
+      if (error) return fail(error.message);
+      return ok();
     }
 
     if (action === 'upsertListing') {
@@ -224,23 +241,23 @@ Deno.serve(async (req) => {
       const update = Object.fromEntries(
         Object.entries(row).filter(([, value]) => value !== '' && value !== null)
       );
-      if (!id && !row.artisan_id) return json(400, { error: 'Artisan owner is required.' });
-      if (!id && !row.title) return json(400, { error: 'Listing title is required.' });
+      if (!id && !row.artisan_id) return fail('Artisan owner is required.');
+      if (!id && !row.title) return fail('Listing title is required.');
 
       const query = id
         ? adminClient.from('listings').update(update).eq('id', id).select('id').maybeSingle()
         : adminClient.from('listings').insert(update).select('id').maybeSingle();
       const { data, error } = await query;
-      if (error) return json(400, { error: error.message });
-      return json(200, { ok: true, id: data?.id || id });
+      if (error) return fail(error.message);
+      return ok({ id: data?.id || id });
     }
 
     if (action === 'deleteListing') {
       const id = clean(body.id);
-      if (!id) return json(400, { error: 'Listing id is required.' });
+      if (!id) return fail('Listing id is required.');
       const { error } = await adminClient.from('listings').delete().eq('id', id);
-      if (error) return json(400, { error: error.message });
-      return json(200, { ok: true });
+      if (error) return fail(error.message);
+      return ok();
     }
 
     if (action === 'upsertJob') {
@@ -258,47 +275,47 @@ Deno.serve(async (req) => {
       const update = Object.fromEntries(
         Object.entries(row).filter(([, value]) => value !== '' && value !== null)
       );
-      if (!id && !row.created_by) return json(400, { error: 'Job owner is required.' });
-      if (!id && !row.title) return json(400, { error: 'Job title is required.' });
+      if (!id && !row.created_by) return fail('Job owner is required.');
+      if (!id && !row.title) return fail('Job title is required.');
 
       const query = id
         ? adminClient.from('jobs').update(update).eq('id', id).select('id').maybeSingle()
         : adminClient.from('jobs').insert(update).select('id').maybeSingle();
       const { data, error } = await query;
-      if (error) return json(400, { error: error.message });
-      return json(200, { ok: true, id: data?.id || id });
+      if (error) return fail(error.message);
+      return ok({ id: data?.id || id });
     }
 
     if (action === 'deleteJob') {
       const id = clean(body.id);
-      if (!id) return json(400, { error: 'Job id is required.' });
+      if (!id) return fail('Job id is required.');
       const { error } = await adminClient.from('jobs').delete().eq('id', id);
-      if (error) return json(400, { error: error.message });
-      return json(200, { ok: true });
+      if (error) return fail(error.message);
+      return ok();
     }
 
     if (action === 'sendPasswordReset') {
       const email = clean(body.email).toLowerCase();
-      if (!validEmail(email)) return json(400, { error: 'Valid email is required.' });
+      if (!validEmail(email)) return fail('Valid email is required.');
 
       const redirectTo = Deno.env.get('PASSWORD_RESET_REDIRECT_URL') || undefined;
       const { error } = await adminClient.auth.resetPasswordForEmail(email, { redirectTo });
-      if (error) return json(400, { error: error.message });
-      return json(200, { ok: true });
+      if (error) return fail(error.message);
+      return ok();
     }
 
     if (action === 'setPassword') {
       const userId = clean(body.userId);
       const password = clean(body.password) || randomPassword();
-      if (!userId) return json(400, { error: 'User id is required.' });
+      if (!userId) return fail('User id is required.');
 
       const { error } = await adminClient.auth.admin.updateUserById(userId, { password });
-      if (error) return json(400, { error: error.message });
-      return json(200, { ok: true, temporaryPassword: password });
+      if (error) return fail(error.message);
+      return ok({ temporaryPassword: password });
     }
 
-    return json(400, { error: 'Unknown developer action.' });
+    return fail('Unknown developer action.');
   } catch (error) {
-    return json(500, { error: error instanceof Error ? error.message : String(error) });
+    return fail(error);
   }
 });
