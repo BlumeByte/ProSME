@@ -21,7 +21,7 @@ const requiredEnv = (key: string) => {
 const clean = (value: unknown) => String(value ?? '').trim();
 const cleanNullable = (value: unknown) => {
   const normalized = clean(value);
-  return normalized.isEmpty ? null : normalized;
+  return normalized.length === 0 ? null : normalized;
 };
 
 const hasOwn = (source: Record<string, unknown>, key: string) =>
@@ -31,6 +31,8 @@ const numberOrZero = (value: unknown) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
+
+const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
 
 const randomPassword = () => {
   const bytes = new Uint8Array(12);
@@ -92,7 +94,7 @@ Deno.serve(async (req) => {
       const password = clean(body.password) || randomPassword();
       const allowedRoles = new Set(['customer', 'artisan', 'developer']);
 
-      if (!email || !email.includes('@')) return json(400, { error: 'Valid email is required.' });
+      if (!validEmail(email)) return json(400, { error: 'Valid email is required.' });
       if (!allowedRoles.has(role)) return json(400, { error: 'Invalid role.' });
 
       const { data, error } = await adminClient.auth.admin.createUser({
@@ -118,6 +120,8 @@ Deno.serve(async (req) => {
       });
 
       if (profileError) return json(400, { error: profileError.message });
+      const redirectTo = Deno.env.get('PASSWORD_RESET_REDIRECT_URL') || undefined;
+      await adminClient.auth.resetPasswordForEmail(email, { redirectTo });
       return json(200, { ok: true, userId: createdUser.id, temporaryPassword: password });
     }
 
@@ -134,7 +138,7 @@ Deno.serve(async (req) => {
         const fullName = clean(account.full_name) || clean(account.name) || email.split('@')[0];
         const password = clean(account.password) || randomPassword();
 
-        if (!email || !email.includes('@')) {
+        if (!validEmail(email)) {
           failed.push({ email, error: 'Valid email is required.' });
           continue;
         }
@@ -172,6 +176,8 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        const redirectTo = Deno.env.get('PASSWORD_RESET_REDIRECT_URL') || undefined;
+        await adminClient.auth.resetPasswordForEmail(email, { redirectTo });
         created.push({ email, userId: data.user.id, temporaryPassword: password });
       }
 
@@ -273,7 +279,7 @@ Deno.serve(async (req) => {
 
     if (action === 'sendPasswordReset') {
       const email = clean(body.email).toLowerCase();
-      if (!email || !email.includes('@')) return json(400, { error: 'Valid email is required.' });
+      if (!validEmail(email)) return json(400, { error: 'Valid email is required.' });
 
       const redirectTo = Deno.env.get('PASSWORD_RESET_REDIRECT_URL') || undefined;
       const { error } = await adminClient.auth.resetPasswordForEmail(email, { redirectTo });

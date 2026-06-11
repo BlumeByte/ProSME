@@ -9,8 +9,7 @@ const String kSupabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
   defaultValue: 'https://wbnvifrzckjttyxhmlcf.supabase.co',
 );
-const String kSupabaseAnonKeyPlaceholder =
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndibnZpZnJ6Y2tqdHR5eGhtbGNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzODE0MTIsImV4cCI6MjA5MTk1NzQxMn0.w1AhJHFzXeuV86KLv3xc3xiflqeB06bp6Q2YcBg3vkY';
+const String kSupabaseAnonKeyPlaceholder = 'YOUR_SUPABASE_ANON_KEY';
 const String kSupabaseAnonKey = String.fromEnvironment(
   'SUPABASE_ANON_KEY',
   defaultValue: kSupabaseAnonKeyPlaceholder,

@@ -113,6 +113,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (!_emailPattern.hasMatch(_email)) {
       return 'Please enter a valid email.';
     }
+    if (_isCreateAccountMode && !isStrongPassword(_password)) {
+      return 'Password must be 8+ characters with uppercase, lowercase, number, and special character.';
+    }
     return null;
   }
 

@@ -8,9 +8,19 @@ import '../models/app_user.dart';
 final _emailRegex = RegExp(
   r'^(?=.{1,254}$)(?=.{1,64}@)[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
 );
+final _strongPasswordRegex = RegExp(
+  r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$',
+);
 
 bool _isValidEmailAddress(String email) =>
     _emailRegex.hasMatch(email) && !email.contains('..');
+bool isStrongPassword(String password) =>
+    _strongPasswordRegex.hasMatch(password);
+String limitProfileDescription(String description) {
+  final normalized = description.trim();
+  if (normalized.length <= 50) return normalized;
+  return normalized.substring(0, 50);
+}
 
 abstract class AuthService {
   Stream<AppUser?> authStateChanges();
@@ -47,6 +57,7 @@ class MockAuthService implements AuthService {
   final StreamController<AppUser?> _controller =
       StreamController<AppUser?>.broadcast();
   final Map<String, AppUser> _accountsByEmail = {};
+  final Map<String, String> _passwordsByEmail = {};
   final Map<String, String> _emailByUsername = {};
   AppUser? _currentUser;
 
@@ -62,18 +73,11 @@ class MockAuthService implements AuthService {
   @override
   Future<AppUser> signInWithEmail(String email, String password) async {
     final normalizedEmail = email.trim().toLowerCase();
-    _currentUser = _accountsByEmail[normalizedEmail] ??
-        AppUser(
-          id: 'mock_${DateTime.now().microsecondsSinceEpoch}',
-          role: UserRole.customer,
-          name: normalizedEmail.split('@').first,
-          phone: '',
-          email: normalizedEmail,
-          photoUrl: '',
-          verificationStatus: VerificationStatus.verified,
-          createdAt: DateTime.now(),
-        );
-    _accountsByEmail[normalizedEmail] = _currentUser!;
+    final account = _accountsByEmail[normalizedEmail];
+    if (account == null || _passwordsByEmail[normalizedEmail] != password) {
+      throw StateError('Invalid email or password.');
+    }
+    _currentUser = account;
     _controller.add(_currentUser);
     return _currentUser!;
   }
@@ -90,6 +94,11 @@ class MockAuthService implements AuthService {
 
     if (_accountsByEmail.containsKey(normalizedEmail)) {
       throw StateError('This email is already registered.');
+    }
+    if (!isStrongPassword(password)) {
+      throw StateError(
+        'Password must be at least 8 characters with uppercase, lowercase, number, and special character.',
+      );
     }
     if (normalizedUsername.isEmpty) {
       throw StateError('Please provide a username.');
@@ -111,6 +120,7 @@ class MockAuthService implements AuthService {
       createdAt: DateTime.now(),
     );
     _accountsByEmail[normalizedEmail] = _currentUser!;
+    _passwordsByEmail[normalizedEmail] = password;
     _emailByUsername[normalizedUsername] = normalizedEmail;
     _controller.add(_currentUser);
     return _currentUser!;
@@ -143,8 +153,10 @@ class MockAuthService implements AuthService {
 
   @override
   Future<void> updatePassword(String password, String emailOtp) async {
-    if (password.length < 6) {
-      throw StateError('Password must be at least 6 characters.');
+    if (!isStrongPassword(password)) {
+      throw StateError(
+        'Password must be at least 8 characters with uppercase, lowercase, number, and special character.',
+      );
     }
   }
 
@@ -254,10 +266,14 @@ class MockAuthService implements AuthService {
       throw StateError('This email is already registered.');
     }
 
+    final previousPassword = _passwordsByEmail.remove(user.email.toLowerCase());
     _accountsByEmail.remove(user.email.toLowerCase());
     _emailByUsername[user.name.toLowerCase()] = normalized;
     _currentUser = user.copyWith(email: normalized);
     _accountsByEmail[normalized] = _currentUser!;
+    if (previousPassword != null) {
+      _passwordsByEmail[normalized] = previousPassword;
+    }
     _controller.add(_currentUser);
   }
 
@@ -266,6 +282,7 @@ class MockAuthService implements AuthService {
     final user = _currentUser;
     if (user != null) {
       _accountsByEmail.remove(user.email.toLowerCase());
+      _passwordsByEmail.remove(user.email.toLowerCase());
       _emailByUsername.remove(user.name.toLowerCase());
     }
     _currentUser = null;
@@ -502,6 +519,11 @@ class SupabaseAuthService implements AuthService {
     UserRole role = UserRole.customer,
   }) async {
     final normalizedUsername = (username ?? email.split('@').first).trim();
+    if (!isStrongPassword(password)) {
+      throw StateError(
+        'Password must be at least 8 characters with uppercase, lowercase, number, and special character.',
+      );
+    }
     final response = await _supabase.auth.signUp(
       email: email.trim(),
       password: password,
@@ -562,8 +584,10 @@ class SupabaseAuthService implements AuthService {
       throw StateError('No signed-in user.');
     }
     final normalizedOtp = emailOtp.trim();
-    if (password.length < 6) {
-      throw StateError('Password must be at least 6 characters.');
+    if (!isStrongPassword(password)) {
+      throw StateError(
+        'Password must be at least 8 characters with uppercase, lowercase, number, and special character.',
+      );
     }
     if (normalizedOtp.isEmpty) {
       throw StateError('Enter the email verification code.');
@@ -636,8 +660,7 @@ class SupabaseAuthService implements AuthService {
     }
     final profile = await _fetchProfile(user.id);
     final lastChangedRaw =
-        (profile?['username_updated_at'] ?? profile?['updated_at'])
-            ?.toString();
+        (profile?['username_updated_at'] ?? profile?['updated_at'])?.toString();
     final lastChanged = DateTime.tryParse(lastChangedRaw ?? '');
     if (lastChanged != null &&
         DateTime.now().toUtc().difference(lastChanged.toUtc()) <
@@ -744,7 +767,7 @@ class SupabaseAuthService implements AuthService {
     if (user == null) {
       throw StateError('No signed-in user.');
     }
-    final normalized = description.trim();
+    final normalized = limitProfileDescription(description);
     await _updateProfile(user.id, {'description': normalized});
     if (_resolvedCurrentUser != null) {
       _resolvedCurrentUser =

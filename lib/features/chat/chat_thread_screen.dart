@@ -101,17 +101,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   Future<void> _deleteMessage(ChatMessage message) async {
     await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Delete message'),
         content: const Text('Are you sure you want to delete this message?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               try {
                 await ref.read(chatServiceProvider).deleteMessage(
                       threadId: message.threadId,
@@ -139,19 +139,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   Future<void> _clearAllMessages() async {
     await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Clear all messages'),
         content: const Text(
           'Are you sure you want to clear all messages in this conversation? This cannot be undone.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               try {
                 await ref.read(chatServiceProvider).clearMessages(
                       widget.threadId,

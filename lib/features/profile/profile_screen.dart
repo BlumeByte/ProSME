@@ -65,12 +65,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           user: user,
           uploading: _uploadingPhoto,
           onChangePhoto: () => _changeProfilePhoto(authService),
-          onOpenSettings: () => _showSettingsSheet(
-            context,
-            ref,
-            authService,
-            user,
-          ),
         ),
         const SizedBox(height: 20),
         const _SectionTitle(title: 'Favourites'),
@@ -100,11 +94,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           const Divider(),
         ],
         _SettingsTile(
-          icon: Icons.settings_outlined,
-          title: 'Account and app settings',
-          subtitle: 'Username, phone, email, language, notifications, privacy.',
+          icon: Icons.manage_accounts_outlined,
+          title: 'Account settings',
+          subtitle: 'Username, phone, email, password, and privacy.',
           trailingText: 'Open',
-          onTap: () => _showSettingsSheet(context, ref, authService, user),
+          onTap: () =>
+              _showAccountSettingsSheet(context, ref, authService, user),
+        ),
+        const Divider(),
+        _SettingsTile(
+          icon: Icons.tune_outlined,
+          title: 'App settings',
+          subtitle: 'Language, dark mode, and notifications.',
+          trailingText: 'Open',
+          onTap: () => _showAppSettingsSheet(context, ref, user),
         ),
         const SizedBox(height: 8),
         ListTile(
@@ -598,6 +601,7 @@ Future<void> _showDescriptionDialog(
     title: 'Profile description',
     hintText: 'What do you do?',
     initialValue: currentDescription,
+    maxLength: 50,
   );
   if (description == null) return;
   try {
@@ -657,6 +661,7 @@ Future<String?> _showEditDialog({
   required String hintText,
   required String initialValue,
   TextInputType? keyboardType,
+  int? maxLength,
 }) async {
   final controller = TextEditingController(text: initialValue);
   final result = await showDialog<String>(
@@ -666,6 +671,7 @@ Future<String?> _showEditDialog({
       content: TextField(
         controller: controller,
         keyboardType: keyboardType,
+        maxLength: maxLength,
         decoration: InputDecoration(hintText: hintText),
       ),
       actions: [
@@ -709,10 +715,9 @@ Future<void> _showInfoSheet(
   );
 }
 
-Future<void> _showSettingsSheet(
+Future<void> _showAppSettingsSheet(
   BuildContext context,
   WidgetRef ref,
-  AuthService authService,
   AppUser user,
 ) async {
   var isDarkMode = ref.read(themeModeControllerProvider) == ThemeMode.dark;
@@ -772,7 +777,7 @@ Future<void> _showSettingsSheet(
                   children: [
                     Expanded(
                       child: Text(
-                        'Settings',
+                        'App settings',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
@@ -846,135 +851,178 @@ Future<void> _showSettingsSheet(
                   },
                 ),
                 const SizedBox(height: 10),
-                const Divider(),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.person_outline),
-                  title: Text(user.name),
-                  subtitle: const Text('Username or company display name'),
-                  trailing: const Text('Edit'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _showChangeUsernameDialog(context, authService, user.name);
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.phone_outlined),
-                  title: Text(user.phone.isEmpty ? 'Add phone' : user.phone),
-                  subtitle: const Text('Phone number and country code'),
-                  trailing: const Text('Edit'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _showChangePhoneDialog(
-                      context,
-                      authService,
-                      user.phone,
-                      user.country,
-                    );
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.public_outlined),
-                  title: Text(user.country),
-                  subtitle: Text('Country code ${user.countryCode}'),
-                  trailing: const Text('Edit'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _showCountryDialog(context, authService, user.country);
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.badge_outlined),
-                  title: Text(
-                    user.description.isEmpty
-                        ? 'Add profile description'
-                        : user.description,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    user.role == UserRole.artisan
-                        ? 'Company or artisan profile description'
-                        : 'Customer profile description',
-                  ),
-                  trailing: const Text('Edit'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _showDescriptionDialog(
-                      context,
-                      authService,
-                      user.description,
-                    );
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.alternate_email_outlined),
-                  title: Text(user.email),
-                  trailing: const Text('Edit'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _showChangeEmailDialog(context, authService, user.email);
-                  },
-                ),
-                const Divider(),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.security_outlined),
-                  title: const Text('Account security'),
-                  subtitle: const Text(
-                    'Email codes, password recovery, and Google verification are handled by Supabase.',
-                  ),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _showSecuritySheet(context, authService);
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.privacy_tip_outlined),
-                  title: const Text('Privacy'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    context.push(RouteNames.privacy);
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.support_agent_outlined),
-                  title: const Text('Support'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    context.push(RouteNames.aiSupport);
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.description_outlined),
-                  title: const Text('Terms of Service'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    context.push(RouteNames.terms);
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.info_outline),
-                  title: const Text('About'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _showInfoSheet(
-                      context,
-                      'About Pro SME',
-                      'Pro SME helps customers connect with verified SMEs and artisans.',
-                    );
-                  },
-                ),
               ],
             ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+Future<void> _showAccountSettingsSheet(
+  BuildContext context,
+  WidgetRef ref,
+  AuthService authService,
+  AppUser user,
+) async {
+  if (!context.mounted) return;
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (context) => SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Account settings',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Close',
+                  ),
+                ],
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.person_outline),
+                title: Text(user.name),
+                subtitle: const Text('Username or company display name'),
+                trailing: const Text('Edit'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showChangeUsernameDialog(context, authService, user.name);
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.phone_outlined),
+                title: Text(user.phone.isEmpty ? 'Add phone' : user.phone),
+                subtitle: const Text('Phone number and country code'),
+                trailing: const Text('Edit'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showChangePhoneDialog(
+                    context,
+                    authService,
+                    user.phone,
+                    user.country,
+                  );
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.public_outlined),
+                title: Text(user.country),
+                subtitle: Text('Country code ${user.countryCode}'),
+                trailing: const Text('Edit'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showCountryDialog(context, authService, user.country);
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.badge_outlined),
+                title: Text(
+                  user.description.isEmpty
+                      ? 'Add profile description'
+                      : user.description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  user.role == UserRole.artisan
+                      ? 'Company or artisan profile description'
+                      : 'Customer profile description',
+                ),
+                trailing: const Text('Edit'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showDescriptionDialog(
+                    context,
+                    authService,
+                    user.description,
+                  );
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.alternate_email_outlined),
+                title: Text(user.email),
+                trailing: const Text('Edit'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showChangeEmailDialog(context, authService, user.email);
+                },
+              ),
+              const Divider(),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.security_outlined),
+                title: const Text('Account security'),
+                subtitle: const Text(
+                  'Email codes, password recovery, and Google verification are handled by Supabase.',
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showSecuritySheet(context, authService);
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.privacy_tip_outlined),
+                title: const Text('Privacy'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  context.push(RouteNames.privacy);
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.support_agent_outlined),
+                title: const Text('Support'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  context.push(RouteNames.aiSupport);
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.description_outlined),
+                title: const Text('Terms of Service'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  context.push(RouteNames.terms);
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.info_outline),
+                title: const Text('About'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showInfoSheet(
+                    context,
+                    'About Pro SME',
+                    'Pro SME helps customers connect with verified SMEs and artisans.',
+                  );
+                },
+              ),
+            ],
           ),
         ),
       ),
@@ -1044,78 +1092,73 @@ class _ProfilePhotoHeader extends StatelessWidget {
     required this.user,
     required this.uploading,
     required this.onChangePhoto,
-    required this.onOpenSettings,
   });
 
   final AppUser user;
   final bool uploading;
   final VoidCallback onChangePhoto;
-  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final imageProvider = _profileImageProvider(user.photoUrl);
     final hasPhoto = imageProvider != null;
-    return Row(
-      children: [
-        Stack(
-          alignment: Alignment.bottomRight,
-          children: [
-            CircleAvatar(
-              radius: 36,
-              backgroundColor: scheme.primaryContainer,
-              backgroundImage: imageProvider,
-              child: uploading
-                  ? const SizedBox.square(
-                      dimension: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : hasPhoto
-                      ? null
-                      : Text(
-                          user.name.trim().isEmpty
-                              ? 'U'
-                              : user.name.trim()[0].toUpperCase(),
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-            ),
-            IconButton.filled(
-              onPressed: uploading ? null : onChangePhoto,
-              icon: const Icon(Icons.photo_camera_outlined, size: 18),
-              tooltip: 'Change profile image',
-            ),
-          ],
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            alignment: Alignment.bottomRight,
             children: [
-              Text(
-                user.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+              CircleAvatar(
+                radius: 52,
+                backgroundColor: scheme.primaryContainer,
+                backgroundImage: imageProvider,
+                child: uploading
+                    ? const SizedBox.square(
+                        dimension: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : hasPhoto
+                        ? null
+                        : Text(
+                            user.name.trim().isEmpty
+                                ? 'U'
+                                : user.name.trim()[0].toUpperCase(),
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                user.role == UserRole.artisan
-                    ? 'Artisan profile'
-                    : 'Customer profile',
-                style: TextStyle(color: scheme.onSurfaceVariant),
+              IconButton.filled(
+                onPressed: uploading ? null : onChangePhoto,
+                icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                tooltip: 'Change profile image',
               ),
             ],
           ),
-        ),
-        IconButton.outlined(
-          onPressed: onOpenSettings,
-          icon: const Icon(Icons.settings_outlined),
-          tooltip: 'Settings',
-        ),
-      ],
+          const SizedBox(height: 12),
+          Text(
+            user.name,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            user.description.trim().isEmpty
+                ? (user.role == UserRole.artisan
+                    ? 'Artisan profile'
+                    : 'Customer profile')
+                : user.description.trim(),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: scheme.onSurfaceVariant),
+          ),
+        ],
+      ),
     );
   }
 

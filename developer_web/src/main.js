@@ -61,6 +61,24 @@ const esc = (value) =>
 
 const normalize = (value) => String(value ?? '').trim();
 const lower = (value) => normalize(value).toLowerCase();
+const validEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalize(value));
+const generateStrongPassword = () => {
+  const lowercase = 'abcdefghijkmnopqrstuvwxyz';
+  const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const numbers = '23456789';
+  const symbols = '!@#$%^&*';
+  const all = lowercase + uppercase + numbers + symbols;
+  const pick = (chars) => chars[crypto.getRandomValues(new Uint32Array(1))[0] % chars.length];
+  return [
+    pick(lowercase),
+    pick(uppercase),
+    pick(numbers),
+    pick(symbols),
+    ...Array.from({ length: 10 }, () => pick(all)),
+  ]
+    .sort(() => crypto.getRandomValues(new Uint32Array(1))[0] - 2147483648)
+    .join('');
+};
 
 const money = (value) =>
   Number(value || 0).toLocaleString('en-GH', {
@@ -452,8 +470,13 @@ async function deleteTableRow(table, id) {
 async function createAccount(role) {
   const email = normalize(window.prompt(`New ${role} email`, ''));
   if (!email) return;
+  if (!validEmail(email)) {
+    state.error = 'Enter a complete email address.';
+    render();
+    return;
+  }
   const fullName = normalize(window.prompt('Full name', '')) || email.split('@')[0];
-  const randomPassword = crypto.getRandomValues(new Uint32Array(2)).join('-') + 'Aa!';
+  const randomPassword = generateStrongPassword();
 
   await runAction(async () => {
     await developerAction('createUser', {
@@ -462,7 +485,8 @@ async function createAccount(role) {
       role,
       full_name: fullName,
     });
-    setNotice(`${role} created. Temporary password: ${randomPassword}`);
+    await developerAction('sendPasswordReset', { email });
+    setNotice(`${role} created. Password setup link sent to ${email}.`);
     await refreshData();
   });
 }
@@ -493,6 +517,10 @@ async function importAccounts(file) {
       .filter((account) => account.email);
 
     if (!accounts.length) throw new Error('No rows with an email column were found.');
+    const badEmails = accounts.filter((account) => !validEmail(account.email));
+    if (badEmails.length) {
+      throw new Error(`Fix invalid email addresses before importing: ${badEmails.map((account) => account.email).slice(0, 5).join(', ')}`);
+    }
     const result = await developerAction('bulkCreateUsers', { accounts });
     const created = result.created?.length || 0;
     const failed = result.failed?.length || 0;
@@ -610,10 +638,11 @@ async function sendPasswordReset(email) {
 
 async function randomizePassword(userId, email) {
   if (!window.confirm(`Create a new random password for ${email}?`)) return;
-  const password = crypto.getRandomValues(new Uint32Array(2)).join('-') + 'Aa!';
+  const password = generateStrongPassword();
   await runAction(async () => {
     await developerAction('setPassword', { userId, password });
-    setNotice(`New temporary password for ${email}: ${password}`);
+    await developerAction('sendPasswordReset', { email });
+    setNotice(`New secure password created. Password setup link sent to ${email}.`);
   });
 }
 

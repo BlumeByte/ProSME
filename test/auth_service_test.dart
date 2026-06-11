@@ -5,7 +5,20 @@ import 'package:prosme/services/auth_service.dart';
 void main() {
   test('MockAuthService signs in and updates role', () async {
     final service = MockAuthService();
-    final user = await service.signInWithEmail('demo@example.com', 'pass');
+    await service.signUpWithEmail(
+      'demo@example.com',
+      'Valid1!pass',
+      username: 'demo_user',
+    );
+    await service.signOut();
+
+    expect(
+      () => service.signInWithEmail('demo@example.com', 'wrong-password'),
+      throwsA(isA<StateError>()),
+    );
+
+    final user =
+        await service.signInWithEmail('demo@example.com', 'Valid1!pass');
 
     expect(user.email, 'demo@example.com');
 
@@ -13,12 +26,14 @@ void main() {
     expect(service.currentUser?.role, UserRole.artisan);
   });
 
-  test('MockAuthService enforces unique usernames and releases on change/delete', () async {
+  test(
+      'MockAuthService enforces unique usernames and releases on change/delete',
+      () async {
     final service = MockAuthService();
 
     final first = await service.signUpWithEmail(
       'first@example.com',
-      'pass',
+      'Valid1!pass',
       username: 'first_user',
     );
     expect(first.name, 'first_user');
@@ -26,7 +41,7 @@ void main() {
     expect(
       () => service.signUpWithEmail(
         'second@example.com',
-        'pass',
+        'Valid1!pass',
         username: 'first_user',
       ),
       throwsA(isA<StateError>()),
@@ -48,7 +63,7 @@ void main() {
 
     final second = await service.signUpWithEmail(
       'second@example.com',
-      'pass',
+      'Valid1!pass',
       username: 'first_user',
     );
     expect(second.email, 'second@example.com');
@@ -57,7 +72,7 @@ void main() {
 
     final third = await service.signUpWithEmail(
       'third@example.com',
-      'pass',
+      'Valid1!pass',
       username: 'first_user',
     );
     expect(third.email, 'third@example.com');
