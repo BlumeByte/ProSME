@@ -22,9 +22,23 @@ const json = (status: number, body: Record<string, unknown>) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
+const firstEnv = (keys: string[]) => {
+  for (const key of keys) {
+    const value = Deno.env.get(key)?.trim();
+    if (value) return value;
+  }
+  return '';
+};
+
 const requiredEnv = (key: string) => {
-  const value = Deno.env.get(key);
+  const value = firstEnv([key]);
   if (!value) throw new Error(`${key} is not configured`);
+  return value;
+};
+
+const requiredAnyEnv = (keys: string[]) => {
+  const value = firstEnv(keys);
+  if (!value) throw new Error(`${keys.join(' or ')} is not configured`);
   return value;
 };
 
@@ -145,8 +159,8 @@ Deno.serve(async (req) => {
     const supabaseUrl = requiredEnv('SUPABASE_URL');
     const anonKey = requiredEnv('SUPABASE_ANON_KEY');
     const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY');
-    const resendApiKey = requiredEnv('RESEND_API_KEY');
-    const from = requiredEnv('RESEND_FROM_EMAIL');
+    const resendApiKey = requiredAnyEnv(['RESEND_API_KEY', 'ProSME']);
+    const from = requiredAnyEnv(['RESEND_FROM_EMAIL', 'PROSME_FROM_EMAIL']);
 
     const auth = await authorize(req, supabaseUrl, anonKey);
 
