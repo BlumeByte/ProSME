@@ -1,0 +1,6 @@
+{
+  "SUPABASE_URL": "https://your-project-ref.supabase.co",
+  "SUPABASE_ANON_KEY": "your-supabase-publishable-or-anon-key",
+  "GOOGLE_OAUTH_REDIRECT_URL": "com.prosme.app://login-callback",
+  "DEV_MODE": "false"
+}
