@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/widgets/app_scaffold.dart';
 import '../../routes/route_names.dart';
@@ -43,11 +42,6 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
         if (didPop) return;
         if (currentIndex != 0) {
           setState(() => _currentIndex = 0);
-          return;
-        }
-        final shouldExit = await _confirmExit(context);
-        if (shouldExit) {
-          SystemNavigator.pop();
         }
       },
       child: AppScaffold(
@@ -120,25 +114,4 @@ class _NavIconWithBadge extends StatelessWidget {
     if (count <= 0) return Icon(icon);
     return Badge.count(count: count, child: Icon(icon));
   }
-}
-
-Future<bool> _confirmExit(BuildContext context) async {
-  return await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Exit ProSME?'),
-          content: const Text('Press Exit to close the app.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Stay'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Exit'),
-            ),
-          ],
-        ),
-      ) ??
-      false;
 }

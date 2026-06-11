@@ -73,31 +73,35 @@ class AdminService {
     if (client == null) return;
     yield* client
         .from('profiles')
-        .stream(primaryKey: ['id'])
-        .eq('role', 'artisan')
-        .asyncMap((_) => fetchVerificationQueue());
+        .stream(primaryKey: ['id']).asyncMap((_) => fetchVerificationQueue());
   }
 
   Future<List<ArtisanProfile>> fetchVerificationQueue() async {
     if (_supabase == null) return const [];
     try {
-      final rows = await _supabase
-          .from('profiles')
-          .select(
-            'id,verification_status,national_id_url,momo_number,location,categories,bio,rating_summary,role',
-          )
-          .eq('role', 'artisan');
+      final rows = await _supabase.from('profiles').select(
+            'id,phone,role,verification_status,national_id_url,national_id_front_url,national_id_back_url,momo_number,location,categories,bio,rating_summary',
+          );
       return (rows as List<dynamic>)
           .map((row) => Map<String, dynamic>.from(row as Map))
           .map((row) => ArtisanProfile(
                 userId: (row['id'] ?? '').toString(),
+                role: UserRole.values.firstWhere(
+                  (role) => role.name == (row['role'] ?? '').toString(),
+                  orElse: () => UserRole.artisan,
+                ),
+                phone: (row['phone'] ?? '').toString(),
                 verifiedStatus: _verificationFrom(
                   (row['verification_status'] ?? row['verifiedStatus'])
                       ?.toString(),
                 ),
-                nationalIdUrl:
-                    (row['national_id_url'] ?? row['nationalIdUrl'] ?? '')
-                        .toString(),
+                nationalIdUrl: (row['national_id_front_url'] ??
+                        row['national_id_url'] ??
+                        row['nationalIdUrl'] ??
+                        '')
+                    .toString(),
+                nationalIdBackUrl:
+                    (row['national_id_back_url'] ?? '').toString(),
                 momoNumber:
                     (row['momo_number'] ?? row['momoNumber'] ?? '').toString(),
                 location: (row['location'] ?? '').toString(),
@@ -110,8 +114,9 @@ class AdminService {
                             ?.toDouble() ??
                         0,
               ))
-          .where(
-              (profile) => profile.verifiedStatus == VerificationStatus.pending)
+          .where((profile) =>
+              profile.verifiedStatus == VerificationStatus.pending &&
+              profile.nationalIdUrl.isNotEmpty)
           .toList(growable: false);
     } catch (_) {
       return const [];
@@ -185,6 +190,7 @@ class AdminService {
 
   Future<void> submitArtisanVerification({
     required String userId,
+    required String phone,
     required String nationalIdFrontUrl,
     required String nationalIdBackUrl,
     List<String> businessCertificateUrls = const [],
@@ -193,6 +199,7 @@ class AdminService {
     if (client == null) return;
     await client.from('profiles').update({
       'verification_status': VerificationStatus.pending.name,
+      'phone': phone,
       'national_id_url': nationalIdFrontUrl,
       'national_id_front_url': nationalIdFrontUrl,
       'national_id_back_url': nationalIdBackUrl,
@@ -200,18 +207,20 @@ class AdminService {
       'verification_submitted_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', userId);
     await client.from('admin_notifications').insert({
-      'type': 'artisan_verification',
-      'title': 'New artisan verification',
-      'body': 'An artisan uploaded national ID documents for review.',
+      'type': 'account_verification',
+      'title': 'New account verification',
+      'body':
+          'An account uploaded national ID documents for review. Phone: $phone',
       'actor_id': userId,
     });
     await client.from('email_outbox').insert({
       'to_email': 'blumebyte@gmail.com',
-      'subject': 'New ProSME artisan verification',
+      'subject': 'New ProSME account verification',
       'body':
-          'An artisan uploaded front and back ID documents for verification. Review them in the Support dashboard.',
+          'An account uploaded front and back ID documents for verification. Phone: $phone. Review them in the Support dashboard.',
       'related_user_id': userId,
     });
+    await _flushEmailOutbox(relatedUserId: userId);
   }
 
   Future<void> reviewArtisan({
@@ -237,13 +246,30 @@ class AdminService {
     await client.from('email_outbox').insert({
       'to_email': null,
       'subject': approved
-          ? 'Your ProSME artisan account is verified'
-          : 'Your ProSME artisan verification needs attention',
+          ? 'Your ProSME account is verified'
+          : 'Your ProSME verification needs attention',
       'body': approved
-          ? 'Your artisan account has been verified and can now publish services.'
-          : 'Your artisan verification was rejected. Notes: $notes',
+          ? 'Your account has been verified and now shows a public checkmark.'
+          : 'Your verification was rejected. Notes: $notes',
       'related_user_id': userId,
     });
+    await _flushEmailOutbox(relatedUserId: userId);
+  }
+
+  Future<void> _flushEmailOutbox({String? relatedUserId}) async {
+    final client = _supabase;
+    if (client == null) return;
+    try {
+      await client.functions.invoke(
+        'send-email-outbox',
+        body: {
+          if (relatedUserId != null) 'relatedUserId': relatedUserId,
+          'limit': 10,
+        },
+      );
+    } catch (_) {
+      // Email delivery is retried from the outbox; never block the user action.
+    }
   }
 
   Future<void> submitSupportReport({
@@ -302,8 +328,9 @@ class AdminService {
             id: (row['id'] ?? '').toString(),
             title: (row['title'] ?? 'Support update').toString(),
             body: (row['body'] ?? '').toString(),
-            createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()) ??
-                DateTime.now(),
+            createdAt:
+                DateTime.tryParse((row['created_at'] ?? '').toString()) ??
+                    DateTime.now(),
           ),
         )
         .toList(growable: false);

@@ -82,7 +82,21 @@ drop policy if exists "Authenticated users can create email tasks" on public.ema
 create policy "Authenticated users can create email tasks"
 on public.email_outbox for insert
 to authenticated
-with check (true);
+with check (
+  (
+    related_user_id = (select auth.uid())
+    and (
+      to_email is null
+      or lower(to_email) = 'blumebyte@gmail.com'
+    )
+  )
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = (select auth.uid())
+      and p.role in ('admin', 'developer')
+  )
+);
 
 drop policy if exists "Developers can read sms outbox" on public.sms_outbox;
 create policy "Developers can read sms outbox"
@@ -101,7 +115,15 @@ drop policy if exists "Authenticated users can create sms tasks" on public.sms_o
 create policy "Authenticated users can create sms tasks"
 on public.sms_outbox for insert
 to authenticated
-with check (true);
+with check (
+  related_user_id = (select auth.uid())
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = (select auth.uid())
+      and p.role in ('admin', 'developer')
+  )
+);
 
 create or replace function public.queue_profile_notification(
   target_user_id uuid,

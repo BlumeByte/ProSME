@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
         country: country || undefined,
         location,
         role,
-        verification_status: role === 'artisan' ? 'pending' : 'verified',
+        verification_status: 'pending',
       });
 
       if (profileError) return fail(profileError.message);
@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
           country: cleanNullable(account.country),
           location: clean(account.location),
           role,
-          verification_status: role === 'artisan' ? 'pending' : 'verified',
+          verification_status: 'pending',
         });
 
         if (profileError) {

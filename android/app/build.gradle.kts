@@ -12,6 +12,9 @@ val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
+val requestedReleaseBuild = gradle.startParameter.taskNames.any {
+    it.contains("Release", ignoreCase = true)
+}
 
 android {
     namespace = "com.prosme.app"
@@ -54,6 +57,11 @@ android {
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
+                if (requestedReleaseBuild) {
+                    throw GradleException(
+                        "Release signing is not configured. Create android/key.properties with your Play signing keystore before publishing."
+                    )
+                }
                 signingConfigs.getByName("debug")
             }
             isMinifyEnabled = true

@@ -100,7 +100,7 @@ class _VerificationQueue extends ConsumerWidget {
         if (queue.isEmpty) {
           return const _AdminInfoPanel(
             title: 'No pending verifications',
-            body: 'New artisan ID submissions will appear here automatically.',
+            body: 'New account ID submissions will appear here automatically.',
             icon: Icons.verified_outlined,
           );
         }
@@ -122,7 +122,7 @@ class _VerificationQueue extends ConsumerWidget {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Artisan ${profile.userId}',
+                            '${profile.role.name} ${profile.userId}',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                         ),
@@ -130,7 +130,11 @@ class _VerificationQueue extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text('ID: ${profile.nationalIdUrl}'),
+                    Text('Front ID: ${profile.nationalIdUrl}'),
+                    if (profile.nationalIdBackUrl.isNotEmpty)
+                      Text('Back ID: ${profile.nationalIdBackUrl}'),
+                    if (profile.phone.isNotEmpty)
+                      Text('Phone: ${profile.phone}'),
                     if (profile.location.isNotEmpty)
                       Text('Location: ${profile.location}'),
                     if (profile.categories.isNotEmpty)
@@ -189,7 +193,7 @@ class _VerificationQueue extends ConsumerWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(approved ? 'Artisan verified.' : 'Artisan rejected.'),
+            content: Text(approved ? 'Account verified.' : 'Account rejected.'),
           ),
         );
       }

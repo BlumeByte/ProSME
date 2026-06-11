@@ -1,7 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image/image.dart' as img;
 
 import '../../config/constants.dart';
 import '../../core/widgets/primary_button.dart';
@@ -19,7 +22,9 @@ class ArtisanVerificationScreen extends ConsumerStatefulWidget {
 
 class _ArtisanVerificationScreenState
     extends ConsumerState<ArtisanVerificationScreen> {
-  static const _maxBytes = 1024 * 1024;
+  static const _maxUploadBytes = 1024 * 1024;
+  static const _maxSourceImageBytes = 5 * 1024 * 1024;
+  final _phoneController = TextEditingController();
   PlatformFile? _frontId;
   PlatformFile? _backId;
   final List<PlatformFile> _certificates = [];
@@ -31,7 +36,15 @@ class _ArtisanVerificationScreenState
   @override
   void initState() {
     super.initState();
+    final user = ref.read(authStateProvider).valueOrNull;
+    _phoneController.text = user?.phone ?? '';
     _loadVerificationStatus();
+  }
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadVerificationStatus() async {
@@ -45,12 +58,16 @@ class _ArtisanVerificationScreenState
           .read(supabaseClientProvider)
           .from('profiles')
           .select(
-            'national_id_front_url,national_id_back_url,verification_retry_after',
+            'phone,national_id_front_url,national_id_back_url,verification_retry_after',
           )
           .eq('id', user.id)
           .maybeSingle();
       if (!mounted) return;
       setState(() {
+        final phone = (row?['phone'] ?? '').toString();
+        if (phone.isNotEmpty && _phoneController.text.trim().isEmpty) {
+          _phoneController.text = phone;
+        }
         _hasSubmittedDocuments =
             ((row?['national_id_front_url'] ?? '') as String).isNotEmpty ||
                 ((row?['national_id_back_url'] ?? '') as String).isNotEmpty;
@@ -96,8 +113,12 @@ class _ArtisanVerificationScreenState
       _showMessage('Only PDF, JPG, JPEG, or PNG files are allowed.');
       return null;
     }
-    if (file.size > _maxBytes) {
-      _showMessage('File must be 1 MB or smaller.');
+    if (extension == 'pdf' && file.size > _maxUploadBytes) {
+      _showMessage('PDF files must be 1 MB or smaller.');
+      return null;
+    }
+    if (extension != 'pdf' && file.size > _maxSourceImageBytes) {
+      _showMessage('Images must be 5 MB or smaller before compression.');
       return null;
     }
     if (file.bytes == null) {
@@ -113,13 +134,65 @@ class _ArtisanVerificationScreenState
     required PlatformFile file,
   }) async {
     final client = ref.read(supabaseClientProvider);
-    final extension = (file.extension ?? 'bin').toLowerCase();
+    final upload = _prepareUpload(file);
     final path =
-        '$userId/${DateTime.now().microsecondsSinceEpoch}_$label.$extension';
+        '$userId/${DateTime.now().microsecondsSinceEpoch}_$label.${upload.extension}';
     await client.storage.from('artisan-verification').uploadBinary(
-        path, file.bytes!,
-        fileOptions: const FileOptions(upsert: true));
+          path,
+          upload.bytes,
+          fileOptions: FileOptions(
+            upsert: true,
+            contentType: upload.contentType,
+          ),
+        );
     return client.storage.from('artisan-verification').getPublicUrl(path);
+  }
+
+  _PreparedUpload _prepareUpload(PlatformFile file) {
+    final extension = (file.extension ?? '').toLowerCase();
+    final bytes = file.bytes;
+    if (bytes == null) {
+      throw StateError('Could not read the selected file.');
+    }
+    if (extension == 'pdf') {
+      if (bytes.length > _maxUploadBytes) {
+        throw StateError('PDF files must be 1 MB or smaller.');
+      }
+      return _PreparedUpload(
+        bytes: bytes,
+        extension: 'pdf',
+        contentType: 'application/pdf',
+      );
+    }
+
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) {
+      throw StateError('Could not process the selected image.');
+    }
+    final largestSide =
+        decoded.width > decoded.height ? decoded.width : decoded.height;
+    final resized = largestSide > 1100
+        ? img.copyResize(
+            decoded,
+            width: decoded.width >= decoded.height ? 1100 : null,
+            height: decoded.height > decoded.width ? 1100 : null,
+          )
+        : decoded;
+
+    var quality = 72;
+    var compressed = img.encodeJpg(resized, quality: quality);
+    while (compressed.length > _maxUploadBytes && quality > 38) {
+      quality -= 8;
+      compressed = img.encodeJpg(resized, quality: quality);
+    }
+    if (compressed.length > _maxUploadBytes) {
+      throw StateError('Image is still larger than 1 MB after compression.');
+    }
+    return _PreparedUpload(
+      bytes: Uint8List.fromList(compressed),
+      extension: 'jpg',
+      contentType: 'image/jpeg',
+    );
   }
 
   Future<void> _submit() async {
@@ -130,6 +203,11 @@ class _ArtisanVerificationScreenState
     }
     if (_frontId == null || _backId == null) {
       _showMessage('Front and back of National ID are required.');
+      return;
+    }
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) {
+      _showMessage('Telephone number is required for verification.');
       return;
     }
 
@@ -157,6 +235,7 @@ class _ArtisanVerificationScreenState
       }
       await ref.read(adminServiceProvider).submitArtisanVerification(
             userId: user.id,
+            phone: phone,
             nationalIdFrontUrl: frontUrl,
             nationalIdBackUrl: backUrl,
             businessCertificateUrls: certificateUrls,
@@ -164,11 +243,16 @@ class _ArtisanVerificationScreenState
       if (!mounted) return;
       setState(() => _hasSubmittedDocuments = true);
       _showMessage('Verification sent to Support for review.');
-      context.go(RouteNames.artisanHome);
-    } catch (_) {
+      context.go(
+        user.role == UserRole.artisan
+            ? RouteNames.artisanHome
+            : RouteNames.home,
+      );
+    } catch (error) {
       if (!mounted) return;
-      _showMessage(
-          'Could not submit verification. Check Supabase storage setup.');
+      _showMessage(error is StateError
+          ? error.message
+          : 'Could not submit verification. Check Supabase storage setup.');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -239,10 +323,19 @@ class _ArtisanVerificationScreenState
             ),
             const SizedBox(height: 8),
             const Text(
-              'PDF or image only. Each file must be 1 MB or smaller.',
+              'PDF up to 1 MB, or JPG/PNG up to 5 MB. Images are resized before review.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
+            TextField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Telephone number *',
+                prefixIcon: Icon(Icons.phone_outlined),
+              ),
+            ),
+            const SizedBox(height: 16),
             _FileTile(
               title: 'National ID front',
               required: true,
@@ -338,9 +431,21 @@ class _FileTile extends StatelessWidget {
       leading: const Icon(Icons.attach_file),
       title: Text(required ? '$title *' : title),
       subtitle:
-          Text(file == null ? 'PDF, JPG, JPEG, PNG. Max 1 MB.' : file!.name),
+          Text(file == null ? 'PDF max 1 MB. Images max 5 MB.' : file!.name),
       trailing: const Icon(Icons.upload_file),
       onTap: onTap,
     );
   }
+}
+
+class _PreparedUpload {
+  const _PreparedUpload({
+    required this.bytes,
+    required this.extension,
+    required this.contentType,
+  });
+
+  final Uint8List bytes;
+  final String extension;
+  final String contentType;
 }

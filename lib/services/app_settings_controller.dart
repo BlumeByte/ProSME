@@ -33,11 +33,11 @@ class AppSettings {
       case 'Dutch':
         return const Locale('nl');
       case 'Ewe':
-        return const Locale('ee');
+        return const Locale('en');
       case 'French':
         return const Locale('fr');
       case 'Ga':
-        return const Locale('gaa');
+        return const Locale('en');
       case 'German':
         return const Locale('de');
       case 'Greek':
@@ -69,7 +69,7 @@ class AppSettings {
       case 'Thai':
         return const Locale('th');
       case 'Twi':
-        return const Locale('ak');
+        return const Locale('en');
       case 'Turkish':
         return const Locale('tr');
       case 'Ukrainian':

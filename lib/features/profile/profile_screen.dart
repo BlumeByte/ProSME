@@ -923,6 +923,7 @@ Future<void> _showAccountSettingsSheet(
   AppUser user,
 ) async {
   if (!context.mounted) return;
+  final parentContext = context;
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -960,7 +961,11 @@ Future<void> _showAccountSettingsSheet(
                 trailing: const Text('Edit'),
                 onTap: () {
                   Navigator.of(context).pop();
-                  _showChangeUsernameDialog(context, authService, user.name);
+                  _showChangeUsernameDialog(
+                    parentContext,
+                    authService,
+                    user.name,
+                  );
                 },
               ),
               ListTile(
@@ -972,7 +977,7 @@ Future<void> _showAccountSettingsSheet(
                 onTap: () {
                   Navigator.of(context).pop();
                   _showChangePhoneDialog(
-                    context,
+                    parentContext,
                     authService,
                     user.phone,
                     user.country,
@@ -987,7 +992,7 @@ Future<void> _showAccountSettingsSheet(
                 trailing: const Text('Edit'),
                 onTap: () {
                   Navigator.of(context).pop();
-                  _showCountryDialog(context, authService, user.country);
+                  _showCountryDialog(parentContext, authService, user.country);
                 },
               ),
               ListTile(
@@ -1009,7 +1014,7 @@ Future<void> _showAccountSettingsSheet(
                 onTap: () {
                   Navigator.of(context).pop();
                   _showDescriptionDialog(
-                    context,
+                    parentContext,
                     authService,
                     user.description,
                   );
@@ -1022,7 +1027,8 @@ Future<void> _showAccountSettingsSheet(
                 trailing: const Text('Edit'),
                 onTap: () {
                   Navigator.of(context).pop();
-                  _showChangeEmailDialog(context, authService, user.email);
+                  _showChangeEmailDialog(
+                      parentContext, authService, user.email);
                 },
               ),
               const Divider(),
@@ -1035,7 +1041,7 @@ Future<void> _showAccountSettingsSheet(
                 ),
                 onTap: () {
                   Navigator.of(context).pop();
-                  _showSecuritySheet(context, authService);
+                  _showSecuritySheet(parentContext, authService);
                 },
               ),
               ListTile(
@@ -1044,7 +1050,7 @@ Future<void> _showAccountSettingsSheet(
                 title: const Text('Privacy'),
                 onTap: () {
                   Navigator.of(context).pop();
-                  context.push(RouteNames.privacy);
+                  parentContext.push(RouteNames.privacy);
                 },
               ),
               ListTile(
@@ -1053,7 +1059,7 @@ Future<void> _showAccountSettingsSheet(
                 title: const Text('Support'),
                 onTap: () {
                   Navigator.of(context).pop();
-                  context.push(RouteNames.aiSupport);
+                  parentContext.push(RouteNames.aiSupport);
                 },
               ),
               ListTile(
@@ -1062,7 +1068,7 @@ Future<void> _showAccountSettingsSheet(
                 title: const Text('Terms of Service'),
                 onTap: () {
                   Navigator.of(context).pop();
-                  context.push(RouteNames.terms);
+                  parentContext.push(RouteNames.terms);
                 },
               ),
               ListTile(
@@ -1072,7 +1078,7 @@ Future<void> _showAccountSettingsSheet(
                 onTap: () {
                   Navigator.of(context).pop();
                   _showInfoSheet(
-                    context,
+                    parentContext,
                     'About Pro SME',
                     'Pro SME helps customers connect with verified SMEs and artisans.',
                   );

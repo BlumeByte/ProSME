@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -9,6 +10,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/widgets/loading_state.dart';
 import '../../core/widgets/safe_back_button.dart';
 import '../../models/chat_models.dart';
+import '../../routes/route_names.dart';
 import '../../services/service_providers.dart';
 
 class ChatThreadScreen extends ConsumerStatefulWidget {
@@ -27,6 +29,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   String? _editingMessageId;
   ChatMessage? _editingMessage;
   List<ChatMessage> _latestMessages = const [];
+  final Set<String> _selectedMessageIds = {};
 
   @override
   void dispose() {
@@ -98,7 +101,56 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     });
   }
 
+  bool get _selectingMessages => _selectedMessageIds.isNotEmpty;
+
+  void _toggleMessageSelection(ChatMessage message) {
+    setState(() {
+      if (_selectedMessageIds.contains(message.id)) {
+        _selectedMessageIds.remove(message.id);
+      } else {
+        _selectedMessageIds.add(message.id);
+      }
+    });
+  }
+
+  void _selectAllMessages() {
+    setState(() {
+      _selectedMessageIds
+        ..clear()
+        ..addAll(_latestMessages.map((message) => message.id));
+    });
+  }
+
+  void _clearSelection() {
+    setState(() => _selectedMessageIds.clear());
+  }
+
+  Future<void> _deleteSelectedMessages() async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null || _selectedMessageIds.isEmpty) return;
+    final ids = _selectedMessageIds.toList(growable: false);
+    try {
+      await ref.read(chatServiceProvider).deleteMessagesForUser(
+            threadId: widget.threadId,
+            userId: user.id,
+            messageIds: ids,
+          );
+      if (!mounted) return;
+      _clearSelection();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${ids.length} message(s) deleted for you.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete messages: $error')),
+      );
+    }
+  }
+
   Future<void> _deleteMessage(ChatMessage message) async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -116,6 +168,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 await ref.read(chatServiceProvider).deleteMessage(
                       threadId: message.threadId,
                       messageId: message.id,
+                      deletedForUserId: user.id,
                     );
                 if (!mounted) return;
                 if (_editingMessageId == message.id) _cancelEdit();
@@ -137,6 +190,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   Future<void> _clearAllMessages() async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -155,6 +210,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               try {
                 await ref.read(chatServiceProvider).clearMessages(
                       widget.threadId,
+                      clearedForUserId: user.id,
                     );
                 if (!mounted) return;
                 _cancelEdit();
@@ -348,33 +404,81 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
-  void _viewProfile(String userId) {
+  Future<void> _viewProfile(String userId) async {
+    Map<String, dynamic>? profile;
+    if (shouldUseSupabase()) {
+      try {
+        final row = await ref
+            .read(supabaseClientProvider)
+            .from('profiles')
+            .select(
+              'id,username,full_name,avatar_url,description,role,verification_status',
+            )
+            .eq('id', userId)
+            .maybeSingle();
+        if (row != null) profile = Map<String, dynamic>.from(row);
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    final name = (profile?['username'] ?? profile?['full_name'] ?? 'User')
+        .toString()
+        .trim();
+    final avatarUrl = (profile?['avatar_url'] ?? '').toString();
+    final description = (profile?['description'] ?? '').toString().trim();
+    final role = (profile?['role'] ?? '').toString();
+    final verified =
+        (profile?['verification_status'] ?? '').toString() == 'verified';
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('User Profile'),
+        title:
+            Text(role == 'artisan' ? 'Professional profile' : 'User profile'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const CircleAvatar(
+              CircleAvatar(
                 radius: 40,
-                child: Icon(Icons.person, size: 40),
+                backgroundImage:
+                    avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                child: avatarUrl.isEmpty
+                    ? const Icon(Icons.person, size: 40)
+                    : null,
               ),
               const SizedBox(height: 16),
-              Text(
-                'User ID: $userId',
-                style: Theme.of(context).textTheme.bodyMedium,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(
+                      name.isEmpty ? 'User' : name,
+                      style: Theme.of(context).textTheme.titleMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (verified) ...[
+                    const SizedBox(width: 6),
+                    const Icon(Icons.verified, color: Colors.blue, size: 18),
+                  ],
+                ],
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Full profile details loading...',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
+              if (description.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(description, textAlign: TextAlign.center),
+              ],
             ],
           ),
         ),
         actions: [
+          if (role == 'artisan')
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                context.push('${RouteNames.artisanProfile}/$userId');
+              },
+              child: const Text('View full profile'),
+            ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Close'),
@@ -392,41 +496,61 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: const SafeBackButton(),
-        title: const Text('Chat'),
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'clear_all') {
-                _clearAllMessages();
-              } else if (value == 'share') {
-                _showShareOptions(_latestMessages);
-              }
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: 'share',
-                child: Row(
-                  children: [
-                    Icon(Icons.ios_share),
-                    SizedBox(width: 8),
-                    Text('Share conversation'),
+        leading: _selectingMessages
+            ? IconButton(
+                onPressed: _clearSelection,
+                icon: const Icon(Icons.close),
+              )
+            : const SafeBackButton(),
+        title: Text(
+          _selectingMessages ? '${_selectedMessageIds.length}' : 'Chat',
+        ),
+        actions: _selectingMessages
+            ? [
+                IconButton(
+                  onPressed: _selectAllMessages,
+                  icon: const Icon(Icons.select_all),
+                  tooltip: 'Select all',
+                ),
+                IconButton(
+                  onPressed: _deleteSelectedMessages,
+                  icon: const Icon(Icons.delete),
+                  tooltip: 'Delete selected',
+                ),
+              ]
+            : [
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'clear_all') {
+                      _clearAllMessages();
+                    } else if (value == 'share') {
+                      _showShareOptions(_latestMessages);
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'share',
+                      child: Row(
+                        children: [
+                          Icon(Icons.ios_share),
+                          SizedBox(width: 8),
+                          Text('Share conversation'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'clear_all',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_sweep),
+                          SizedBox(width: 8),
+                          Text('Clear all messages'),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              PopupMenuItem(
-                value: 'clear_all',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_sweep),
-                    SizedBox(width: 8),
-                    Text('Clear all messages'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
+              ],
       ),
       body: Column(
         children: [
@@ -449,7 +573,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           ),
           Expanded(
             child: StreamBuilder<List<ChatMessage>>(
-              stream: chatService.watchMessages(widget.threadId),
+              stream: chatService.watchMessages(
+                widget.threadId,
+                userId: user?.id,
+              ),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(
@@ -500,16 +627,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   itemBuilder: (context, index) {
                     final message = messages[index];
                     final isMine = user?.id == message.senderId;
+                    final isSelected = _selectedMessageIds.contains(message.id);
                     return Align(
                       alignment:
                           isMine ? Alignment.centerRight : Alignment.centerLeft,
                       child: InkWell(
                         onLongPress: isMine
-                            ? () => _showMessageOptions(context, message)
-                            : () => _viewProfile(message.senderId),
-                        onTap: !isMine
-                            ? () => _viewProfile(message.senderId)
-                            : null,
+                            ? () => _toggleMessageSelection(message)
+                            : () => _toggleMessageSelection(message),
+                        onTap: _selectingMessages
+                            ? () => _toggleMessageSelection(message)
+                            : (!isMine
+                                ? () => _viewProfile(message.senderId)
+                                : () => _showMessageOptions(context, message)),
                         borderRadius: BorderRadius.circular(10),
                         child: Container(
                           constraints: BoxConstraints(
@@ -521,6 +651,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                             color: isMine
                                 ? colorScheme.primary
                                 : colorScheme.surfaceContainerHighest,
+                            border: isSelected
+                                ? Border.all(
+                                    color: colorScheme.primary,
+                                    width: 2,
+                                  )
+                                : null,
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Column(

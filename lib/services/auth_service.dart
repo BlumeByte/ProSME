@@ -115,9 +115,7 @@ class MockAuthService implements AuthService {
       phone: '',
       email: email.trim(),
       photoUrl: '',
-      verificationStatus: role == UserRole.artisan
-          ? VerificationStatus.pending
-          : VerificationStatus.verified,
+      verificationStatus: VerificationStatus.pending,
       createdAt: DateTime.now(),
     );
     _accountsByEmail[normalizedEmail] = _currentUser!;
@@ -138,7 +136,7 @@ class MockAuthService implements AuthService {
       phone: '',
       email: email,
       photoUrl: '',
-      verificationStatus: VerificationStatus.verified,
+      verificationStatus: VerificationStatus.pending,
       createdAt: DateTime.now(),
     );
     _accountsByEmail[email] = _currentUser!;
@@ -307,6 +305,8 @@ class SupabaseAuthService implements AuthService {
   final SupabaseClient _supabase;
   static const String _defaultDisplayName = 'New User';
   AppUser? _resolvedCurrentUser;
+  final StreamController<AppUser?> _profileController =
+      StreamController<AppUser?>.broadcast();
 
   bool _isMissingProfilesTable(Object error) {
     if (error is! PostgrestException) return false;
@@ -359,9 +359,7 @@ class SupabaseAuthService implements AuthService {
       'is_busy': existingProfile?['is_busy'] ?? false,
       'role': role,
       'verification_status': (existingProfile?['verification_status'] ??
-              (role == UserRole.artisan.name
-                  ? VerificationStatus.pending.name
-                  : VerificationStatus.verified.name))
+              VerificationStatus.pending.name)
           .toString(),
     };
     if (username != null && username.isNotEmpty) {
@@ -428,9 +426,7 @@ class SupabaseAuthService implements AuthService {
                     source['verificationStatus'] ??
                     metadata['verification_status'] ??
                     metadata['verificationStatus'] ??
-                    (roleName == UserRole.artisan.name
-                        ? VerificationStatus.pending.name
-                        : VerificationStatus.verified.name))
+                    VerificationStatus.pending.name)
                 .toString(),
         orElse: () => VerificationStatus.pending,
       ),
@@ -493,26 +489,38 @@ class SupabaseAuthService implements AuthService {
 
   @override
   Stream<AppUser?> authStateChanges() async* {
-    final currentUser = _supabase.auth.currentUser;
-    if (currentUser == null) {
-      yield null;
-    } else {
-      yield await _resolveUser(currentUser);
+    final controller = StreamController<AppUser?>();
+    Future<void> emitInitial() async {
+      final currentUser = _supabase.auth.currentUser;
+      controller
+          .add(currentUser == null ? null : await _resolveUser(currentUser));
     }
 
-    yield* _supabase.auth.onAuthStateChange.asyncMap((authState) async {
+    unawaited(emitInitial());
+    final authSub = _supabase.auth.onAuthStateChange.listen((authState) async {
       final user = authState.session?.user ?? _supabase.auth.currentUser;
       if (user == null) {
         _resolvedCurrentUser = null;
-        return null;
+        controller.add(null);
+        return;
       }
-      return _resolveUser(user);
+      controller.add(await _resolveUser(user));
     });
+    final profileSub = _profileController.stream.listen(controller.add);
+    controller.onCancel = () async {
+      await authSub.cancel();
+      await profileSub.cancel();
+    };
+    yield* controller.stream;
   }
 
   @override
   AppUser? get currentUser =>
       _resolvedCurrentUser ?? _mapUser(_supabase.auth.currentUser);
+
+  void _emitProfileUpdate() {
+    _profileController.add(_resolvedCurrentUser);
+  }
 
   @override
   Future<AppUser> signInWithEmail(String email, String password) async {
@@ -636,9 +644,7 @@ class SupabaseAuthService implements AuthService {
           'phone': user.phone ?? '',
           'avatar_url': (user.userMetadata?['avatar_url'] ?? '').toString(),
           'role': role.name,
-          'verification_status': role == UserRole.artisan
-              ? VerificationStatus.pending.name
-              : VerificationStatus.verified.name,
+          'verification_status': VerificationStatus.pending.name,
         };
         final username = user.userMetadata?['username']?.toString().trim();
         if (username != null && username.isNotEmpty) {
@@ -651,6 +657,7 @@ class SupabaseAuthService implements AuthService {
       final mapped = _resolvedCurrentUser ?? _mapUser(user);
       if (mapped != null) {
         _resolvedCurrentUser = mapped.copyWith(role: role);
+        _emitProfileUpdate();
       }
     }
 
@@ -703,6 +710,7 @@ class SupabaseAuthService implements AuthService {
 
     if (_resolvedCurrentUser != null) {
       _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(name: normalized);
+      _emitProfileUpdate();
     }
   }
 
@@ -722,6 +730,7 @@ class SupabaseAuthService implements AuthService {
 
     if (_resolvedCurrentUser != null) {
       _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(phone: normalized);
+      _emitProfileUpdate();
     }
   }
 
@@ -740,6 +749,7 @@ class SupabaseAuthService implements AuthService {
         country: country,
         countryCode: countryCode,
       );
+      _emitProfileUpdate();
     }
   }
 
@@ -774,6 +784,7 @@ class SupabaseAuthService implements AuthService {
     );
     if (_resolvedCurrentUser != null) {
       _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(photoUrl: url);
+      _emitProfileUpdate();
     }
   }
 
@@ -788,6 +799,7 @@ class SupabaseAuthService implements AuthService {
     if (_resolvedCurrentUser != null) {
       _resolvedCurrentUser =
           _resolvedCurrentUser!.copyWith(description: normalized);
+      _emitProfileUpdate();
     }
   }
 
@@ -800,6 +812,7 @@ class SupabaseAuthService implements AuthService {
     await _updateProfile(user.id, {'is_busy': isBusy});
     if (_resolvedCurrentUser != null) {
       _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(isBusy: isBusy);
+      _emitProfileUpdate();
     }
   }
 
@@ -824,6 +837,7 @@ class SupabaseAuthService implements AuthService {
 
     if (_resolvedCurrentUser != null) {
       _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(email: normalized);
+      _emitProfileUpdate();
     }
   }
 

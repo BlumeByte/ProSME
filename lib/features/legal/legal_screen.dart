@@ -71,20 +71,44 @@ _LegalContent _contentFor(LegalPageKind kind) {
         title: 'Terms of Service',
         sections: [
           _LegalSection(
-            'Marketplace rules',
-            'Users must post lawful requests and communicate respectfully. Artisans must provide accurate service descriptions and honor agreed work terms.',
+            'Marketplace role',
+            'ProSME is a marketplace that helps customers and artisans discover, message, negotiate, and record service requests. ProSME is not a party to private work agreements unless a separate written contract says otherwise.',
           ),
           _LegalSection(
-            'Verification',
-            'Support verification improves trust but does not replace user judgment. Users should review artisan status before engagement.',
+            'User responsibilities',
+            'Users must provide accurate account information, post lawful requests, avoid abusive or misleading content, and use the platform only for legitimate service activity.',
           ),
           _LegalSection(
-            'Payments',
-            'Users and artisans are responsible for confirming payment terms, receipts, and job completion details.',
+            'Artisan responsibilities',
+            'Artisans must describe skills, prices, availability, credentials, bids, and completion status honestly. Artisans are responsible for permits, taxes, safety practices, and work quality required for their services.',
           ),
           _LegalSection(
-            'Moderation',
-            'ProSME may remove unsafe content, restrict accounts, or reject verification submissions that violate platform rules.',
+            'Verification and trust',
+            'Verification badges show that submitted documents passed a platform review at the time of review. Verification is not a guarantee of identity, licensing, insurance, work quality, safety, or future conduct.',
+          ),
+          _LegalSection(
+            'Payments and disputes',
+            'Customers and artisans are responsible for agreeing payment terms, receipts, refunds, site visits, materials, timelines, and completion details. ProSME may provide records to help review a dispute but does not guarantee payment or outcomes.',
+          ),
+          _LegalSection(
+            'Safety and prohibited conduct',
+            'Do not post illegal services, harassment, threats, fraud, stolen materials, dangerous work requests, spam, or content that violates another person’s rights. Meet in safe locations and verify details before sharing money or sensitive information.',
+          ),
+          _LegalSection(
+            'Account actions',
+            'ProSME may remove content, hide requests, limit features, reject verification, suspend accounts, or delete accounts when activity appears unsafe, fraudulent, unlawful, or harmful to the marketplace.',
+          ),
+          _LegalSection(
+            'Platform availability',
+            'The app may be updated, interrupted, delayed, or unavailable because of maintenance, network issues, third-party services, or security controls. ProSME is provided without a guarantee of uninterrupted access.',
+          ),
+          _LegalSection(
+            'Liability limits',
+            'To the fullest extent allowed by law, ProSME is not responsible for indirect losses, lost profits, failed negotiations, off-platform payments, user conduct, or service quality. Users remain responsible for their own decisions and agreements.',
+          ),
+          _LegalSection(
+            'Changes',
+            'These terms may be updated as the platform changes. Continued use of ProSME after updates means you accept the updated terms.',
           ),
         ],
       );

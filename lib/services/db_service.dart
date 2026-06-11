@@ -64,6 +64,7 @@ class LocalDbService {
   static const _listingsKey = 'local_cache_listings';
   static const _threadsKey = 'local_cache_chat_threads';
   static const _messagesKey = 'local_cache_chat_messages';
+  static const _hiddenMessagesKey = 'local_cache_hidden_chat_messages';
   static const _pendingChatKey = 'local_cache_pending_chat_actions';
 
   SharedPreferences? _prefs;
@@ -214,6 +215,17 @@ class LocalDbService {
     return messages;
   }
 
+  Future<List<ChatMessage>> loadVisibleMessages(
+    String threadId,
+    String userId,
+  ) async {
+    final hidden = await loadHiddenMessageIds(threadId, userId);
+    final messages = await loadMessages(threadId);
+    return messages
+        .where((message) => !hidden.contains(message.id))
+        .toList(growable: false);
+  }
+
   Future<void> upsertMessage(ChatMessage message) async {
     final messages = await loadMessages(message.threadId);
     final index = messages.indexWhere((item) => item.id == message.id);
@@ -233,6 +245,28 @@ class LocalDbService {
     messages.removeWhere((message) => message.id == messageId);
     await cacheMessages(threadId, messages);
     await _refreshThreadFromMessages(threadId);
+  }
+
+  Future<void> hideMessagesForUser(
+    String threadId,
+    String userId,
+    Iterable<String> messageIds,
+  ) async {
+    final all = await _loadHiddenMessageMap();
+    final key = '${userId}_$threadId';
+    final hidden = {...(all[key] ?? const <String>[]), ...messageIds};
+    all[key] = hidden.toList(growable: false);
+    await _saveHiddenMessageMap(all);
+    final visible = await loadVisibleMessages(threadId, userId);
+    _emitMessages(threadId, visible);
+  }
+
+  Future<Set<String>> loadHiddenMessageIds(
+    String threadId,
+    String userId,
+  ) async {
+    final all = await _loadHiddenMessageMap();
+    return (all['${userId}_$threadId'] ?? const <String>[]).toSet();
   }
 
   Future<void> clearMessages(String threadId) async {
@@ -313,6 +347,24 @@ class LocalDbService {
             .toList(growable: false),
       ),
     );
+  }
+
+  Future<Map<String, List<String>>> _loadHiddenMessageMap() async {
+    final prefs = await _store;
+    final raw = prefs.getString(_hiddenMessagesKey);
+    if (raw == null || raw.isEmpty) return <String, List<String>>{};
+    final decoded = jsonDecode(raw) as Map<String, dynamic>;
+    return decoded.map(
+      (key, value) => MapEntry(
+        key,
+        List<String>.from(value as List<dynamic>),
+      ),
+    );
+  }
+
+  Future<void> _saveHiddenMessageMap(Map<String, List<String>> value) async {
+    final prefs = await _store;
+    await prefs.setString(_hiddenMessagesKey, jsonEncode(value));
   }
 
   Future<void> _saveMessageMap(Map<String, List<ChatMessage>> value) async {

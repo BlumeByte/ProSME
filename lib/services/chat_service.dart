@@ -8,7 +8,7 @@ import 'db_service.dart';
 
 abstract class ChatService {
   Stream<List<ChatThread>> watchThreads(String userId);
-  Stream<List<ChatMessage>> watchMessages(String threadId);
+  Stream<List<ChatMessage>> watchMessages(String threadId, {String? userId});
   Future<void> markThreadRead(String threadId, String userId);
   Future<ChatThread> createOrOpenThread({
     required String userId,
@@ -19,8 +19,14 @@ abstract class ChatService {
   Future<void> deleteMessage({
     required String threadId,
     required String messageId,
+    String? deletedForUserId,
   });
-  Future<void> clearMessages(String threadId);
+  Future<void> deleteMessagesForUser({
+    required String threadId,
+    required String userId,
+    required Iterable<String> messageIds,
+  });
+  Future<void> clearMessages(String threadId, {String? clearedForUserId});
 }
 
 class MockChatService implements ChatService {
@@ -56,7 +62,10 @@ class MockChatService implements ChatService {
   }
 
   @override
-  Stream<List<ChatMessage>> watchMessages(String threadId) async* {
+  Stream<List<ChatMessage>> watchMessages(
+    String threadId, {
+    String? userId,
+  }) async* {
     final controller = _messageControllers.putIfAbsent(
       threadId,
       () => StreamController<List<ChatMessage>>.broadcast(),
@@ -150,6 +159,7 @@ class MockChatService implements ChatService {
   Future<void> deleteMessage({
     required String threadId,
     required String messageId,
+    String? deletedForUserId,
   }) async {
     final messages = _messagesByThread[threadId];
     if (messages == null) return;
@@ -159,7 +169,19 @@ class MockChatService implements ChatService {
   }
 
   @override
-  Future<void> clearMessages(String threadId) async {
+  Future<void> deleteMessagesForUser({
+    required String threadId,
+    required String userId,
+    required Iterable<String> messageIds,
+  }) async {
+    for (final messageId in messageIds) {
+      await deleteMessage(threadId: threadId, messageId: messageId);
+    }
+  }
+
+  @override
+  Future<void> clearMessages(String threadId,
+      {String? clearedForUserId}) async {
     _messagesByThread[threadId] = <ChatMessage>[];
     _messageControllers[threadId]?.add(const <ChatMessage>[]);
     _refreshThreadSummaries(threadId);
@@ -295,8 +317,13 @@ class SupabaseChatService implements ChatService {
   }
 
   @override
-  Stream<List<ChatMessage>> watchMessages(String threadId) async* {
-    var lastGood = await _localDb.loadMessages(threadId);
+  Stream<List<ChatMessage>> watchMessages(
+    String threadId, {
+    String? userId,
+  }) async* {
+    var lastGood = userId == null
+        ? await _localDb.loadMessages(threadId)
+        : await _localDb.loadVisibleMessages(threadId, userId);
     while (true) {
       if (lastGood.isNotEmpty) yield lastGood;
       try {
@@ -315,11 +342,16 @@ class SupabaseChatService implements ChatService {
             .where((message) => seen.add(message.id))
             .toList(growable: false);
         await _localDb.cacheMessages(threadId, lastGood);
-        yield lastGood;
+        final visible = userId == null
+            ? lastGood
+            : await _localDb.loadVisibleMessages(threadId, userId);
+        yield visible;
       } catch (error, stackTrace) {
         debugPrint('Failed to refresh chat messages: $error');
         debugPrintStack(stackTrace: stackTrace);
-        lastGood = await _localDb.loadMessages(threadId);
+        lastGood = userId == null
+            ? await _localDb.loadMessages(threadId)
+            : await _localDb.loadVisibleMessages(threadId, userId);
         yield lastGood;
       }
       await Future<void>.delayed(const Duration(seconds: 4));
@@ -437,7 +469,14 @@ class SupabaseChatService implements ChatService {
   Future<void> deleteMessage({
     required String threadId,
     required String messageId,
+    String? deletedForUserId,
   }) async {
+    if (deletedForUserId != null) {
+      await _localDb.hideMessagesForUser(threadId, deletedForUserId, [
+        messageId,
+      ]);
+      return;
+    }
     await _localDb.deleteMessage(threadId, messageId);
     try {
       await _supabase.from('messages').delete().eq('id', messageId);
@@ -460,8 +499,26 @@ class SupabaseChatService implements ChatService {
   }
 
   @override
-  Future<void> clearMessages(String threadId) async {
+  Future<void> deleteMessagesForUser({
+    required String threadId,
+    required String userId,
+    required Iterable<String> messageIds,
+  }) async {
+    await _localDb.hideMessagesForUser(threadId, userId, messageIds);
+  }
+
+  @override
+  Future<void> clearMessages(String threadId,
+      {String? clearedForUserId}) async {
     final messages = await _localDb.loadMessages(threadId);
+    if (clearedForUserId != null) {
+      await _localDb.hideMessagesForUser(
+        threadId,
+        clearedForUserId,
+        messages.map((message) => message.id),
+      );
+      return;
+    }
     await _localDb.clearMessages(threadId);
     try {
       await _supabase.from('messages').delete().eq('thread_id', threadId);
