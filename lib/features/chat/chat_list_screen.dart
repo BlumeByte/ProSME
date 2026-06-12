@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/widgets/loading_state.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 
 class ChatListScreen extends ConsumerWidget {
@@ -15,20 +16,23 @@ class ChatListScreen extends ConsumerWidget {
     String threadId,
     String userId,
   ) async {
+    final settings = ref.read(appSettingsControllerProvider);
+    final messenger = ScaffoldMessenger.maybeOf(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete chat'),
-        content: const Text('Delete this conversation from your chat home?'),
+        title: Text(settings.t('Delete chat')),
+        content:
+            Text(settings.t('Delete this conversation from your chat home?')),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(settings.t('Cancel')),
           ),
           FilledButton.icon(
             onPressed: () => Navigator.of(context).pop(true),
             icon: const Icon(Icons.delete),
-            label: const Text('Delete'),
+            label: Text(settings.t('Delete')),
           ),
         ],
       ),
@@ -40,13 +44,13 @@ class ChatListScreen extends ConsumerWidget {
             userId: userId,
           );
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger?.showSnackBar(
           const SnackBar(content: Text('Chat deleted.')),
         );
       }
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger?.showSnackBar(
           SnackBar(content: Text('Could not delete chat: $error')),
         );
       }
@@ -57,12 +61,13 @@ class ChatListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final chatService = ref.watch(chatServiceProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
+    final settings = ref.watch(appSettingsControllerProvider);
     if (user == null) {
       return Center(
         child: FilledButton.icon(
           onPressed: () => context.go(RouteNames.auth),
           icon: const Icon(Icons.login),
-          label: const Text('Sign in to view chats'),
+          label: Text(settings.t('Sign in to view chats')),
         ),
       );
     }
@@ -85,11 +90,12 @@ class ChatListScreen extends ConsumerWidget {
         }
         final threads = snapshot.data!;
         if (threads.isEmpty) {
-          return const Center(
+          return Center(
             child: Padding(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: Text(
-                'No chats yet. Open a professional listing and tap Chat to start.',
+                settings.t(
+                    'No chats yet. Open a professional listing and tap Chat to start.'),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -145,7 +151,7 @@ class ChatListScreen extends ConsumerWidget {
               ),
               subtitle: Text(
                 thread.lastMessage.isEmpty
-                    ? 'No messages yet'
+                    ? settings.t('No messages yet')
                     : thread.lastMessage,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

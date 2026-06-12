@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/widgets/app_scaffold.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 import '../chat/chat_list_screen.dart';
 import 'artisan_dashboard_screen.dart';
@@ -17,12 +18,12 @@ class ArtisanHomeScreen extends ConsumerStatefulWidget {
 
 class _ArtisanHomeScreenState extends ConsumerState<ArtisanHomeScreen> {
   int _currentIndex = 0;
+  late final List<Widget> _pages;
 
   @override
-  Widget build(BuildContext context) {
-    final user = ref.watch(authStateProvider).valueOrNull;
-    final chatService = ref.watch(chatServiceProvider);
-    final pages = [
+  void initState() {
+    super.initState();
+    _pages = [
       ArtisanDashboardScreen(
         onOpenListings: () => setState(() => _currentIndex = 1),
         onOpenJobs: () => setState(() => _currentIndex = 2),
@@ -34,6 +35,13 @@ class _ArtisanHomeScreenState extends ConsumerState<ArtisanHomeScreen> {
       const ChatListScreen(),
       const ProfileScreen(),
     ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = ref.watch(authStateProvider).valueOrNull;
+    final chatService = ref.watch(chatServiceProvider);
+    final settings = ref.watch(appSettingsControllerProvider);
 
     return PopScope(
       canPop: false,
@@ -44,15 +52,15 @@ class _ArtisanHomeScreenState extends ConsumerState<ArtisanHomeScreen> {
         }
       },
       child: AppScaffold(
-        title: 'Artisan Dashboard',
+        title: settings.t('Artisan Dashboard'),
         actions: [
           IconButton(
             onPressed: () => setState(() => _currentIndex = 2),
             icon: const Icon(Icons.search),
-            tooltip: 'Search requests',
+            tooltip: settings.t('Search requests'),
           ),
         ],
-        body: pages[_currentIndex],
+        body: IndexedStack(index: _currentIndex, children: _pages),
         bottomNavigationBar: StreamBuilder(
           stream: user == null ? null : chatService.watchThreads(user.id),
           builder: (context, snapshot) {
@@ -63,18 +71,21 @@ class _ArtisanHomeScreenState extends ConsumerState<ArtisanHomeScreen> {
               onTap: (index) => setState(() => _currentIndex = index),
               type: BottomNavigationBarType.fixed,
               items: [
-                const BottomNavigationBarItem(
-                    icon: Icon(Icons.dashboard), label: 'Artisan'),
-                const BottomNavigationBarItem(
-                    icon: Icon(Icons.store), label: 'Listings'),
-                const BottomNavigationBarItem(
-                    icon: Icon(Icons.work), label: 'Jobs'),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.dashboard),
+                    label: settings.t('Artisan')),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.store),
+                    label: settings.t('Listings')),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.work), label: settings.t('Jobs')),
                 BottomNavigationBarItem(
                   icon: _NavIconWithBadge(icon: Icons.chat, count: unread),
-                  label: 'Chats',
+                  label: settings.t('Chats'),
                 ),
-                const BottomNavigationBarItem(
-                    icon: Icon(Icons.settings), label: 'Settings'),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.settings),
+                    label: settings.t('Settings')),
               ],
             );
           },

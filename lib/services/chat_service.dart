@@ -231,10 +231,12 @@ class SupabaseChatService implements ChatService {
   final LocalDbService _localDb;
 
   @override
-  Stream<List<ChatThread>> watchThreads(String userId) async* {
-    var lastGood = await _localDb.loadThreads(userId);
-    while (true) {
-      if (lastGood.isNotEmpty) yield lastGood;
+  Stream<List<ChatThread>> watchThreads(String userId) {
+    late final StreamController<List<ChatThread>> controller;
+    StreamSubscription<List<ChatThread>>? localSub;
+    Timer? refreshTimer;
+
+    Future<void> refresh() async {
       try {
         await ChatSyncService.syncPending(
           supabase: _supabase,
@@ -245,23 +247,38 @@ class SupabaseChatService implements ChatService {
             .select()
             .or('user_id.eq.$userId,artisan_id.eq.$userId')
             .order('updated_at', ascending: false);
-        lastGood = await _hydrateThreads(
+        final remoteThreads = await _hydrateThreads(
             userId,
             _dedupeThreads(rows
                 .map((row) =>
                     ChatThread.fromJson(Map<String, dynamic>.from(row)))
                 .toList(growable: false)));
-        await _localDb.cacheThreadsForUser(userId, lastGood);
-        lastGood = await _localDb.loadThreads(userId);
-        yield lastGood;
+        await _localDb.cacheThreadsForUser(userId, remoteThreads);
       } catch (error, stackTrace) {
         debugPrint('Failed to refresh chat threads: $error');
         debugPrintStack(stackTrace: stackTrace);
-        lastGood = await _localDb.loadThreads(userId);
-        yield lastGood;
       }
-      await Future<void>.delayed(const Duration(seconds: 6));
     }
+
+    controller = StreamController<List<ChatThread>>.broadcast(
+      onListen: () {
+        localSub = _localDb
+            .watchThreads(userId)
+            .distinct(_threadListsEqual)
+            .listen(controller.add, onError: controller.addError);
+        unawaited(refresh());
+        refreshTimer = Timer.periodic(
+          const Duration(seconds: 20),
+          (_) => unawaited(refresh()),
+        );
+      },
+      onCancel: () async {
+        refreshTimer?.cancel();
+        await localSub?.cancel();
+      },
+    );
+
+    return controller.stream.distinct(_threadListsEqual);
   }
 
   List<ChatThread> _dedupeThreads(List<ChatThread> threads) {
@@ -350,12 +367,23 @@ class SupabaseChatService implements ChatService {
   Stream<List<ChatMessage>> watchMessages(
     String threadId, {
     String? userId,
-  }) async* {
-    var lastGood = userId == null
-        ? await _localDb.loadMessages(threadId)
-        : await _localDb.loadVisibleMessages(threadId, userId);
-    while (true) {
-      if (lastGood.isNotEmpty) yield lastGood;
+  }) {
+    late final StreamController<List<ChatMessage>> controller;
+    StreamSubscription<List<ChatMessage>>? localSub;
+    Timer? refreshTimer;
+
+    Future<List<ChatMessage>> visibleLocal() {
+      return userId == null
+          ? _localDb.loadMessages(threadId)
+          : _localDb.loadVisibleMessages(threadId, userId);
+    }
+
+    Future<void> emitVisibleLocal() async {
+      if (controller.isClosed) return;
+      controller.add(await visibleLocal());
+    }
+
+    Future<void> refresh() async {
       try {
         await ChatSyncService.syncPending(
           supabase: _supabase,
@@ -367,32 +395,42 @@ class SupabaseChatService implements ChatService {
             .eq('thread_id', threadId)
             .order('created_at');
         final seen = <String>{};
-        lastGood = rows
+        final remoteMessages = rows
             .map((row) => ChatMessage.fromJson(Map<String, dynamic>.from(row)))
             .where((message) => seen.add(message.id))
-            .toList(growable: false);
+            .toList(growable: false)
+          ..sort(_compareMessages);
         await _localDb.cacheMessages(
           threadId,
-          lastGood,
-          emit: userId == null,
+          remoteMessages,
+          emit: false,
         );
-        final visible = userId == null
-            ? lastGood
-            : await _localDb.loadVisibleMessages(threadId, userId);
-        if (userId != null) {
-          await _localDb.emitVisibleMessagesForUser(threadId, userId);
-        }
-        yield visible;
+        await emitVisibleLocal();
       } catch (error, stackTrace) {
         debugPrint('Failed to refresh chat messages: $error');
         debugPrintStack(stackTrace: stackTrace);
-        lastGood = userId == null
-            ? await _localDb.loadMessages(threadId)
-            : await _localDb.loadVisibleMessages(threadId, userId);
-        yield lastGood;
       }
-      await Future<void>.delayed(const Duration(seconds: 4));
     }
+
+    controller = StreamController<List<ChatMessage>>.broadcast(
+      onListen: () {
+        localSub = _localDb.watchMessages(threadId).listen((_) {
+          unawaited(emitVisibleLocal());
+        }, onError: controller.addError);
+        unawaited(emitVisibleLocal());
+        unawaited(refresh());
+        refreshTimer = Timer.periodic(
+          const Duration(seconds: 12),
+          (_) => unawaited(refresh()),
+        );
+      },
+      onCancel: () async {
+        refreshTimer?.cancel();
+        await localSub?.cancel();
+      },
+    );
+
+    return controller.stream.distinct(_messageListsEqual);
   }
 
   @override
@@ -627,6 +665,56 @@ class SupabaseChatService implements ChatService {
       'updated_at':
           (lastMessage?.createdAt ?? DateTime.now()).toIso8601String(),
     }).eq('id', threadId);
+  }
+
+  static bool _threadListsEqual(
+    List<ChatThread> previous,
+    List<ChatThread> next,
+  ) {
+    if (previous.length != next.length) return false;
+    for (var index = 0; index < previous.length; index += 1) {
+      final a = previous[index];
+      final b = next[index];
+      if (a.id != b.id ||
+          a.lastMessage != b.lastMessage ||
+          a.updatedAt != b.updatedAt ||
+          a.unreadCount != b.unreadCount ||
+          a.userName != b.userName ||
+          a.userPhotoUrl != b.userPhotoUrl ||
+          a.artisanName != b.artisanName ||
+          a.artisanPhotoUrl != b.artisanPhotoUrl) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static bool _messageListsEqual(
+    List<ChatMessage> previous,
+    List<ChatMessage> next,
+  ) {
+    if (previous.length != next.length) return false;
+    for (var index = 0; index < previous.length; index += 1) {
+      final a = previous[index];
+      final b = next[index];
+      if (a.id != b.id ||
+          a.threadId != b.threadId ||
+          a.senderId != b.senderId ||
+          a.type != b.type ||
+          a.content != b.content ||
+          a.createdAt != b.createdAt ||
+          a.updatedAt != b.updatedAt ||
+          a.readAt != b.readAt) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static int _compareMessages(ChatMessage a, ChatMessage b) {
+    final byCreatedAt = a.createdAt.compareTo(b.createdAt);
+    if (byCreatedAt != 0) return byCreatedAt;
+    return a.id.compareTo(b.id);
   }
 }
 

@@ -41,6 +41,11 @@ abstract class AuthService {
   Future<void> updateUsername(String username, {String? emailOtp});
   Future<void> updateFullName(String fullName);
   Future<void> updatePhone(String phone);
+  Future<void> updatePhoneAndCountry({
+    required String phone,
+    required String country,
+    required String countryCode,
+  });
   Future<void> updateCountry(String country, String countryCode);
   Future<void> updatePhoto(Uint8List bytes, {required String contentType});
   Future<void> updateDescription(String description);
@@ -228,6 +233,29 @@ class MockAuthService implements AuthService {
       throw StateError('Phone cannot be empty.');
     }
     _currentUser = user.copyWith(phone: normalized);
+    _accountsByEmail[user.email.toLowerCase()] = _currentUser!;
+    _controller.add(_currentUser);
+  }
+
+  @override
+  Future<void> updatePhoneAndCountry({
+    required String phone,
+    required String country,
+    required String countryCode,
+  }) async {
+    final user = _currentUser;
+    if (user == null) {
+      throw StateError('No signed-in user.');
+    }
+    final normalized = phone.trim();
+    if (normalized.isEmpty) {
+      throw StateError('Phone cannot be empty.');
+    }
+    _currentUser = user.copyWith(
+      phone: normalized,
+      country: country,
+      countryCode: countryCode,
+    );
     _accountsByEmail[user.email.toLowerCase()] = _currentUser!;
     _controller.add(_currentUser);
   }
@@ -752,6 +780,37 @@ class SupabaseAuthService implements AuthService {
 
     if (_resolvedCurrentUser != null) {
       _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(phone: normalized);
+      _emitProfileUpdate();
+    }
+  }
+
+  @override
+  Future<void> updatePhoneAndCountry({
+    required String phone,
+    required String country,
+    required String countryCode,
+  }) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      throw StateError('No signed-in user.');
+    }
+    final normalized = phone.trim();
+    if (normalized.isEmpty) {
+      throw StateError('Phone cannot be empty.');
+    }
+
+    await _updateProfile(user.id, {
+      'phone': normalized,
+      'country': country,
+      'country_code': countryCode,
+    });
+
+    if (_resolvedCurrentUser != null) {
+      _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(
+        phone: normalized,
+        country: country,
+        countryCode: countryCode,
+      );
       _emitProfileUpdate();
     }
   }

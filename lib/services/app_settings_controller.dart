@@ -32,6 +32,11 @@ class AppSettings {
   final bool emailNotifications;
   final bool phoneNotifications;
 
+  String t(String text) {
+    if (language == 'English') return text;
+    return _translations[language]?[text] ?? text;
+  }
+
   Locale? get locale {
     switch (language) {
       case 'Arabic':
@@ -111,6 +116,97 @@ class AppSettings {
     );
   }
 }
+
+const _translations = <String, Map<String, String>>{
+  'French': {
+    'ProSME   Find Professionals': 'ProSME   Trouver des professionnels',
+    'ProSME': 'ProSME',
+    'Home': 'Accueil',
+    'Upload': 'Publier',
+    'Chat': 'Discussion',
+    'Chats': 'Discussions',
+    'Bookings': 'Réservations',
+    'Profile': 'Profil',
+    'Artisan Dashboard': 'Tableau artisan',
+    'Artisan': 'Artisan',
+    'Listings': 'Annonces',
+    'Jobs': 'Travaux',
+    'Settings': 'Paramètres',
+    'Search requests': 'Rechercher des demandes',
+    'Sign in to view chats': 'Connectez-vous pour voir les discussions',
+    'No chats yet. Open a professional listing and tap Chat to start.':
+        'Aucune discussion. Ouvrez une annonce et appuyez sur Discussion.',
+    'No messages yet': 'Aucun message',
+    'Delete chat': 'Supprimer la discussion',
+    'Delete this conversation from your chat home?':
+        'Supprimer cette conversation de vos discussions ?',
+    'Cancel': 'Annuler',
+    'Delete': 'Supprimer',
+  },
+  'Spanish': {
+    'ProSME   Find Professionals': 'ProSME   Buscar profesionales',
+    'ProSME': 'ProSME',
+    'Home': 'Inicio',
+    'Upload': 'Publicar',
+    'Chat': 'Chat',
+    'Chats': 'Chats',
+    'Bookings': 'Reservas',
+    'Profile': 'Perfil',
+    'Artisan Dashboard': 'Panel de artesano',
+    'Artisan': 'Artesano',
+    'Listings': 'Anuncios',
+    'Jobs': 'Trabajos',
+    'Settings': 'Ajustes',
+    'Search requests': 'Buscar solicitudes',
+    'Sign in to view chats': 'Inicia sesión para ver chats',
+    'No chats yet. Open a professional listing and tap Chat to start.':
+        'Aún no hay chats. Abre un anuncio y toca Chat.',
+    'No messages yet': 'Sin mensajes',
+    'Delete chat': 'Eliminar chat',
+    'Delete this conversation from your chat home?':
+        '¿Eliminar esta conversación de tus chats?',
+    'Cancel': 'Cancelar',
+    'Delete': 'Eliminar',
+  },
+  'Arabic': {
+    'ProSME   Find Professionals': 'ProSME   ابحث عن محترفين',
+    'ProSME': 'ProSME',
+    'Home': 'الرئيسية',
+    'Upload': 'نشر',
+    'Chat': 'دردشة',
+    'Chats': 'الدردشات',
+    'Bookings': 'الحجوزات',
+    'Profile': 'الملف الشخصي',
+    'Artisan Dashboard': 'لوحة الحرفي',
+    'Artisan': 'حرفي',
+    'Listings': 'القوائم',
+    'Jobs': 'الوظائف',
+    'Settings': 'الإعدادات',
+    'Search requests': 'بحث الطلبات',
+    'Sign in to view chats': 'سجل الدخول لعرض الدردشات',
+    'No chats yet. Open a professional listing and tap Chat to start.':
+        'لا توجد دردشات بعد. افتح قائمة واضغط دردشة.',
+    'No messages yet': 'لا توجد رسائل',
+    'Delete chat': 'حذف الدردشة',
+    'Delete this conversation from your chat home?':
+        'حذف هذه المحادثة من الدردشات؟',
+    'Cancel': 'إلغاء',
+    'Delete': 'حذف',
+  },
+  'Twi': {
+    'ProSME   Find Professionals': 'ProSME   Hwehwɛ adwumayɛfo',
+    'Home': 'Fie',
+    'Upload': 'Fa so',
+    'Chat': 'Nkɔmmɔ',
+    'Chats': 'Nkɔmmɔ',
+    'Bookings': 'Nhyehyɛe',
+    'Profile': 'Wo ho nsɛm',
+    'Artisan Dashboard': 'Adwumfoɔ Dashboard',
+    'Listings': 'Nnwuma',
+    'Jobs': 'Adwuma',
+    'Settings': 'Nhyehyɛe',
+  },
+};
 
 class AppSettingsController extends StateNotifier<AppSettings> {
   AppSettingsController(super.state);

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/widgets/app_scaffold.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 import '../chat/chat_list_screen.dart';
 import '../listing/listing_feed_screen.dart';
@@ -19,12 +20,12 @@ class UserHomeScreen extends ConsumerStatefulWidget {
 
 class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
   int _currentIndex = 0;
+  late final List<Widget> _pages;
 
   @override
-  Widget build(BuildContext context) {
-    final user = ref.watch(authStateProvider).valueOrNull;
-    final chatService = ref.watch(chatServiceProvider);
-    final pages = [
+  void initState() {
+    super.initState();
+    _pages = [
       ListingFeedScreen(
         onOpenChatTab: () => setState(() => _currentIndex = 2),
         onOpenUploadTab: () => setState(() => _currentIndex = 1),
@@ -34,6 +35,13 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
       const JobsScreen(showAppBar: false),
       const ProfileScreen(),
     ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = ref.watch(authStateProvider).valueOrNull;
+    final chatService = ref.watch(chatServiceProvider);
+    final settings = ref.watch(appSettingsControllerProvider);
     final currentIndex = user == null && _currentIndex > 0 ? 0 : _currentIndex;
 
     return PopScope(
@@ -45,7 +53,9 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
         }
       },
       child: AppScaffold(
-        title: currentIndex == 0 ? 'ProSME   Find Professionals' : 'ProSME',
+        title: currentIndex == 0
+            ? settings.t('ProSME   Find Professionals')
+            : settings.t('ProSME'),
         actions: currentIndex == 0
             ? [
                 IconButton(
@@ -61,7 +71,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
                 ),
               ]
             : null,
-        body: pages[currentIndex],
+        body: IndexedStack(index: currentIndex, children: _pages),
         bottomNavigationBar: StreamBuilder(
           stream: user == null ? null : chatService.watchThreads(user.id),
           builder: (context, snapshot) {
@@ -78,22 +88,24 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
               },
               type: BottomNavigationBarType.fixed,
               items: [
-                const BottomNavigationBarItem(
-                    icon: Icon(Icons.home), label: 'Home'),
-                const BottomNavigationBarItem(
-                    icon: Icon(Icons.upload_outlined), label: 'Upload'),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.home), label: settings.t('Home')),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.upload_outlined),
+                    label: settings.t('Upload')),
                 BottomNavigationBarItem(
                   icon: _NavIconWithBadge(
                     icon: Icons.chat_bubble_outline,
                     count: unread,
                   ),
-                  label: 'Chat',
+                  label: settings.t('Chat'),
                 ),
-                const BottomNavigationBarItem(
-                    icon: Icon(Icons.calendar_month_outlined),
-                    label: 'Bookings'),
-                const BottomNavigationBarItem(
-                    icon: Icon(Icons.person), label: 'Profile'),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.calendar_month_outlined),
+                    label: settings.t('Bookings')),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.person),
+                    label: settings.t('Profile')),
               ],
             );
           },

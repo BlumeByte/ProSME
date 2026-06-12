@@ -443,6 +443,7 @@ Future<void> _showChangePhoneDialog(
   String currentPhone,
   String currentCountry,
 ) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
   final countries = await loadWorldCountries();
   if (!context.mounted) return;
   var selectedCountry = countries.firstWhere(
@@ -509,8 +510,8 @@ Future<void> _showChangePhoneDialog(
 
   if (nextPhone == null || nextPhone.isEmpty) return;
   if (!isValidPhoneForCountry(nextPhone, selectedCountry)) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (context.mounted && messenger != null) {
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Enter a valid ${selectedCountry.name} phone number.'),
         ),
@@ -520,20 +521,21 @@ Future<void> _showChangePhoneDialog(
   }
 
   try {
-    await authService.updateCountry(
-        selectedCountry.name, selectedCountry.dialCode);
-    await authService
-        .updatePhone(formatPhoneForCountry(nextPhone, selectedCountry));
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    await authService.updatePhoneAndCountry(
+      phone: formatPhoneForCountry(nextPhone, selectedCountry),
+      country: selectedCountry.name,
+      countryCode: selectedCountry.dialCode,
+    );
+    if (context.mounted && messenger != null) {
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('Phone number saved.'),
         ),
       );
     }
   } catch (error) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (context.mounted && messenger != null) {
+      messenger.showSnackBar(
         SnackBar(content: Text('Could not update phone number: $error')),
       );
     }

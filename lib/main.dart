@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
@@ -19,11 +21,13 @@ Future<void> main() async {
   await AppLaunchService.init();
   await ThemeModeController.init();
   await AppSettingsController.init();
-  await NotificationService().initialize();
+  unawaited(NotificationService().initialize());
   if (shouldUseSupabase()) {
-    await ChatSyncService.syncPending(
-      supabase: supabaseClient,
-      localDb: LocalDbService.instance,
+    unawaited(
+      ChatSyncService.syncPending(
+        supabase: supabaseClient,
+        localDb: LocalDbService.instance,
+      ),
     );
   }
   runApp(const ProviderScope(child: ProSMEApp()));

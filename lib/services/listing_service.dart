@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../models/listing.dart';
+import 'db_service.dart';
 
 abstract class ListingService {
   Stream<List<Listing>> watchListings();
@@ -50,9 +51,10 @@ class MockListingService implements ListingService {
 }
 
 class SupabaseListingService implements ListingService {
-  SupabaseListingService(this._supabase);
+  SupabaseListingService(this._supabase, [this._localDb]);
 
   final SupabaseClient _supabase;
+  final LocalDbService? _localDb;
 
   Future<List<Listing>> _hydrateListings(
       List<Map<String, dynamic>> rows) async {
@@ -166,19 +168,46 @@ class SupabaseListingService implements ListingService {
   }
 
   @override
-  Stream<List<Listing>> watchListings() async* {
-    var lastGood = const <Listing>[];
-    while (true) {
+  Stream<List<Listing>> watchListings() {
+    late final StreamController<List<Listing>> controller;
+    Timer? refreshTimer;
+    var lastEmitted = const <Listing>[];
+
+    void emitIfChanged(List<Listing> listings) {
+      if (_listingListsEqual(lastEmitted, listings)) return;
+      lastEmitted = List<Listing>.unmodifiable(listings);
+      if (!controller.isClosed) controller.add(lastEmitted);
+    }
+
+    Future<void> refresh() async {
       try {
-        lastGood = await fetchListings();
-        yield lastGood;
+        final listings = await fetchListings();
+        if (_localDb != null) {
+          await _localDb.cacheListings(listings);
+        }
+        emitIfChanged(listings);
       } catch (error, stackTrace) {
         debugPrint('Failed to refresh listings: $error');
         debugPrintStack(stackTrace: stackTrace);
-        yield lastGood;
       }
-      await Future<void>.delayed(const Duration(seconds: 12));
     }
+
+    controller = StreamController<List<Listing>>.broadcast(
+      onListen: () async {
+        final cached = await _localDb?.loadCachedListings() ?? const [];
+        emitIfChanged(cached);
+        unawaited(refresh());
+        refreshTimer = Timer.periodic(
+          const Duration(seconds: 30),
+          (_) => unawaited(refresh()),
+        );
+      },
+      onCancel: () {
+        refreshTimer?.cancel();
+      },
+    );
+
+    return controller.stream;
   }
 
   @override
@@ -187,11 +216,15 @@ class SupabaseListingService implements ListingService {
         .from('listings')
         .select()
         .order('created_at', ascending: false);
-    return _hydrateListings(
+    final listings = await _hydrateListings(
       response
           .map((row) => Map<String, dynamic>.from(row as Map<String, dynamic>))
           .toList(),
     );
+    if (_localDb != null) {
+      await _localDb.cacheListings(listings);
+    }
+    return listings;
   }
 
   @override
@@ -212,6 +245,10 @@ class SupabaseListingService implements ListingService {
         .select()
         .single();
     final hydrated = await _hydrateListings([Map<String, dynamic>.from(row)]);
+    if (_localDb != null) {
+      final cached = await _localDb.loadCachedListings();
+      await _localDb.cacheListings([hydrated.first, ...cached]);
+    }
     return hydrated.first;
   }
 
@@ -234,12 +271,36 @@ class SupabaseListingService implements ListingService {
         .select()
         .single();
     final hydrated = await _hydrateListings([Map<String, dynamic>.from(row)]);
+    if (_localDb != null) {
+      final cached = await _localDb.loadCachedListings();
+      final next = [
+        for (final item in cached)
+          if (item.id == hydrated.first.id) hydrated.first else item,
+      ];
+      await _localDb.cacheListings(next);
+    }
     return hydrated.first;
   }
 
   @override
   Future<void> deleteListing(String listingId) async {
     await _supabase.from('listings').delete().eq('id', listingId);
+    if (_localDb != null) {
+      final cached = await _localDb.loadCachedListings();
+      await _localDb.cacheListings(
+        cached.where((listing) => listing.id != listingId).toList(),
+      );
+    }
+  }
+
+  static bool _listingListsEqual(List<Listing> a, List<Listing> b) {
+    if (a.length != b.length) return false;
+    for (var index = 0; index < a.length; index += 1) {
+      if (a[index].toJson().toString() != b[index].toJson().toString()) {
+        return false;
+      }
+    }
+    return true;
   }
 }
 

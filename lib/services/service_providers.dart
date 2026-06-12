@@ -53,7 +53,10 @@ final listingServiceProvider = Provider<ListingService>((ref) {
   if (!shouldUseSupabase()) {
     return MockListingService();
   }
-  return SupabaseListingService(Supabase.instance.client);
+  return SupabaseListingService(
+    Supabase.instance.client,
+    ref.watch(localDbProvider),
+  );
 });
 
 final chatServiceProvider = Provider<ChatService>((ref) {
