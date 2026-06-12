@@ -8,8 +8,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../config/constants.dart';
+import '../../core/utils/currency.dart';
 import '../../core/utils/service_categories.dart';
 import '../../models/listing.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 
 class ListingManageScreen extends ConsumerWidget {
@@ -18,6 +20,7 @@ class ListingManageScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authStateProvider).valueOrNull;
+    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
     if (user == null) {
       return const Center(child: Text('Sign in to manage listings.'));
     }
@@ -94,7 +97,7 @@ class ListingManageScreen extends ConsumerWidget {
                           ),
                     title: Text(listing.title),
                     subtitle: Text(
-                      '${listing.category} - ${listing.location}\n$kCurrencySymbol ${listing.priceMin.toStringAsFixed(2)} - ${listing.priceMax.toStringAsFixed(2)}',
+                      '${listing.category} - ${listing.location}\n${formatMoney(listing.priceMin, currencyCode)} - ${formatMoney(listing.priceMax, currencyCode)}',
                     ),
                     isThreeLine: true,
                     trailing: PopupMenuButton<String>(
@@ -133,6 +136,7 @@ Future<void> _openListingSheet(
   WidgetRef ref, {
   Listing? existing,
 }) async {
+  final currencyCode = ref.read(appSettingsControllerProvider).currencyCode;
   final titleController = TextEditingController(text: existing?.title ?? '');
   final descriptionController =
       TextEditingController(text: existing?.description ?? '');
@@ -140,9 +144,15 @@ Future<void> _openListingSheet(
   final locationController =
       TextEditingController(text: existing?.location ?? '');
   final priceMinController = TextEditingController(
-      text: existing == null ? '' : existing.priceMin.toStringAsFixed(0));
+    text: existing == null
+        ? ''
+        : convertFromGhs(existing.priceMin, currencyCode).toStringAsFixed(0),
+  );
   final priceMaxController = TextEditingController(
-      text: existing == null ? '' : existing.priceMax.toStringAsFixed(0));
+    text: existing == null
+        ? ''
+        : convertFromGhs(existing.priceMax, currencyCode).toStringAsFixed(0),
+  );
   final formKey = GlobalKey<FormState>();
   final selectedImages = <Uint8List>[];
   final existingImages = <String>[...(existing?.images ?? const <String>[])];
@@ -232,8 +242,9 @@ Future<void> _openListingSheet(
                       Expanded(
                         child: TextFormField(
                           controller: priceMinController,
-                          decoration:
-                              const InputDecoration(labelText: 'Min price'),
+                          decoration: InputDecoration(
+                            labelText: 'Min price ($currencyCode)',
+                          ),
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true),
                           validator: _positiveMoney,
@@ -243,8 +254,9 @@ Future<void> _openListingSheet(
                       Expanded(
                         child: TextFormField(
                           controller: priceMaxController,
-                          decoration:
-                              const InputDecoration(labelText: 'Max price'),
+                          decoration: InputDecoration(
+                            labelText: 'Max price ($currencyCode)',
+                          ),
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true),
                           validator: _positiveMoney,
@@ -357,10 +369,14 @@ Future<void> _openListingSheet(
                         final user = ref.read(authStateProvider).valueOrNull;
                         if (user == null) return;
 
-                        final minPrice =
-                            double.parse(priceMinController.text.trim());
-                        final maxPrice =
-                            double.parse(priceMaxController.text.trim());
+                        final minPrice = convertToGhs(
+                          double.parse(priceMinController.text.trim()),
+                          currencyCode,
+                        );
+                        final maxPrice = convertToGhs(
+                          double.parse(priceMaxController.text.trim()),
+                          currencyCode,
+                        );
                         if (maxPrice < minPrice) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -560,13 +576,13 @@ Future<List<String>> _uploadListingImages(
     final path = '$userId/${DateTime.now().microsecondsSinceEpoch}_$i.jpg';
     try {
       await client.storage.from('listing-images').uploadBinary(
-          path,
-          images[i],
-          fileOptions: const FileOptions(
-            upsert: false,
-            contentType: 'image/jpeg',
-          ),
-        );
+            path,
+            images[i],
+            fileOptions: const FileOptions(
+              upsert: false,
+              contentType: 'image/jpeg',
+            ),
+          );
     } on StorageException catch (error) {
       throw StateError(
         'Storage bucket "listing-images" is not ready or your account cannot upload to it. ${error.message}',

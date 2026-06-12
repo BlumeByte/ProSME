@@ -5,6 +5,7 @@ class AppUser {
     required this.id,
     required this.role,
     required this.name,
+    this.fullName = '',
     required this.phone,
     required this.email,
     required this.photoUrl,
@@ -19,6 +20,7 @@ class AppUser {
   final String id;
   final UserRole role;
   final String name;
+  final String fullName;
   final String phone;
   final String email;
   final String photoUrl;
@@ -32,6 +34,7 @@ class AppUser {
   AppUser copyWith({
     UserRole? role,
     String? name,
+    String? fullName,
     String? phone,
     String? email,
     String? photoUrl,
@@ -45,6 +48,7 @@ class AppUser {
       id: id,
       role: role ?? this.role,
       name: name ?? this.name,
+      fullName: fullName ?? this.fullName,
       phone: phone ?? this.phone,
       email: email ?? this.email,
       photoUrl: photoUrl ?? this.photoUrl,
@@ -65,6 +69,7 @@ class AppUser {
         orElse: () => UserRole.customer,
       ),
       name: json['name'] as String,
+      fullName: (json['fullName'] as String?) ?? '',
       phone: json['phone'] as String,
       email: json['email'] as String,
       photoUrl: json['photoUrl'] as String,
@@ -85,6 +90,7 @@ class AppUser {
       'id': id,
       'role': role.name,
       'name': name,
+      'fullName': fullName,
       'phone': phone,
       'email': email,
       'photoUrl': photoUrl,

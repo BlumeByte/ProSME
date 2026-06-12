@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../config/constants.dart';
+import '../../core/utils/currency.dart';
 import '../../core/utils/service_categories.dart';
 import '../../core/widgets/loading_state.dart';
 import '../../core/widgets/safe_back_button.dart';
 import '../../models/listing.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 import '../jobs/jobs_repository.dart';
 
@@ -19,6 +20,7 @@ class ArtisanProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final listingsFuture = ref.watch(listingServiceProvider).fetchListings();
+    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
     final bids = ref.watch(artisanBidsProvider(artisanId)).valueOrNull ??
         const <JobBid>[];
     final ratings = ref.watch(artisanRatingsProvider(artisanId)).valueOrNull ??
@@ -165,7 +167,7 @@ class ArtisanProfileScreen extends ConsumerWidget {
                       leading: const Icon(Icons.storefront_outlined),
                       title: Text(listing.title),
                       subtitle: Text(
-                        '${listing.location} - $kCurrencySymbol ${listing.priceMin.toStringAsFixed(2)}',
+                        '${listing.location} - ${formatMoney(listing.priceMin, currencyCode)}',
                       ),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => context

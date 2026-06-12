@@ -6,7 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../config/constants.dart';
+import '../../core/utils/currency.dart';
 import '../../core/utils/location_data.dart';
 import '../../core/utils/service_categories.dart';
 import '../../routes/route_names.dart';
@@ -328,6 +328,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   Widget build(BuildContext context) {
     final listingService = ref.watch(listingServiceProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
+    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
     final scheme = Theme.of(context).colorScheme;
     if (!_appliedUserCountry && user != null) {
       _appliedUserCountry = true;
@@ -507,6 +508,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   userId: user?.id,
                   query: _serviceQuery,
                   locationQuery: _locationQuery,
+                  currencyCode: currencyCode,
                 ),
                 const SizedBox(height: 18),
                 Text('Matching professionals',
@@ -517,6 +519,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                 else
                   ...featured.map((pro) => _ProfessionalCard(
                         pro: pro,
+                        currencyCode: currencyCode,
                         onOpenProfile: () => context.push(
                           '${RouteNames.artisanProfile}/${pro.artisanId}',
                         ),
@@ -640,7 +643,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            _OpenJobsPreview(userId: user?.id),
+            _OpenJobsPreview(userId: user?.id, currencyCode: currencyCode),
             const SizedBox(height: 20),
             Text(
               'Latest Artisan Updates',
@@ -699,6 +702,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               ...featured.take(5).map(
                     (pro) => _ProfessionalCard(
                       pro: pro,
+                      currencyCode: currencyCode,
                       onOpenProfile: () => context.push(
                         '${RouteNames.artisanProfile}/${pro.artisanId}',
                       ),
@@ -1041,11 +1045,13 @@ Future<_PickerResult<T>?> _pickOption<T>(
 class _OpenJobsPreview extends ConsumerWidget {
   const _OpenJobsPreview({
     required this.userId,
+    required this.currencyCode,
     this.query = '',
     this.locationQuery = '',
   });
 
   final String? userId;
+  final String currencyCode;
   final String query;
   final String locationQuery;
 
@@ -1079,7 +1085,7 @@ class _OpenJobsPreview extends ConsumerWidget {
               child: ListTile(
                 title: Text(job.title),
                 subtitle: Text(
-                  '${job.location} - $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
+                  '${job.location} - ${formatMoney(job.budget, currencyCode)}',
                 ),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: userId == null
@@ -1097,12 +1103,14 @@ class _OpenJobsPreview extends ConsumerWidget {
 class _ProfessionalCard extends StatelessWidget {
   const _ProfessionalCard({
     required this.pro,
+    required this.currencyCode,
     required this.onOpenProfile,
     required this.onChat,
     required this.onBook,
   });
 
   final _ProfessionalPreview pro;
+  final String currencyCode;
   final VoidCallback onOpenProfile;
   final VoidCallback onChat;
   final VoidCallback onBook;
@@ -1222,7 +1230,7 @@ class _ProfessionalCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'From $kCurrencySymbol ${pro.minPrice.toStringAsFixed(2)}',
+                'From ${formatMoney(pro.minPrice, currencyCode)}',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 10),

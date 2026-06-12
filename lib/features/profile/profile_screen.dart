@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import '../../config/constants.dart';
+import '../../core/utils/currency.dart';
 import '../../core/utils/location_data.dart';
 import '../../models/app_user.dart';
 import '../../routes/route_names.dart';
@@ -216,21 +217,15 @@ Future<void> _showChangeUsernameDialog(
   AuthService authService,
   String currentUsername,
 ) async {
-  final requestSent = await _sendEmailOtp(context, authService);
-  if (!requestSent) return;
-  if (!context.mounted) return;
-
-  final result = await _showUsernameOtpDialog(
+  final nextUsername = await _showUsernameDialog(
     context: context,
     currentUsername: currentUsername,
   );
 
-  if (result == null) return;
-  final (nextUsername, otp) = result;
-  if (nextUsername.isEmpty || otp.isEmpty) return;
+  if (nextUsername == null || nextUsername.isEmpty) return;
 
   try {
-    await authService.updateUsername(nextUsername, emailOtp: otp);
+    await authService.updateUsername(nextUsername);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Username updated.')),
@@ -245,52 +240,18 @@ Future<void> _showChangeUsernameDialog(
   }
 }
 
-Future<bool> _sendEmailOtp(
-  BuildContext context,
-  AuthService authService,
-) async {
-  try {
-    await authService.requestEmailOtp();
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Email verification code sent.')),
-      );
-    }
-    return true;
-  } catch (error) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not send email code: $error')),
-      );
-    }
-    return false;
-  }
-}
-
-Future<(String username, String otp)?> _showUsernameOtpDialog({
+Future<String?> _showUsernameDialog({
   required BuildContext context,
   required String currentUsername,
 }) async {
   final usernameController = TextEditingController(text: currentUsername);
-  final otpController = TextEditingController();
-  final result = await showDialog<(String, String)>(
+  final result = await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Change username'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: usernameController,
-            decoration: const InputDecoration(labelText: 'New username'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: otpController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Email code'),
-          ),
-        ],
+      content: TextField(
+        controller: usernameController,
+        decoration: const InputDecoration(labelText: 'New username'),
       ),
       actions: [
         TextButton(
@@ -298,17 +259,61 @@ Future<(String username, String otp)?> _showUsernameOtpDialog({
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(
-            (usernameController.text.trim(), otpController.text.trim()),
-          ),
-          child: const Text('Verify and save'),
+          onPressed: () =>
+              Navigator.of(context).pop(usernameController.text.trim()),
+          child: const Text('Save'),
         ),
       ],
     ),
   );
   usernameController.dispose();
-  otpController.dispose();
   return result;
+}
+
+Future<void> _showFullNameDialog(
+  BuildContext context,
+  AuthService authService,
+  String currentFullName,
+) async {
+  final controller = TextEditingController(text: currentFullName);
+  final result = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Change full name'),
+      content: TextField(
+        controller: controller,
+        textCapitalization: TextCapitalization.words,
+        decoration: const InputDecoration(labelText: 'Full name'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+          child: const Text('Save'),
+        ),
+      ],
+    ),
+  );
+  controller.dispose();
+  if (result == null || result.trim().isEmpty) return;
+
+  try {
+    await authService.updateFullName(result);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Full name updated.')),
+      );
+    }
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update full name: $error')),
+      );
+    }
+  }
 }
 
 Future<void> _showSecuritySheet(
@@ -341,17 +346,18 @@ Future<void> _showSecuritySheet(
             ListTile(
               leading: const Icon(Icons.password_outlined),
               title: const Text('Change password'),
-              subtitle: const Text('Requires an email verification code.'),
+              subtitle: const Text('Updates your password directly.'),
               onTap: () {
                 Navigator.of(context).pop();
                 _showChangePasswordDialog(context, authService);
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.mark_email_read_outlined),
-              title: const Text('Email verification'),
-              subtitle: const Text('Security codes are sent by Supabase Auth.'),
-              onTap: () => _sendEmailOtp(context, authService),
+            const ListTile(
+              leading: Icon(Icons.mark_email_read_outlined),
+              title: Text('Email verification'),
+              subtitle: Text(
+                  'Temporarily disabled while email delivery is repaired.'),
+              enabled: false,
             ),
           ],
         ),
@@ -364,14 +370,9 @@ Future<void> _showChangePasswordDialog(
   BuildContext context,
   AuthService authService,
 ) async {
-  final requestSent = await _sendEmailOtp(context, authService);
-  if (!requestSent) return;
-  if (!context.mounted) return;
-
   final passwordController = TextEditingController();
   final confirmController = TextEditingController();
-  final otpController = TextEditingController();
-  final result = await showDialog<(String, String, String)>(
+  final result = await showDialog<(String, String)>(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Change password'),
@@ -389,12 +390,6 @@ Future<void> _showChangePasswordDialog(
             obscureText: true,
             decoration: const InputDecoration(labelText: 'Confirm password'),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: otpController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Email code'),
-          ),
         ],
       ),
       actions: [
@@ -407,7 +402,6 @@ Future<void> _showChangePasswordDialog(
             (
               passwordController.text,
               confirmController.text,
-              otpController.text.trim(),
             ),
           ),
           child: const Text('Update password'),
@@ -417,9 +411,8 @@ Future<void> _showChangePasswordDialog(
   );
   passwordController.dispose();
   confirmController.dispose();
-  otpController.dispose();
   if (result == null) return;
-  final (password, confirm, otp) = result;
+  final (password, confirm) = result;
   if (password != confirm) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -429,7 +422,7 @@ Future<void> _showChangePasswordDialog(
     return;
   }
   try {
-    await authService.updatePassword(password, otp);
+    await authService.updatePassword(password, '');
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Password updated.')),
@@ -526,21 +519,6 @@ Future<void> _showChangePhoneDialog(
     return;
   }
 
-  if (!context.mounted) return;
-  final code = await _showPhoneCodeDialog(
-    context,
-    formatPhoneForCountry(nextPhone, selectedCountry),
-  );
-  if (code == null) return;
-  if (code.trim().length < 4) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter the verification code.')),
-      );
-    }
-    return;
-  }
-
   try {
     await authService.updateCountry(
         selectedCountry.name, selectedCountry.dialCode);
@@ -560,47 +538,6 @@ Future<void> _showChangePhoneDialog(
       );
     }
   }
-}
-
-Future<String?> _showPhoneCodeDialog(
-  BuildContext context,
-  String phone,
-) async {
-  final controller = TextEditingController();
-  final result = await showDialog<String>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Confirm phone number'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Enter the text code sent to $phone. If SMS is not configured yet, use your test code.',
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Verification code'),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-          child: const Text('Verify'),
-        ),
-      ],
-    ),
-  );
-  controller.dispose();
-  return result;
 }
 
 Future<void> _showCountryDialog(
@@ -781,6 +718,7 @@ Future<void> _showAppSettingsSheet(
   var emailNotifications = settings.emailNotifications;
   var phoneNotifications = settings.phoneNotifications;
   var language = settings.language;
+  var currencyCode = settings.currencyCode;
   const languages = [
     'English',
     'Arabic',
@@ -907,6 +845,34 @@ Future<void> _showAppSettingsSheet(
                   },
                 ),
                 const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: currencyCode,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Currency',
+                    prefixIcon: Icon(Icons.payments_outlined),
+                  ),
+                  items: kCurrencyOptions
+                      .map(
+                        (currency) => DropdownMenuItem(
+                          value: currency.code,
+                          child: Text(
+                            '${currency.code} - ${currency.name}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (value) async {
+                    if (value == null) return;
+                    setSheetState(() => currencyCode = value);
+                    await ref
+                        .read(appSettingsControllerProvider.notifier)
+                        .setCurrencyCode(value);
+                    await _saveRemoteSettings(ref, user);
+                  },
+                ),
+                const SizedBox(height: 10),
               ],
             ),
           ),
@@ -957,7 +923,7 @@ Future<void> _showAccountSettingsSheet(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.person_outline),
                 title: Text(user.name),
-                subtitle: const Text('Username or company display name'),
+                subtitle: const Text('Username'),
                 trailing: const Text('Edit'),
                 onTap: () {
                   Navigator.of(context).pop();
@@ -965,6 +931,31 @@ Future<void> _showAccountSettingsSheet(
                     parentContext,
                     authService,
                     user.name,
+                  );
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.badge_outlined),
+                title: Text(
+                  user.fullName.trim().isEmpty
+                      ? 'Add full name'
+                      : user.fullName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  user.role == UserRole.artisan
+                      ? 'Full name or business contact name'
+                      : 'Full name',
+                ),
+                trailing: const Text('Edit'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showFullNameDialog(
+                    parentContext,
+                    authService,
+                    user.fullName.trim().isEmpty ? user.name : user.fullName,
                   );
                 },
               ),
@@ -1100,6 +1091,7 @@ Future<void> _saveRemoteSettings(WidgetRef ref, AppUser user) async {
       'email_notifications': settings.emailNotifications,
       'phone_notifications': settings.phoneNotifications,
       'app_language': settings.language,
+      'currency_code': settings.currencyCode,
     }).eq('id', user.id);
   } catch (_) {
     // Local settings still apply immediately; remote sync can retry next edit.

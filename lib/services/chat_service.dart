@@ -27,6 +27,10 @@ abstract class ChatService {
     required Iterable<String> messageIds,
   });
   Future<void> clearMessages(String threadId, {String? clearedForUserId});
+  Future<void> deleteThreadForUser({
+    required String threadId,
+    required String userId,
+  });
 }
 
 class MockChatService implements ChatService {
@@ -187,6 +191,16 @@ class MockChatService implements ChatService {
     _refreshThreadSummaries(threadId);
   }
 
+  @override
+  Future<void> deleteThreadForUser({
+    required String threadId,
+    required String userId,
+  }) async {
+    final threads = _threadsByUser[userId];
+    threads?.removeWhere((thread) => thread.id == threadId);
+    _threadControllers[userId]?.add(List<ChatThread>.from(threads ?? const []));
+  }
+
   void _refreshThreadSummaries(String threadId) {
     final messages = _messagesByThread[threadId] ?? const <ChatMessage>[];
     final lastMessage = messages.isEmpty ? null : messages.last;
@@ -233,11 +247,12 @@ class SupabaseChatService implements ChatService {
             .order('updated_at', ascending: false);
         lastGood = await _hydrateThreads(
             userId,
-            rows
+            _dedupeThreads(rows
                 .map((row) =>
                     ChatThread.fromJson(Map<String, dynamic>.from(row)))
-                .toList(growable: false));
+                .toList(growable: false)));
         await _localDb.cacheThreadsForUser(userId, lastGood);
+        lastGood = await _localDb.loadThreads(userId);
         yield lastGood;
       } catch (error, stackTrace) {
         debugPrint('Failed to refresh chat threads: $error');
@@ -247,6 +262,21 @@ class SupabaseChatService implements ChatService {
       }
       await Future<void>.delayed(const Duration(seconds: 6));
     }
+  }
+
+  List<ChatThread> _dedupeThreads(List<ChatThread> threads) {
+    final byPair = <String, ChatThread>{};
+    for (final thread in threads) {
+      final pair = [thread.userId, thread.artisanId]..sort();
+      final key = pair.join(':');
+      final existing = byPair[key];
+      if (existing == null || thread.updatedAt.isAfter(existing.updatedAt)) {
+        byPair[key] = thread;
+      }
+    }
+    final values = byPair.values.toList(growable: false);
+    values.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return values;
   }
 
   Future<List<ChatThread>> _hydrateThreads(
@@ -341,10 +371,17 @@ class SupabaseChatService implements ChatService {
             .map((row) => ChatMessage.fromJson(Map<String, dynamic>.from(row)))
             .where((message) => seen.add(message.id))
             .toList(growable: false);
-        await _localDb.cacheMessages(threadId, lastGood);
+        await _localDb.cacheMessages(
+          threadId,
+          lastGood,
+          emit: userId == null,
+        );
         final visible = userId == null
             ? lastGood
             : await _localDb.loadVisibleMessages(threadId, userId);
+        if (userId != null) {
+          await _localDb.emitVisibleMessagesForUser(threadId, userId);
+        }
         yield visible;
       } catch (error, stackTrace) {
         debugPrint('Failed to refresh chat messages: $error');
@@ -540,6 +577,39 @@ class SupabaseChatService implements ChatService {
         );
       }
     }
+  }
+
+  @override
+  Future<void> deleteThreadForUser({
+    required String threadId,
+    required String userId,
+  }) async {
+    try {
+      final current = await _supabase
+          .from('threads')
+          .select('user_id,artisan_id')
+          .eq('id', threadId)
+          .maybeSingle();
+      final customerId = (current?['user_id'] ?? '').toString();
+      final artisanId = (current?['artisan_id'] ?? '').toString();
+      if (customerId.isNotEmpty && artisanId.isNotEmpty) {
+        final duplicates = await _supabase
+            .from('threads')
+            .select('id')
+            .eq('user_id', customerId)
+            .eq('artisan_id', artisanId);
+        for (final row in duplicates) {
+          final duplicateId = (row['id'] ?? '').toString();
+          if (duplicateId.isNotEmpty) {
+            await _localDb.hideThreadForUser(duplicateId, userId);
+          }
+        }
+        return;
+      }
+    } catch (_) {
+      // Fall back to hiding the selected row locally.
+    }
+    await _localDb.hideThreadForUser(threadId, userId);
   }
 
   Future<void> _refreshThreadSummary(String threadId) async {

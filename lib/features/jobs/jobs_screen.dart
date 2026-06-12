@@ -4,8 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/constants.dart';
+import '../../core/utils/currency.dart';
+import '../../core/utils/location_data.dart';
 import '../../core/utils/service_categories.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 import 'jobs_repository.dart';
 
@@ -22,6 +25,8 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
   final _searchController = TextEditingController();
   String _query = '';
   String _category = 'All';
+  CountryOption? _selectedCountry;
+  RegionOption? _selectedRegion;
   String _scope = 'open';
   bool _newestFirst = true;
   Set<String> _hiddenJobIds = const {};
@@ -49,7 +54,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     });
   }
 
-  Future<void> _hideJob(String jobId) async {
+  Future<void> _hideJob(String jobId, {bool showNotice = true}) async {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
     final next = {..._hiddenJobIds, jobId};
@@ -57,14 +62,69 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     await prefs.setStringList('hidden_jobs_${user.id}', next.toList());
     if (!mounted) return;
     setState(() => _hiddenJobIds = next);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Request removed from your list.')),
+    if (showNotice) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Request removed from your list.')),
+      );
+    }
+  }
+
+  Future<void> _confirmDeleteOrHideJob(JobFeedItem job) async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    final ownsJob = job.createdBy == user.id;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(ownsJob ? 'Delete job request' : 'Remove job request'),
+        content: Text(
+          ownsJob
+              ? 'Delete "${job.title}" permanently?'
+              : 'Remove "${job.title}" from your list?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).pop(true),
+            icon: const Icon(Icons.delete),
+            label: Text(ownsJob ? 'Delete' : 'Remove'),
+          ),
+        ],
+      ),
     );
+    if (confirmed != true) return;
+    try {
+      if (ownsJob) {
+        await ref.read(jobsRepositoryProvider).deleteJob(job.id);
+        ref.invalidate(jobsStreamProvider);
+      } else {
+        await _hideJob(job.id, showNotice: false);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ownsJob
+                ? 'Job request deleted.'
+                : 'Request removed from your list.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete job request: $error')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
+    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
     if (user == null) {
       return const Center(child: Text('Please sign in to view jobs.'));
     }
@@ -125,12 +185,20 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                     searchController: _searchController,
                     query: _query,
                     category: _category,
+                    selectedCountry: _selectedCountry,
+                    selectedRegion: _selectedRegion,
                     scope: _scope,
                     newestFirst: _newestFirst,
                     onSearchChanged: (value) =>
                         setState(() => _query = value.trim().toLowerCase()),
                     onCategoryChanged: (value) =>
                         setState(() => _category = value),
+                    onCountryChanged: (value) => setState(() {
+                      _selectedCountry = value;
+                      _selectedRegion = null;
+                    }),
+                    onRegionChanged: (value) =>
+                        setState(() => _selectedRegion = value),
                     onScopeChanged: (value) => setState(() => _scope = value),
                     onSortChanged: () =>
                         setState(() => _newestFirst = !_newestFirst),
@@ -142,7 +210,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                   child: ListTile(
                     title: Text(job.title),
                     subtitle: Text(
-                      '${job.location} - $kCurrencySymbol ${job.budget.toStringAsFixed(2)}\n${_formatDateTime(job.createdAt)}',
+                      '${job.location} - ${formatMoney(job.budget, currencyCode)}\n${_formatDateTime(job.createdAt)}',
                     ),
                     isThreeLine: true,
                     trailing: FilledButton(
@@ -158,10 +226,10 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                     ),
                     onTap: () =>
                         context.push('${RouteNames.jobDetail}/${job.id}'),
-                    onLongPress: isArtisan ? () => _hideJob(job.id) : null,
+                    onLongPress: () => _confirmDeleteOrHideJob(job),
                   ),
                 );
-                if (!isArtisan) return card;
+                if (!isArtisan && job.createdBy != user.id) return card;
                 return Dismissible(
                   key: ValueKey('job_${job.id}'),
                   direction: DismissDirection.endToStart,
@@ -175,7 +243,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                     child: const Icon(Icons.delete, color: Colors.white),
                   ),
                   confirmDismiss: (_) async {
-                    await _hideJob(job.id);
+                    await _confirmDeleteOrHideJob(job);
                     return false;
                   },
                   child: card,
@@ -208,11 +276,19 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
           normalizeServiceCategory(job.title) == _category ||
           normalizeServiceCategory(job.description) == _category ||
           text.contains(_category.toLowerCase());
+      final countryMatches = _selectedCountry == null ||
+          text.contains(_selectedCountry!.name.toLowerCase());
+      final regionMatches = _selectedRegion == null ||
+          text.contains(_selectedRegion!.name.toLowerCase());
       final scopeMatches = !isArtisan ||
           _scope == 'all' ||
           (_scope == 'open' && !bidJobIds.contains(job.id)) ||
           (_scope == 'bids' && bidJobIds.contains(job.id));
-      return queryMatches && categoryMatches && scopeMatches;
+      return queryMatches &&
+          categoryMatches &&
+          countryMatches &&
+          regionMatches &&
+          scopeMatches;
     }).toList(growable: false);
     filtered.sort((a, b) => _newestFirst
         ? b.createdAt.compareTo(a.createdAt)
@@ -233,10 +309,14 @@ class _ArtisanJobFilters extends StatelessWidget {
     required this.searchController,
     required this.query,
     required this.category,
+    required this.selectedCountry,
+    required this.selectedRegion,
     required this.scope,
     required this.newestFirst,
     required this.onSearchChanged,
     required this.onCategoryChanged,
+    required this.onCountryChanged,
+    required this.onRegionChanged,
     required this.onScopeChanged,
     required this.onSortChanged,
   });
@@ -244,16 +324,21 @@ class _ArtisanJobFilters extends StatelessWidget {
   final TextEditingController searchController;
   final String query;
   final String category;
+  final CountryOption? selectedCountry;
+  final RegionOption? selectedRegion;
   final String scope;
   final bool newestFirst;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<String> onCategoryChanged;
+  final ValueChanged<CountryOption?> onCountryChanged;
+  final ValueChanged<RegionOption?> onRegionChanged;
   final ValueChanged<String> onScopeChanged;
   final VoidCallback onSortChanged;
 
   @override
   Widget build(BuildContext context) {
     final categories = ['All', ...kServiceCategories.map((item) => item.name)];
+    final regions = selectedCountry?.regions ?? const <RegionOption>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -272,7 +357,7 @@ class _ArtisanJobFilters extends StatelessWidget {
               child: DropdownButtonFormField<String>(
                 initialValue: category,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Category'),
+                decoration: const InputDecoration(labelText: 'Type'),
                 items: categories
                     .map((item) => DropdownMenuItem(
                           value: item,
@@ -291,6 +376,50 @@ class _ArtisanJobFilters extends StatelessWidget {
                 newestFirst ? Icons.arrow_downward : Icons.arrow_upward,
               ),
               tooltip: newestFirst ? 'Newest first' : 'Oldest first',
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<CountryOption?>(
+                initialValue: selectedCountry,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Country'),
+                items: <CountryOption?>[null, ...kCountries]
+                    .map(
+                      (country) => DropdownMenuItem(
+                        value: country,
+                        child: Text(
+                          country?.name ?? 'Any country',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: onCountryChanged,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: DropdownButtonFormField<RegionOption?>(
+                initialValue: selectedRegion,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Region'),
+                items: <RegionOption?>[null, ...regions]
+                    .map(
+                      (region) => DropdownMenuItem(
+                        value: region,
+                        child: Text(
+                          region?.name ?? 'Any region',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: selectedCountry == null ? null : onRegionChanged,
+              ),
             ),
           ],
         ),
@@ -315,6 +444,7 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
   final locationController = TextEditingController();
   final budgetController = TextEditingController();
   final formKey = GlobalKey<FormState>();
+  final currencyCode = ref.read(appSettingsControllerProvider).currencyCode;
 
   await showModalBottomSheet<void>(
     context: context,
@@ -378,7 +508,8 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: budgetController,
-                  decoration: const InputDecoration(labelText: 'Budget (GHS)'),
+                  decoration:
+                      InputDecoration(labelText: 'Budget ($currencyCode)'),
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   validator: (value) {
@@ -402,7 +533,10 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
                               title: titleController.text.trim(),
                               description: descriptionController.text.trim(),
                               location: locationController.text.trim(),
-                              budget: double.parse(budgetController.text),
+                              budget: convertToGhs(
+                                double.parse(budgetController.text),
+                                currencyCode,
+                              ),
                               createdBy: user.id,
                             );
                         if (context.mounted) {

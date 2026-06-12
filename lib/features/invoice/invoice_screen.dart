@@ -5,6 +5,7 @@ import '../../core/widgets/primary_button.dart';
 import '../../core/widgets/safe_back_button.dart';
 import '../../config/constants.dart';
 import '../../models/listing.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 
 class InvoiceScreen extends ConsumerStatefulWidget {
@@ -66,6 +67,7 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
       );
     }
     final user = ref.watch(authStateProvider).valueOrNull;
+    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
     final unitAmount = (listing.priceMin + listing.priceMax) / 2;
     final subtotal = unitAmount;
     final fee = subtotal * 0.05;
@@ -92,21 +94,27 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
           ].map(
             (line) => ListTile(
               title: Text(line.label),
-              trailing: Text(formatCurrency(line.amount * line.quantity)),
+              trailing: Text(
+                formatCurrency(
+                  line.amount * line.quantity,
+                  currencyCode: currencyCode,
+                ),
+              ),
             ),
           ),
           const Divider(),
           ListTile(
             title: const Text('Subtotal'),
-            trailing: Text(formatCurrency(subtotal)),
+            trailing:
+                Text(formatCurrency(subtotal, currencyCode: currencyCode)),
           ),
           ListTile(
             title: const Text('Service Fee'),
-            trailing: Text(formatCurrency(fee)),
+            trailing: Text(formatCurrency(fee, currencyCode: currencyCode)),
           ),
           ListTile(
             title: const Text('Total'),
-            trailing: Text(formatCurrency(total)),
+            trailing: Text(formatCurrency(total, currencyCode: currencyCode)),
           ),
           const SizedBox(height: 16),
           Text('Payment method',

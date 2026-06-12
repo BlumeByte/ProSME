@@ -1,8 +1,16 @@
+import 'dart:convert';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/utils/currency.dart';
+
 const _languageKey = 'settings_language';
+const _currencyCodeKey = 'settings_currency_code';
+const _currencyRateKeyPrefix = 'settings_currency_rate_';
 const _emailNotificationsKey = 'settings_email_notifications';
 const _phoneNotificationsKey = 'settings_phone_notifications';
 
@@ -14,11 +22,13 @@ final appSettingsControllerProvider =
 class AppSettings {
   const AppSettings({
     this.language = 'English',
+    this.currencyCode = 'GHS',
     this.emailNotifications = true,
     this.phoneNotifications = true,
   });
 
   final String language;
+  final String currencyCode;
   final bool emailNotifications;
   final bool phoneNotifications;
 
@@ -89,11 +99,13 @@ class AppSettings {
 
   AppSettings copyWith({
     String? language,
+    String? currencyCode,
     bool? emailNotifications,
     bool? phoneNotifications,
   }) {
     return AppSettings(
       language: language ?? this.language,
+      currencyCode: currencyCode ?? this.currencyCode,
       emailNotifications: emailNotifications ?? this.emailNotifications,
       phoneNotifications: phoneNotifications ?? this.phoneNotifications,
     );
@@ -109,9 +121,52 @@ class AppSettingsController extends StateNotifier<AppSettings> {
     final prefs = await SharedPreferences.getInstance();
     _initialSettings = AppSettings(
       language: prefs.getString(_languageKey) ?? 'English',
+      currencyCode: prefs.getString(_currencyCodeKey) ?? 'GHS',
       emailNotifications: prefs.getBool(_emailNotificationsKey) ?? true,
       phoneNotifications: prefs.getBool(_phoneNotificationsKey) ?? true,
     );
+    final cachedRate = prefs
+        .getDouble('$_currencyRateKeyPrefix${_initialSettings.currencyCode}');
+    if (cachedRate != null) {
+      setCurrencyRateFromGhs(_initialSettings.currencyCode, cachedRate);
+    }
+    unawaited(_refreshCurrencyRate(_initialSettings.currencyCode, prefs));
+  }
+
+  Future<void> setCurrencyCode(String currencyCode) async {
+    state = state.copyWith(currencyCode: currencyCode);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_currencyCodeKey, currencyCode);
+    final cachedRate = prefs.getDouble('$_currencyRateKeyPrefix$currencyCode');
+    if (cachedRate != null) setCurrencyRateFromGhs(currencyCode, cachedRate);
+    await _refreshCurrencyRate(currencyCode, prefs);
+  }
+
+  static Future<void> _refreshCurrencyRate(
+    String currencyCode,
+    SharedPreferences prefs,
+  ) async {
+    if (currencyCode == 'GHS') {
+      setCurrencyRateFromGhs('GHS', 1);
+      await prefs.setDouble('${_currencyRateKeyPrefix}GHS', 1);
+      return;
+    }
+    try {
+      final uri = Uri.parse('https://open.er-api.com/v6/latest/GHS');
+      final response = await http.get(uri).timeout(const Duration(seconds: 5));
+      if (response.statusCode < 200 || response.statusCode >= 300) return;
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) return;
+      final rates = decoded['rates'];
+      if (rates is! Map) return;
+      final rawRate = rates[currencyCode];
+      final rate = rawRate is num ? rawRate.toDouble() : null;
+      if (rate == null || rate <= 0) return;
+      setCurrencyRateFromGhs(currencyCode, rate);
+      await prefs.setDouble('$_currencyRateKeyPrefix$currencyCode', rate);
+    } catch (_) {
+      // Built-in fallback rates keep the app usable offline.
+    }
   }
 
   Future<void> setLanguage(String language) async {

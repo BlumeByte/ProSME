@@ -107,6 +107,8 @@ abstract class JobsRepository {
     List<String> images = const [],
   });
 
+  Future<void> deleteJob(String jobId);
+
   Future<JobBid> createBid({
     required String jobId,
     required String artisanId,
@@ -350,6 +352,11 @@ class SupabaseJobsRepository implements JobsRepository {
   }
 
   @override
+  Future<void> deleteJob(String jobId) async {
+    await _client.from('jobs').delete().eq('id', jobId);
+  }
+
+  @override
   Future<JobBid> createBid({
     required String jobId,
     required String artisanId,
@@ -588,6 +595,14 @@ class MockJobsRepository implements JobsRepository {
     _jobs[index] = updated;
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
     return updated;
+  }
+
+  @override
+  Future<void> deleteJob(String jobId) async {
+    _jobs.removeWhere((job) => job.id == jobId);
+    _bidsByJobId.remove(jobId);
+    _ratingsByJobId.remove(jobId);
+    _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
   }
 
   @override

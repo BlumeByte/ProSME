@@ -64,6 +64,7 @@ class LocalDbService {
   static const _listingsKey = 'local_cache_listings';
   static const _threadsKey = 'local_cache_chat_threads';
   static const _messagesKey = 'local_cache_chat_messages';
+  static const _hiddenThreadsKey = 'local_cache_hidden_chat_threads';
   static const _hiddenMessagesKey = 'local_cache_hidden_chat_messages';
   static const _pendingChatKey = 'local_cache_pending_chat_actions';
 
@@ -123,12 +124,14 @@ class LocalDbService {
     final all = await _loadThreadMap();
     all[userId] = threads;
     await _saveThreadMap(all);
-    _emitThreads(userId, threads);
+    _emitThreads(userId, await loadThreads(userId));
   }
 
   Future<List<ChatThread>> loadThreads(String userId) async {
     final all = await _loadThreadMap();
+    final hidden = await loadHiddenThreadIds(userId);
     final threads = List<ChatThread>.from(all[userId] ?? const []);
+    threads.removeWhere((thread) => hidden.contains(thread.id));
     threads.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return threads;
   }
@@ -196,16 +199,14 @@ class LocalDbService {
     await _savePendingChatActions(updatedPending);
   }
 
-  Future<void> cacheMessages(
-    String threadId,
-    List<ChatMessage> messages,
-  ) async {
+  Future<void> cacheMessages(String threadId, List<ChatMessage> messages,
+      {bool emit = true}) async {
     final all = await _loadMessageMap();
     final sorted = List<ChatMessage>.from(messages)
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     all[threadId] = sorted;
     await _saveMessageMap(all);
-    _emitMessages(threadId, sorted);
+    if (emit) _emitMessages(threadId, sorted);
   }
 
   Future<List<ChatMessage>> loadMessages(String threadId) async {
@@ -259,6 +260,35 @@ class LocalDbService {
     await _saveHiddenMessageMap(all);
     final visible = await loadVisibleMessages(threadId, userId);
     _emitMessages(threadId, visible);
+  }
+
+  Future<void> emitVisibleMessagesForUser(
+    String threadId,
+    String userId,
+  ) async {
+    _emitMessages(threadId, await loadVisibleMessages(threadId, userId));
+  }
+
+  Future<void> hideThreadForUser(String threadId, String userId) async {
+    final all = await _loadHiddenThreadMap();
+    final hidden = {...(all[userId] ?? const <String>[]), threadId};
+    all[userId] = hidden.toList(growable: false);
+    await _saveHiddenThreadMap(all);
+
+    final messages = await loadMessages(threadId);
+    if (messages.isNotEmpty) {
+      await hideMessagesForUser(
+        threadId,
+        userId,
+        messages.map((message) => message.id),
+      );
+    }
+    _emitThreads(userId, await loadThreads(userId));
+  }
+
+  Future<Set<String>> loadHiddenThreadIds(String userId) async {
+    final all = await _loadHiddenThreadMap();
+    return (all[userId] ?? const <String>[]).toSet();
   }
 
   Future<Set<String>> loadHiddenMessageIds(
@@ -360,6 +390,24 @@ class LocalDbService {
         List<String>.from(value as List<dynamic>),
       ),
     );
+  }
+
+  Future<Map<String, List<String>>> _loadHiddenThreadMap() async {
+    final prefs = await _store;
+    final raw = prefs.getString(_hiddenThreadsKey);
+    if (raw == null || raw.isEmpty) return <String, List<String>>{};
+    final decoded = jsonDecode(raw) as Map<String, dynamic>;
+    return decoded.map(
+      (key, value) => MapEntry(
+        key,
+        List<String>.from(value as List<dynamic>),
+      ),
+    );
+  }
+
+  Future<void> _saveHiddenThreadMap(Map<String, List<String>> value) async {
+    final prefs = await _store;
+    await prefs.setString(_hiddenThreadsKey, jsonEncode(value));
   }
 
   Future<void> _saveHiddenMessageMap(Map<String, List<String>> value) async {

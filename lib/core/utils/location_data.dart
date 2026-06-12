@@ -1,5 +1,3 @@
-import 'package:country_state_city/country_state_city.dart' as csc;
-
 class CountryOption {
   const CountryOption({
     required this.name,
@@ -3393,6 +3391,9 @@ const kCountries = <CountryOption>[
   ),
 ];
 
+List<CountryOption>? _cachedCountries;
+final _cachedRegionsByCountryCode = <String, CountryOption>{};
+
 CountryOption countryByName(String? name) {
   return kCountries.firstWhere(
     (country) => country.name == name,
@@ -3401,75 +3402,16 @@ CountryOption countryByName(String? name) {
 }
 
 Future<List<CountryOption>> loadWorldCountries() async {
-  try {
-    final countries = await csc.getAllCountries();
-    final options = countries
-        .map(
-          (country) => CountryOption(
-            name: country.name,
-            code: country.isoCode,
-            dialCode: _formatDialCode(country.phoneCode),
-            regions: const [],
-          ),
-        )
-        .toList(growable: false)
-      ..sort((a, b) => a.name.compareTo(b.name));
-    return options.isEmpty ? kCountries : options;
-  } catch (_) {
-    return kCountries;
-  }
+  return _cachedCountries ??= List<CountryOption>.unmodifiable(kCountries);
 }
 
 Future<CountryOption> loadCountryRegions(CountryOption country) async {
-  try {
-    final states = await csc.getStatesOfCountry(country.code);
-    if (states.isEmpty) {
-      final cities = await csc.getCountryCities(country.code);
-      return CountryOption(
-        name: country.name,
-        code: country.code,
-        dialCode: country.dialCode,
-        regions: [
-          RegionOption(
-            name: 'Any',
-            cities: cities
-                .map(
-                    (city) => CityOption(name: city.name, towns: const ['Any']))
-                .toList(growable: false),
-          ),
-        ],
-      );
-    }
-
-    final regions = <RegionOption>[];
-    for (final state in states) {
-      final cities = await csc.getStateCities(country.code, state.isoCode);
-      regions.add(
-        RegionOption(
-          name: state.name,
-          code: state.isoCode,
-          cities: cities
-              .map((city) => CityOption(name: city.name, towns: const ['Any']))
-              .toList(growable: false),
-        ),
-      );
-    }
-    regions.sort((a, b) => a.name.compareTo(b.name));
-    return CountryOption(
-      name: country.name,
-      code: country.code,
-      dialCode: country.dialCode,
-      regions: regions,
-    );
-  } catch (_) {
-    return country.regions.isNotEmpty ? country : countryByName(country.name);
-  }
-}
-
-String _formatDialCode(String raw) {
-  final trimmed = raw.trim();
-  if (trimmed.isEmpty) return '+000';
-  return trimmed.startsWith('+') ? trimmed : '+$trimmed';
+  final cached = _cachedRegionsByCountryCode[country.code];
+  if (cached != null) return cached;
+  final local =
+      country.regions.isNotEmpty ? country : countryByName(country.name);
+  _cachedRegionsByCountryCode[country.code] = local;
+  return local;
 }
 
 bool isValidPhoneForCountry(String phone, CountryOption country) {

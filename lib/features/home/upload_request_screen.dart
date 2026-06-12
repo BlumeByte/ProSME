@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../config/constants.dart';
+import '../../core/utils/currency.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 import '../jobs/jobs_repository.dart';
 
@@ -43,11 +44,15 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
     }
     setState(() => _isSubmitting = true);
     try {
+      final currencyCode = ref.read(appSettingsControllerProvider).currencyCode;
       await ref.read(jobsRepositoryProvider).createJob(
             title: _titleController.text.trim(),
             description: _descriptionController.text.trim(),
             location: _locationController.text.trim(),
-            budget: double.parse(_budgetController.text.trim()),
+            budget: convertToGhs(
+              double.parse(_budgetController.text.trim()),
+              currencyCode,
+            ),
             createdBy: user.id,
           );
       if (!mounted) return;
@@ -75,6 +80,7 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
+    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
     if (user == null) {
       return Center(
         child: FilledButton.icon(
@@ -129,8 +135,8 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
               const SizedBox(height: 10),
               TextFormField(
                 controller: _budgetController,
-                decoration: const InputDecoration(
-                  labelText: 'Budget ($kCurrencySymbol)',
+                decoration: InputDecoration(
+                  labelText: 'Budget ($currencyCode)',
                 ),
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
@@ -168,7 +174,7 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
               child: ListTile(
                 title: Text(job.title),
                 subtitle: Text(
-                  '${job.location} - $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
+                  '${job.location} - ${formatMoney(job.budget, currencyCode)}',
                 ),
               ),
             ),

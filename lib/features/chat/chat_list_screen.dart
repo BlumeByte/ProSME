@@ -9,6 +9,50 @@ import '../../services/service_providers.dart';
 class ChatListScreen extends ConsumerWidget {
   const ChatListScreen({super.key});
 
+  Future<void> _deleteThread(
+    BuildContext context,
+    WidgetRef ref,
+    String threadId,
+    String userId,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete chat'),
+        content: const Text('Delete this conversation from your chat home?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).pop(true),
+            icon: const Icon(Icons.delete),
+            label: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await ref.read(chatServiceProvider).deleteThreadForUser(
+            threadId: threadId,
+            userId: userId,
+          );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Chat deleted.')),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete chat: $error')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final chatService = ref.watch(chatServiceProvider);
@@ -64,13 +108,24 @@ class ChatListScreen extends ConsumerWidget {
             final photoUrl =
                 showingCustomer ? thread.userPhotoUrl : thread.artisanPhotoUrl;
             return ListTile(
-              leading: CircleAvatar(
-                backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
-                    ? NetworkImage(photoUrl)
-                    : null,
-                child: (photoUrl == null || photoUrl.isEmpty)
-                    ? const Icon(Icons.person)
-                    : null,
+              leading: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    onPressed: () =>
+                        _deleteThread(context, ref, thread.id, user.id),
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Delete chat',
+                  ),
+                  CircleAvatar(
+                    backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+                        ? NetworkImage(photoUrl)
+                        : null,
+                    child: (photoUrl == null || photoUrl.isEmpty)
+                        ? const Icon(Icons.person)
+                        : null,
+                  ),
+                ],
               ),
               title: Row(
                 children: [

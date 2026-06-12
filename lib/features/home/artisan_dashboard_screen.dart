@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/constants.dart';
+import '../../core/utils/currency.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/notification_service.dart';
@@ -36,6 +37,7 @@ class _ArtisanDashboardScreenState
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
+    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
     final jobsAsync = ref.watch(jobsStreamProvider);
     final bidsAsync = user == null
         ? const AsyncValue<List<JobBid>>.data(<JobBid>[])
@@ -192,7 +194,7 @@ class _ArtisanDashboardScreenState
                     child: ListTile(
                       title: Text(job.title),
                       subtitle: Text(
-                        '${job.location} - $kCurrencySymbol ${job.budget.toStringAsFixed(2)}',
+                        '${job.location} - ${formatMoney(job.budget, currencyCode)}',
                       ),
                       trailing: FilledButton(
                         onPressed: () =>

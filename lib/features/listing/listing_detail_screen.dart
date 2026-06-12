@@ -6,6 +6,7 @@ import '../../core/widgets/safe_back_button.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../core/widgets/loading_state.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 import '../../models/listing.dart';
 
@@ -18,6 +19,7 @@ class ListingDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final listingService = ref.watch(listingServiceProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
+    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
 
     // Watch saved IDs in real-time when the user is logged in.
     final savedIds = user == null
@@ -142,7 +144,7 @@ class ListingDetailScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                '${formatCurrency(listingData.priceMin)} - ${formatCurrency(listingData.priceMax)}',
+                '${formatCurrency(listingData.priceMin, currencyCode: currencyCode)} - ${formatCurrency(listingData.priceMax, currencyCode: currencyCode)}',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 16),

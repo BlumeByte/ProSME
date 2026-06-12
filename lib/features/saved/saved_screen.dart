@@ -7,6 +7,7 @@ import '../../core/widgets/loading_state.dart';
 import '../../core/widgets/safe_back_button.dart';
 import '../../models/listing.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 
 class SavedScreen extends ConsumerWidget {
@@ -39,6 +40,7 @@ class _SavedBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final savedIdsAsync = ref.watch(savedListingIdsProvider(userId));
+    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
 
     return savedIdsAsync.when(
       loading: () => const LoadingState(label: 'Loading saved listings…'),
@@ -77,6 +79,7 @@ class _SavedBody extends ConsumerWidget {
                 final listing = saved[index];
                 return ListingCard(
                   listing: listing,
+                  currencyCode: currencyCode,
                   onTap: () =>
                       context.push('${RouteNames.listingDetail}/${listing.id}'),
                 );

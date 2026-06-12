@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../config/constants.dart';
+import '../../core/utils/currency.dart';
 import '../../core/widgets/safe_back_button.dart';
 import '../../models/chat_models.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 import 'jobs_repository.dart';
 
@@ -36,6 +38,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
+    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
     final jobsAsync = ref.watch(jobsStreamProvider);
     return Scaffold(
       appBar: AppBar(
@@ -67,13 +70,15 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
           if (existingBid != null &&
               _amountController.text.isEmpty &&
               _messageController.text.isEmpty) {
-            _amountController.text = existingBid.amount.toStringAsFixed(0);
+            _amountController.text =
+                convertFromGhs(existingBid.amount, currencyCode)
+                    .toStringAsFixed(0);
             _messageController.text = existingBid.message;
           }
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _JobSummary(job: job),
+              _JobSummary(job: job, currencyCode: currencyCode),
               const SizedBox(height: 16),
               const Card(
                 child: ListTile(
@@ -91,9 +96,9 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                   child: const Text('Sign in to bid or chat'),
                 )
               else if (isOwner) ...[
-                _EditJobCard(job: job),
+                _EditJobCard(job: job, currencyCode: currencyCode),
                 const SizedBox(height: 12),
-                _BidsForOwner(job: job),
+                _BidsForOwner(job: job, currencyCode: currencyCode),
               ] else if (isArtisan)
                 _BidForm(
                   formKey: _formKey,
@@ -101,6 +106,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                   messageController: _messageController,
                   submitting: _submitting,
                   existingBid: existingBid,
+                  currencyCode: currencyCode,
                   onSubmit: () => _submitBid(job),
                 )
               else
@@ -127,7 +133,11 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
     if (user == null) return;
     setState(() => _submitting = true);
     try {
-      final amount = double.parse(_amountController.text.trim());
+      final currencyCode = ref.read(appSettingsControllerProvider).currencyCode;
+      final amount = convertToGhs(
+        double.parse(_amountController.text.trim()),
+        currencyCode,
+      );
       final bid = await ref.read(jobsRepositoryProvider).createBid(
             jobId: job.id,
             artisanId: user.id,
@@ -145,7 +155,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
               senderId: user.id,
               type: MessageType.offer,
               content:
-                  'Bid submitted: $kCurrencySymbol ${bid.amount.toStringAsFixed(2)}. ${bid.message}',
+                  'Bid submitted: ${formatMoney(bid.amount, currencyCode)}. ${bid.message}',
               createdAt: DateTime.now(),
             ),
           );
@@ -162,7 +172,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
           ),
         ),
       );
-      context.go('${RouteNames.chatThread}/${thread.id}');
+      context.push('${RouteNames.chatThread}/${thread.id}');
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -175,9 +185,10 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
 }
 
 class _JobSummary extends StatelessWidget {
-  const _JobSummary({required this.job});
+  const _JobSummary({required this.job, required this.currencyCode});
 
   final JobFeedItem job;
+  final String currencyCode;
 
   @override
   Widget build(BuildContext context) {
@@ -203,7 +214,7 @@ class _JobSummary extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              '$kCurrencySymbol ${job.budget.toStringAsFixed(2)} budget',
+              '${formatMoney(job.budget, currencyCode)} budget',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 16),
@@ -229,29 +240,80 @@ class _JobSummary extends StatelessWidget {
 }
 
 class _EditJobCard extends ConsumerWidget {
-  const _EditJobCard({required this.job});
+  const _EditJobCard({required this.job, required this.currencyCode});
 
   final JobFeedItem job;
+  final String currencyCode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Card(
-      child: ListTile(
-        leading: const Icon(Icons.edit_outlined),
-        title: const Text('Edit job'),
-        subtitle: const Text('Update details or add an image URL.'),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => _editJob(context, ref),
+      child: Column(
+        children: [
+          ListTile(
+            leading: const Icon(Icons.edit_outlined),
+            title: const Text('Edit job'),
+            subtitle: const Text('Update details or add an image URL.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _editJob(context, ref),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.delete_outline),
+            title: const Text('Delete job'),
+            subtitle: const Text('Permanently remove this request.'),
+            onTap: () => _deleteJob(context, ref),
+          ),
+        ],
       ),
     );
+  }
+
+  Future<void> _deleteJob(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete job request'),
+        content: Text('Delete "${job.title}" permanently?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).pop(true),
+            icon: const Icon(Icons.delete),
+            label: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(jobsRepositoryProvider).deleteJob(job.id);
+      ref.invalidate(jobsStreamProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Job request deleted.')),
+        );
+        context.pop();
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete job request: $error')),
+        );
+      }
+    }
   }
 
   Future<void> _editJob(BuildContext context, WidgetRef ref) async {
     final titleController = TextEditingController(text: job.title);
     final descriptionController = TextEditingController(text: job.description);
     final locationController = TextEditingController(text: job.location);
-    final budgetController =
-        TextEditingController(text: job.budget.toStringAsFixed(0));
+    final budgetController = TextEditingController(
+      text: convertFromGhs(job.budget, currencyCode).toStringAsFixed(0),
+    );
     final imageController =
         TextEditingController(text: job.images.isEmpty ? '' : job.images.first);
     final formKey = GlobalKey<FormState>();
@@ -290,7 +352,8 @@ class _EditJobCard extends ConsumerWidget {
                   controller: budgetController,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Budget'),
+                  decoration:
+                      InputDecoration(labelText: 'Budget ($currencyCode)'),
                   validator: (value) {
                     final parsed = double.tryParse((value ?? '').trim());
                     if (parsed == null || parsed <= 0) return 'Required';
@@ -331,7 +394,10 @@ class _EditJobCard extends ConsumerWidget {
               title: titleController.text.trim(),
               description: descriptionController.text.trim(),
               location: locationController.text.trim(),
-              budget: double.parse(budgetController.text.trim()),
+              budget: convertToGhs(
+                double.parse(budgetController.text.trim()),
+                currencyCode,
+              ),
               images: image.isEmpty ? const [] : [image],
             );
         if (context.mounted) {
@@ -363,6 +429,7 @@ class _BidForm extends StatelessWidget {
     required this.messageController,
     required this.submitting,
     required this.existingBid,
+    required this.currencyCode,
     required this.onSubmit,
   });
 
@@ -371,6 +438,7 @@ class _BidForm extends StatelessWidget {
   final TextEditingController messageController;
   final bool submitting;
   final JobBid? existingBid;
+  final String currencyCode;
   final VoidCallback onSubmit;
 
   @override
@@ -399,7 +467,7 @@ class _BidForm extends StatelessWidget {
               TextFormField(
                 controller: amountController,
                 decoration:
-                    const InputDecoration(labelText: 'Your price (GHS)'),
+                    InputDecoration(labelText: 'Your price ($currencyCode)'),
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
@@ -455,9 +523,10 @@ class _BidForm extends StatelessWidget {
 }
 
 class _BidsForOwner extends ConsumerWidget {
-  const _BidsForOwner({required this.job});
+  const _BidsForOwner({required this.job, required this.currencyCode});
 
   final JobFeedItem job;
+  final String currencyCode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -478,7 +547,9 @@ class _BidsForOwner extends ConsumerWidget {
           children: [
             Text('Bids', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            ...bids.map((bid) => _BidTile(job: job, bid: bid)),
+            ...bids.map(
+              (bid) => _BidTile(job: job, bid: bid, currencyCode: currencyCode),
+            ),
           ],
         );
       },
@@ -487,10 +558,15 @@ class _BidsForOwner extends ConsumerWidget {
 }
 
 class _BidTile extends ConsumerWidget {
-  const _BidTile({required this.job, required this.bid});
+  const _BidTile({
+    required this.job,
+    required this.bid,
+    required this.currencyCode,
+  });
 
   final JobFeedItem job;
   final JobBid bid;
+  final String currencyCode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -550,7 +626,7 @@ class _BidTile extends ConsumerWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              '$kCurrencySymbol ${bid.amount.toStringAsFixed(2)}',
+              formatMoney(bid.amount, currencyCode),
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -612,7 +688,7 @@ class _BidTile extends ConsumerWidget {
             artisanId: bid.artisanId,
           );
       if (context.mounted) {
-        context.go('${RouteNames.chatThread}/${thread.id}');
+        context.push('${RouteNames.chatThread}/${thread.id}');
       }
     } catch (error) {
       if (context.mounted) {

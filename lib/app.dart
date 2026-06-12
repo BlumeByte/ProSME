@@ -50,7 +50,11 @@ class ProSMEApp extends ConsumerWidget {
         Locale('yo'),
         Locale('zu'),
       ],
-      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       routerConfig: router,
     );
   }

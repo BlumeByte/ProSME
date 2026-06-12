@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
+import '../utils/currency.dart';
 import '../../models/listing.dart';
 
 class ListingCard extends StatelessWidget {
-  const ListingCard({super.key, required this.listing, required this.onTap});
+  const ListingCard({
+    super.key,
+    required this.listing,
+    required this.onTap,
+    this.currencyCode = 'GHS',
+  });
 
   final Listing listing;
   final VoidCallback onTap;
+  final String currencyCode;
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +61,7 @@ class ListingCard extends StatelessWidget {
                   Text(listing.location),
                   const SizedBox(height: 4),
                   Text(
-                    'GHS ${listing.priceMin.toStringAsFixed(0)} - ${listing.priceMax.toStringAsFixed(0)}',
+                    '${formatMoney(listing.priceMin, currencyCode, decimals: 0)} - ${formatMoney(listing.priceMax, currencyCode, decimals: 0)}',
                   ),
                   const SizedBox(height: 4),
                   Text(

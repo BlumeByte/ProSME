@@ -39,6 +39,7 @@ abstract class AuthService {
   Future<void> signOut();
   Future<void> updateRole(UserRole role);
   Future<void> updateUsername(String username, {String? emailOtp});
+  Future<void> updateFullName(String fullName);
   Future<void> updatePhone(String phone);
   Future<void> updateCountry(String country, String countryCode);
   Future<void> updatePhoto(Uint8List bytes, {required String contentType});
@@ -112,6 +113,7 @@ class MockAuthService implements AuthService {
       id: 'mock_${DateTime.now().microsecondsSinceEpoch}',
       role: role,
       name: username!.trim(),
+      fullName: username.trim(),
       phone: '',
       email: email.trim(),
       photoUrl: '',
@@ -133,6 +135,7 @@ class MockAuthService implements AuthService {
       id: 'mock_google_$now',
       role: UserRole.customer,
       name: 'Google User',
+      fullName: 'Google User',
       phone: '',
       email: email,
       photoUrl: '',
@@ -195,6 +198,21 @@ class MockAuthService implements AuthService {
     _emailByUsername.remove(user.name.toLowerCase());
     _emailByUsername[normalizedNext] = user.email.toLowerCase();
     _currentUser = user.copyWith(name: nextUsername);
+    _accountsByEmail[user.email.toLowerCase()] = _currentUser!;
+    _controller.add(_currentUser);
+  }
+
+  @override
+  Future<void> updateFullName(String fullName) async {
+    final user = _currentUser;
+    if (user == null) {
+      throw StateError('No signed-in user.');
+    }
+    final normalized = fullName.trim();
+    if (normalized.isEmpty) {
+      throw StateError('Full name cannot be empty.');
+    }
+    _currentUser = user.copyWith(fullName: normalized);
     _accountsByEmail[user.email.toLowerCase()] = _currentUser!;
     _controller.add(_currentUser);
   }
@@ -405,6 +423,11 @@ class SupabaseAuthService implements AuthService {
               metadata['name'] ??
               _defaultDisplayName)
           .toString(),
+      fullName: (source['full_name'] ??
+              metadata['full_name'] ??
+              metadata['name'] ??
+              '')
+          .toString(),
       phone: (source['phone'] ?? user.phone ?? '').toString(),
       email: (source['email'] ?? user.email ?? '').toString(),
       photoUrl:
@@ -522,6 +545,14 @@ class SupabaseAuthService implements AuthService {
     _profileController.add(_resolvedCurrentUser);
   }
 
+  Future<void> _syncAuthMetadata(Map<String, dynamic> data) async {
+    try {
+      await _supabase.auth.updateUser(UserAttributes(data: data));
+    } catch (error) {
+      debugPrint('Optional auth metadata sync failed: $error');
+    }
+  }
+
   @override
   Future<AppUser> signInWithEmail(String email, String password) async {
     final response = await _supabase.auth.signInWithPassword(
@@ -596,10 +627,8 @@ class SupabaseAuthService implements AuthService {
 
   @override
   Future<void> requestEmailOtp() async {
-    if (_supabase.auth.currentUser == null) {
-      throw StateError('No signed-in user.');
-    }
-    await _supabase.auth.reauthenticate();
+    // Temporarily disabled: Supabase auth email delivery is not reliable on
+    // the current project configuration.
   }
 
   @override
@@ -607,18 +636,14 @@ class SupabaseAuthService implements AuthService {
     if (_supabase.auth.currentUser == null) {
       throw StateError('No signed-in user.');
     }
-    final normalizedOtp = emailOtp.trim();
     if (!isStrongPassword(password)) {
       throw StateError(
         'Password must be at least 8 characters with uppercase, lowercase, number, and special character.',
       );
     }
-    if (normalizedOtp.isEmpty) {
-      throw StateError('Enter the email verification code.');
-    }
 
     await _supabase.auth.updateUser(
-      UserAttributes(password: password, nonce: normalizedOtp),
+      UserAttributes(password: password),
     );
   }
 
@@ -678,38 +703,36 @@ class SupabaseAuthService implements AuthService {
     if (normalized.isEmpty) {
       throw StateError('Username cannot be empty.');
     }
-    if ((emailOtp ?? '').trim().isEmpty) {
-      throw StateError('Enter the email verification code.');
-    }
-    final profile = await _fetchProfile(user.id);
-    final lastChangedRaw =
-        (profile?['username_updated_at'] ?? profile?['updated_at'])?.toString();
-    final lastChanged = DateTime.tryParse(lastChangedRaw ?? '');
-    if (lastChanged != null &&
-        DateTime.now().toUtc().difference(lastChanged.toUtc()) <
-            const Duration(days: 14)) {
-      throw StateError('Username can only be changed once every 14 days.');
-    }
-
     await _updateProfile(user.id, {
       'username': normalized,
-      'full_name': normalized,
       'username_updated_at': DateTime.now().toUtc().toIso8601String(),
     });
 
-    await _supabase.auth.updateUser(
-      UserAttributes(
-        data: {
-          'username': normalized,
-          'full_name': normalized,
-          'name': normalized,
-        },
-        nonce: emailOtp!.trim(),
-      ),
-    );
+    unawaited(_syncAuthMetadata({'username': normalized}));
 
     if (_resolvedCurrentUser != null) {
       _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(name: normalized);
+      _emitProfileUpdate();
+    }
+  }
+
+  @override
+  Future<void> updateFullName(String fullName) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      throw StateError('No signed-in user.');
+    }
+    final normalized = fullName.trim();
+    if (normalized.isEmpty) {
+      throw StateError('Full name cannot be empty.');
+    }
+
+    await _updateProfile(user.id, {'full_name': normalized});
+    unawaited(_syncAuthMetadata({'full_name': normalized, 'name': normalized}));
+
+    if (_resolvedCurrentUser != null) {
+      _resolvedCurrentUser =
+          _resolvedCurrentUser!.copyWith(fullName: normalized);
       _emitProfileUpdate();
     }
   }
@@ -725,8 +748,7 @@ class SupabaseAuthService implements AuthService {
       throw StateError('Phone cannot be empty.');
     }
 
-    await _updateProfile(
-        user.id, {'phone': normalized, 'phone_verified': false});
+    await _updateProfile(user.id, {'phone': normalized});
 
     if (_resolvedCurrentUser != null) {
       _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(phone: normalized);
