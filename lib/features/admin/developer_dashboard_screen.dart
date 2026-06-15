@@ -21,6 +21,7 @@ class _DeveloperDashboardScreenState
   Widget build(BuildContext context) {
     final sections = [
       const _DeveloperOverview(),
+      const _ReportsPanel(),
       const _AccountsPanel(),
       const _TenantsPanel(),
       const _ModulesPanel(),
@@ -39,6 +40,10 @@ class _DeveloperDashboardScreenState
               NavigationRailDestination(
                 icon: Icon(Icons.monitor_heart_outlined),
                 label: Text('Overview'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.report_gmailerrorred_outlined),
+                label: Text('Reports'),
               ),
               NavigationRailDestination(
                 icon: Icon(Icons.people_alt_outlined),
@@ -103,12 +108,163 @@ class _DeveloperOverview extends ConsumerWidget {
                 _MetricCard(label: 'Bids', value: counts.bids),
                 _MetricCard(label: 'Chats', value: counts.threads),
                 _MetricCard(label: 'Messages', value: counts.messages),
+                _MetricCard(label: 'Reports', value: counts.reports),
                 _MetricCard(label: 'Alerts', value: counts.notifications),
               ],
             ),
+            const SizedBox(height: 16),
+            const _RecentReportsPreview(),
           ],
         );
       },
+    );
+  }
+}
+
+class _RecentReportsPreview extends ConsumerWidget {
+  const _RecentReportsPreview();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return StreamBuilder<List<PlatformReport>>(
+      stream: ref.watch(adminServiceProvider).watchReports(),
+      builder: (context, snapshot) {
+        final reports = (snapshot.data ?? const <PlatformReport>[])
+            .where((report) => report.status == 'open')
+            .take(3)
+            .toList(growable: false);
+        if (reports.isEmpty) {
+          return const Card(
+            child: ListTile(
+              leading: Icon(Icons.check_circle_outline),
+              title: Text('No open reports'),
+              subtitle: Text('Chat and support reports will appear here.'),
+            ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Needs review',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            ...reports.map((report) => _ReportTile(report: report)),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ReportsPanel extends ConsumerWidget {
+  const _ReportsPanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return StreamBuilder<List<PlatformReport>>(
+      stream: ref.watch(adminServiceProvider).watchReports(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _ErrorPanel(
+              message: 'Could not load reports: ${snapshot.error}');
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final reports = snapshot.data!;
+        if (reports.isEmpty) {
+          return const Center(child: Text('No reports yet.'));
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: reports.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (context, index) => _ReportTile(report: reports[index]),
+        );
+      },
+    );
+  }
+}
+
+class _ReportTile extends ConsumerWidget {
+  const _ReportTile({required this.report});
+
+  final PlatformReport report;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final statusColor = switch (report.status) {
+      'open' => Colors.orange,
+      'resolved' => Colors.green,
+      'dismissed' => Colors.grey,
+      _ => Theme.of(context).colorScheme.primary,
+    };
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.report_gmailerrorred_outlined, color: statusColor),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    report.title.isEmpty ? report.type : report.title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                Chip(label: Text(report.status)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(report.body.isEmpty ? 'No details provided.' : report.body),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                Chip(label: Text(report.type)),
+                if (report.category.isNotEmpty)
+                  Chip(label: Text(report.category)),
+                if (report.relatedTable.isNotEmpty)
+                  Chip(
+                      label:
+                          Text('${report.relatedTable}: ${report.relatedId}')),
+                if (report.reportedUserId.isNotEmpty)
+                  Chip(label: Text('reported: ${report.reportedUserId}')),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: report.status == 'dismissed'
+                      ? null
+                      : () => ref.read(adminServiceProvider).updateReportStatus(
+                            reportId: report.id,
+                            status: 'dismissed',
+                          ),
+                  icon: const Icon(Icons.close),
+                  label: const Text('Dismiss'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: report.status == 'resolved'
+                      ? null
+                      : () => ref.read(adminServiceProvider).updateReportStatus(
+                            reportId: report.id,
+                            status: 'resolved',
+                          ),
+                  icon: const Icon(Icons.check),
+                  label: const Text('Resolve'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -294,6 +450,7 @@ class _ModulesPanel extends ConsumerWidget {
           ('Bids', counts.bids, 'Negotiation offers from artisans'),
           ('Threads', counts.threads, 'Chat rooms'),
           ('Messages', counts.messages, 'Chat messages and offers'),
+          ('Reports', counts.reports, 'Chat, support, and safety reports'),
           ('Notifications', counts.notifications, 'Support tasks'),
         ];
         return ListView.separated(

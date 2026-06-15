@@ -50,19 +50,19 @@ _LegalContent _contentFor(LegalPageKind kind) {
         sections: [
           _LegalSection(
             'Data we collect',
-            'ProSME stores account details, contact information, listings, jobs, chats, verification documents, saved listings, and payment preferences needed to operate the marketplace.',
+            'ProSME stores account details, contact information, listings, jobs, chats, verification documents, saved listings, reports, blocked-chat records, and payment preferences needed to operate the marketplace.',
           ),
           _LegalSection(
             'How data is used',
-            'Data is used for authentication, service matching, artisan verification, safety review, support, notifications, and transaction records.',
+            'Data is used for authentication, service matching, artisan verification, safety review, support, notifications, dispute context, abuse prevention, and transaction records.',
           ),
           _LegalSection(
             'User rights',
-            'Users may update profile details, request account deletion, and contact support about data access or correction.',
+            'Users may update profile details, request account deletion, block chats, report unsafe activity, and contact support about data access or correction.',
           ),
           _LegalSection(
             'Third parties',
-            'The app uses Supabase for authentication, database, storage, and realtime services. Payment and map providers may process data when those features are used.',
+            'The app uses Supabase for authentication, database, storage, realtime services, and Edge Functions. Payment, email, SMS, and map providers may process data when those features are used.',
           ),
         ],
       );
@@ -92,15 +92,27 @@ _LegalContent _contentFor(LegalPageKind kind) {
           ),
           _LegalSection(
             'Safety and prohibited conduct',
-            'Do not post illegal services, harassment, threats, fraud, stolen materials, dangerous work requests, spam, or content that violates another person’s rights. Meet in safe locations and verify details before sharing money or sensitive information.',
+            'Do not post illegal services, harassment, threats, fraud, stolen materials, dangerous work requests, spam, or content that violates another person\'s rights. Meet in safe locations and verify details before sharing money or sensitive information.',
+          ),
+          _LegalSection(
+            'Chats, reports, and blocking',
+            'Chats are provided to help users discuss service requests. Users may report or block conversations that appear unsafe, abusive, fraudulent, or inappropriate. Reports may be reviewed by ProSME developers or support staff and may include message context, account IDs, timestamps, and related request records.',
           ),
           _LegalSection(
             'Account actions',
             'ProSME may remove content, hide requests, limit features, reject verification, suspend accounts, or delete accounts when activity appears unsafe, fraudulent, unlawful, or harmful to the marketplace.',
           ),
           _LegalSection(
+            'Developer and support review',
+            'Developer dashboard tools may be used to review reports, account roles, verification status, listings, jobs, bids, notifications, and marketplace activity for support, safety, debugging, and abuse prevention.',
+          ),
+          _LegalSection(
             'Platform availability',
             'The app may be updated, interrupted, delayed, or unavailable because of maintenance, network issues, third-party services, or security controls. ProSME is provided without a guarantee of uninterrupted access.',
+          ),
+          _LegalSection(
+            'Offline and cached data',
+            'The app may temporarily store account, listing, job, and chat data on your device to improve speed and offline access. Cached data updates when connectivity returns and may be removed by signing out, clearing app data, or deleting the account.',
           ),
           _LegalSection(
             'Liability limits',
@@ -122,7 +134,7 @@ _LegalContent _contentFor(LegalPageKind kind) {
           ),
           _LegalSection(
             'Access controls',
-            'Supabase row-level security policies restrict private data and limit verification review tools to Support accounts.',
+            'Supabase row-level security policies restrict private data and limit verification, report, and developer review tools to authorized accounts.',
           ),
           _LegalSection(
             'Verification documents',
@@ -130,7 +142,7 @@ _LegalContent _contentFor(LegalPageKind kind) {
           ),
           _LegalSection(
             'Incident response',
-            'Report suspicious behavior or security concerns through Support so the team can review accounts and platform activity.',
+            'Report suspicious behavior or security concerns through Support or the chat report menu so the team can review accounts and platform activity.',
           ),
         ],
       );

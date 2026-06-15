@@ -36,6 +36,7 @@ class PlatformModuleCounts {
     required this.threads,
     required this.messages,
     required this.notifications,
+    required this.reports,
   });
 
   final int accounts;
@@ -46,6 +47,7 @@ class PlatformModuleCounts {
   final int threads;
   final int messages;
   final int notifications;
+  final int reports;
 }
 
 class SupportNotice {
@@ -59,6 +61,34 @@ class SupportNotice {
   final String id;
   final String title;
   final String body;
+  final DateTime createdAt;
+}
+
+class PlatformReport {
+  const PlatformReport({
+    required this.id,
+    required this.reporterId,
+    required this.reportedUserId,
+    required this.type,
+    required this.category,
+    required this.title,
+    required this.body,
+    required this.status,
+    required this.relatedTable,
+    required this.relatedId,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String reporterId;
+  final String reportedUserId;
+  final String type;
+  final String category;
+  final String title;
+  final String body;
+  final String status;
+  final String relatedTable;
+  final String relatedId;
   final DateTime createdAt;
 }
 
@@ -156,6 +186,7 @@ class AdminService {
         threads: 0,
         messages: 0,
         notifications: 0,
+        reports: 0,
       );
     }
 
@@ -167,6 +198,7 @@ class AdminService {
     final messageRows = await _supabase.from('messages').select('id');
     final notificationRows =
         await _supabase.from('admin_notifications').select('id');
+    final reportRows = await _supabase.from('reports').select('id');
     return PlatformModuleCounts(
       accounts: accounts.length,
       tenants: accounts.map((account) => account.tenantId).toSet().length,
@@ -176,6 +208,7 @@ class AdminService {
       threads: (threadRows as List<dynamic>).length,
       messages: (messageRows as List<dynamic>).length,
       notifications: (notificationRows as List<dynamic>).length,
+      reports: (reportRows as List<dynamic>).length,
     );
   }
 
@@ -309,6 +342,125 @@ class AdminService {
     });
   }
 
+  Future<void> submitChatReport({
+    required String threadId,
+    required String reportedUserId,
+    required String reason,
+    String category = 'chat',
+  }) async {
+    final client = _supabase;
+    if (client == null) return;
+    final userId = client.auth.currentUser?.id;
+    final body = reason.trim();
+    if (userId == null || body.isEmpty) return;
+
+    final inserted = await client
+        .from('reports')
+        .insert({
+          'reporter_id': userId,
+          if (reportedUserId.isNotEmpty) 'reported_user_id': reportedUserId,
+          'type': 'chat_report',
+          'category': category,
+          'title': category == 'block' ? 'Blocked chat user' : 'Chat report',
+          'body': body,
+          'message': body,
+          'status': 'open',
+          'related_table': 'threads',
+          if (_uuidOrNull(threadId) != null) 'related_id': threadId,
+        })
+        .select('id')
+        .maybeSingle();
+
+    final reportId = (inserted?['id'] ?? '').toString();
+    await client.from('admin_notifications').insert({
+      'type': category == 'block' ? 'chat_block' : 'chat_report',
+      'title': category == 'block' ? 'User blocked a chat' : 'New chat report',
+      'body': body,
+      'actor_id': userId,
+      if (reportedUserId.isNotEmpty) 'related_user_id': reportedUserId,
+      'related_table': 'reports',
+      'related_id': reportId.isEmpty ? null : reportId,
+    });
+  }
+
+  Future<void> blockChatUser({
+    required String threadId,
+    required String blockedUserId,
+    required String reason,
+  }) async {
+    final client = _supabase;
+    if (client == null) return;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null || blockedUserId.isEmpty) return;
+    await client.from('chat_blocks').upsert({
+      'blocker_id': userId,
+      'blocked_user_id': blockedUserId,
+      if (_uuidOrNull(threadId) != null) 'thread_id': threadId,
+      'reason': reason.trim().isEmpty ? 'Blocked from chat menu' : reason,
+    }, onConflict: 'blocker_id,blocked_user_id');
+    await submitChatReport(
+      threadId: threadId,
+      reportedUserId: blockedUserId,
+      reason: reason.trim().isEmpty ? 'User blocked this chat.' : reason,
+      category: 'block',
+    );
+  }
+
+  Future<bool> isChatBlocked({
+    required String threadId,
+    required String currentUserId,
+  }) async {
+    final client = _supabase;
+    if (client == null) return false;
+    try {
+      final rows = await client
+          .from('chat_blocks')
+          .select('id')
+          .eq('thread_id', threadId)
+          .or('blocker_id.eq.$currentUserId,blocked_user_id.eq.$currentUserId')
+          .limit(1);
+      return (rows as List<dynamic>).isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Stream<List<PlatformReport>> watchReports() async* {
+    yield await fetchReports();
+    final client = _supabase;
+    if (client == null) return;
+    yield* client
+        .from('reports')
+        .stream(primaryKey: ['id']).asyncMap((_) => fetchReports());
+  }
+
+  Future<List<PlatformReport>> fetchReports() async {
+    final client = _supabase;
+    if (client == null) return const [];
+    final rows = await client
+        .from('reports')
+        .select(
+          'id,reporter_id,reported_user_id,type,category,title,body,message,status,related_table,related_id,created_at',
+        )
+        .order('created_at', ascending: false)
+        .limit(100);
+    return (rows as List<dynamic>)
+        .map((row) => _reportFromRow(Map<String, dynamic>.from(row as Map)))
+        .toList(growable: false);
+  }
+
+  Future<void> updateReportStatus({
+    required String reportId,
+    required String status,
+  }) async {
+    final client = _supabase;
+    if (client == null) return;
+    await client.from('reports').update({
+      'status': status,
+      'reviewed_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', reportId);
+  }
+
   Future<List<SupportNotice>> fetchSupportNotices() async {
     final client = _supabase;
     if (client == null) return const [];
@@ -352,6 +504,15 @@ class AdminService {
   }
 }
 
+String? _uuidOrNull(String value) {
+  final normalized = value.trim();
+  return RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  ).hasMatch(normalized)
+      ? normalized
+      : null;
+}
+
 PlatformAccount _accountFromRow(Map<String, dynamic> row) {
   final roleName = (row['role'] ?? '').toString();
   final statusName = (row['verification_status'] ?? '').toString();
@@ -369,6 +530,24 @@ PlatformAccount _accountFromRow(Map<String, dynamic> row) {
       orElse: () => VerificationStatus.pending,
     ),
     tenantId: (row['tenant_id'] ?? 'default').toString(),
+    createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()) ??
+        DateTime.now(),
+  );
+}
+
+PlatformReport _reportFromRow(Map<String, dynamic> row) {
+  final body = (row['body'] ?? row['message'] ?? '').toString();
+  return PlatformReport(
+    id: (row['id'] ?? '').toString(),
+    reporterId: (row['reporter_id'] ?? '').toString(),
+    reportedUserId: (row['reported_user_id'] ?? '').toString(),
+    type: (row['type'] ?? 'support_ticket').toString(),
+    category: (row['category'] ?? '').toString(),
+    title: (row['title'] ?? 'Report').toString(),
+    body: body,
+    status: (row['status'] ?? 'open').toString(),
+    relatedTable: (row['related_table'] ?? '').toString(),
+    relatedId: (row['related_id'] ?? '').toString(),
     createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()) ??
         DateTime.now(),
   );

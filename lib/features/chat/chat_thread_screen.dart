@@ -44,6 +44,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
     setState(() => _sending = true);
     try {
+      final blocked = await ref.read(adminServiceProvider).isChatBlocked(
+            threadId: widget.threadId,
+            currentUserId: user.id,
+          );
+      if (blocked) {
+        throw StateError('This chat is blocked.');
+      }
       final chatService = ref.read(chatServiceProvider);
       if (_editingMessage != null) {
         await chatService.updateMessage(
@@ -229,6 +236,117 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         ],
       ),
     );
+  }
+
+  Future<String> _resolveOtherUserId() async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return '';
+    for (final message in _latestMessages) {
+      if (message.senderId != user.id) return message.senderId;
+    }
+    if (!shouldUseSupabase()) return '';
+    try {
+      final row = await ref
+          .read(supabaseClientProvider)
+          .from('threads')
+          .select('user_id,artisan_id')
+          .eq('id', widget.threadId)
+          .maybeSingle();
+      if (row == null) return '';
+      final customerId = (row['user_id'] ?? '').toString();
+      final artisanId = (row['artisan_id'] ?? '').toString();
+      if (customerId == user.id) return artisanId;
+      if (artisanId == user.id) return customerId;
+    } catch (_) {}
+    return '';
+  }
+
+  Future<String?> _promptReason({
+    required String title,
+    required String label,
+  }) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          minLines: 3,
+          maxLines: 5,
+          decoration: InputDecoration(labelText: label),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _reportConversation() async {
+    final reason = await _promptReason(
+      title: 'Report chat',
+      label: 'What should the developer review?',
+    );
+    if (reason == null || reason.trim().isEmpty) return;
+    final reportedUserId = await _resolveOtherUserId();
+    try {
+      await ref.read(adminServiceProvider).submitChatReport(
+            threadId: widget.threadId,
+            reportedUserId: reportedUserId,
+            reason: reason,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Report sent to developer dashboard.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not send report: $error')),
+      );
+    }
+  }
+
+  Future<void> _blockConversation() async {
+    final otherUserId = await _resolveOtherUserId();
+    if (otherUserId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not find the other user.')),
+      );
+      return;
+    }
+    final reason = await _promptReason(
+      title: 'Block chat',
+      label: 'Reason for blocking',
+    );
+    if (reason == null) return;
+    try {
+      await ref.read(adminServiceProvider).blockChatUser(
+            threadId: widget.threadId,
+            blockedUserId: otherUserId,
+            reason: reason,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Chat blocked and reported.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not block chat: $error')),
+      );
+    }
   }
 
   String _messagesShareText(List<ChatMessage> messages) {
@@ -525,6 +643,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       _clearAllMessages();
                     } else if (value == 'share') {
                       _showShareOptions(_latestMessages);
+                    } else if (value == 'report') {
+                      _reportConversation();
+                    } else if (value == 'block') {
+                      _blockConversation();
                     }
                   },
                   itemBuilder: (context) => const [
@@ -545,6 +667,27 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           Icon(Icons.delete_sweep),
                           SizedBox(width: 8),
                           Text('Clear all messages'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: 'report',
+                      child: Row(
+                        children: [
+                          Icon(Icons.report_gmailerrorred_outlined),
+                          SizedBox(width: 8),
+                          Text('Report'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'block',
+                      child: Row(
+                        children: [
+                          Icon(Icons.block),
+                          SizedBox(width: 8),
+                          Text('Block'),
                         ],
                       ),
                     ),
@@ -604,7 +747,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   return const LoadingState(label: 'Loading messages...');
                 }
 
-                final messages = snapshot.data!;
+                final messages = _sortMessages(snapshot.data!);
                 _latestMessages = messages;
                 if (user != null &&
                     messages.any((message) =>
@@ -626,67 +769,123 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final message = messages[index];
+                    final previous = index == 0 ? null : messages[index - 1];
+                    final showDateHeader = previous == null ||
+                        !_isSameDay(previous.createdAt, message.createdAt);
                     final isMine = user?.id == message.senderId;
                     final isSelected = _selectedMessageIds.contains(message.id);
-                    return Align(
-                      alignment:
-                          isMine ? Alignment.centerRight : Alignment.centerLeft,
-                      child: InkWell(
-                        onLongPress: isMine
-                            ? () => _toggleMessageSelection(message)
-                            : () => _toggleMessageSelection(message),
-                        onTap: _selectingMessages
-                            ? () => _toggleMessageSelection(message)
-                            : (!isMine
-                                ? () => _viewProfile(message.senderId)
-                                : () => _showMessageOptions(context, message)),
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          constraints: BoxConstraints(
-                            maxWidth: MediaQuery.sizeOf(context).width * 0.78,
-                          ),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: isMine
-                                ? colorScheme.primary
-                                : colorScheme.surfaceContainerHighest,
-                            border: isSelected
-                                ? Border.all(
-                                    color: colorScheme.primary,
-                                    width: 2,
-                                  )
-                                : null,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                message.content,
-                                style: TextStyle(
-                                  color: isMine
-                                      ? colorScheme.onPrimary
-                                      : colorScheme.onSurface,
+                    return Column(
+                      children: [
+                        if (showDateHeader)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10, top: 2),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 5,
+                                ),
+                                child: Text(
+                                  _formatDayHeader(message.createdAt),
+                                  style: Theme.of(context).textTheme.labelSmall,
                                 ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _formatTime(message.createdAt),
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(
+                            ),
+                          ),
+                        Align(
+                          alignment: isMine
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                          child: InkWell(
+                            onLongPress: () => _toggleMessageSelection(message),
+                            onTap: _selectingMessages
+                                ? () => _toggleMessageSelection(message)
+                                : (!isMine
+                                    ? () => _viewProfile(message.senderId)
+                                    : () =>
+                                        _showMessageOptions(context, message)),
+                            borderRadius: BorderRadius.circular(14),
+                            child: Container(
+                              constraints: BoxConstraints(
+                                maxWidth:
+                                    MediaQuery.sizeOf(context).width * 0.76,
+                              ),
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.fromLTRB(12, 8, 10, 6),
+                              decoration: BoxDecoration(
+                                color: isMine
+                                    ? colorScheme.primary
+                                    : colorScheme.surfaceContainerHighest,
+                                border: isSelected
+                                    ? Border.all(
+                                        color: colorScheme.secondary,
+                                        width: 2,
+                                      )
+                                    : null,
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(14),
+                                  topRight: const Radius.circular(14),
+                                  bottomLeft: Radius.circular(isMine ? 14 : 4),
+                                  bottomRight: Radius.circular(isMine ? 4 : 14),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (message.content
+                                      .startsWith('Forwarded from chat:')) ...[
+                                    Text(
+                                      'Forwarded',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: isMine
+                                                ? colorScheme.onPrimary
+                                                    .withValues(alpha: 0.75)
+                                                : colorScheme.onSurfaceVariant,
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                  ],
+                                  Text(
+                                    message.content.replaceFirst(
+                                      'Forwarded from chat:\n',
+                                      '',
+                                    ),
+                                    style: TextStyle(
                                       color: isMine
                                           ? colorScheme.onPrimary
-                                              .withValues(alpha: 0.75)
-                                          : colorScheme.onSurfaceVariant,
+                                          : colorScheme.onSurface,
                                     ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      _formatTime(message),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: isMine
+                                                ? colorScheme.onPrimary
+                                                    .withValues(alpha: 0.75)
+                                                : colorScheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     );
                   },
                 );
@@ -844,7 +1043,31 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     return isUser ? 'Artisan chat' : 'Customer chat';
   }
 
-  String _formatTime(DateTime dateTime) {
-    return DateFormat('h:mm a').format(dateTime);
+  List<ChatMessage> _sortMessages(List<ChatMessage> messages) {
+    return List<ChatMessage>.from(messages)
+      ..sort((a, b) {
+        final byCreatedAt = a.createdAt.compareTo(b.createdAt);
+        if (byCreatedAt != 0) return byCreatedAt;
+        return a.id.compareTo(b.id);
+      });
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _formatDayHeader(DateTime dateTime) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(dateTime.year, dateTime.month, dateTime.day);
+    if (day == today) return 'Today';
+    if (day == today.subtract(const Duration(days: 1))) return 'Yesterday';
+    return DateFormat('EEEE, MMM d, y').format(dateTime);
+  }
+
+  String _formatTime(ChatMessage message) {
+    final edited =
+        message.updatedAt.difference(message.createdAt).inSeconds > 2;
+    return '${edited ? 'Edited ' : ''}${DateFormat('h:mm a').format(message.createdAt)}';
   }
 }
