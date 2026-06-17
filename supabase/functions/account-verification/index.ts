@@ -71,33 +71,55 @@ const sendEmail = async (to: string, code: string) => {
   }
 };
 
-const sendSms = async (to: string, code: string) => {
-  const accountSid = env('TWILIO_ACCOUNT_SID');
-  const authToken = env('TWILIO_AUTH_TOKEN');
-  const from = env('TWILIO_FROM_PHONE');
-  if (!accountSid || !authToken || !from) {
-    throw new Error('SMS delivery is not configured. Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_PHONE secrets.');
+const phoneForTwilio = (phone: string) => {
+  const compact = clean(phone).replace(/[\s()-]/g, '');
+  if (/^\+[1-9]\d{7,14}$/.test(compact)) return compact;
+  if (/^0\d{8,13}$/.test(compact)) return `+233${compact.slice(1)}`;
+  return compact;
+};
+
+const twilioVerifyConfig = () => {
+  const serviceSid = env('TWILIO_VERIFY_SERVICE_SID') || (env('TWILIO_ACCOUNT_SID').startsWith('VA') ? env('TWILIO_ACCOUNT_SID') : '');
+  const username = env('TWILIO_API_KEY_SID') || (env('TWILIO_ACCOUNT_SID').startsWith('AC') ? env('TWILIO_ACCOUNT_SID') : '');
+  const password = env('TWILIO_API_KEY_SECRET') || env('TWILIO_AUTH_TOKEN');
+  if (!serviceSid || !username || !password) {
+    throw new Error('SMS verification is not configured. Add TWILIO_VERIFY_SERVICE_SID plus TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN or TWILIO_API_KEY_SID/TWILIO_API_KEY_SECRET secrets.');
   }
-  const body = new URLSearchParams({
-    From: from,
-    To: to,
-    Body: `Your ProSME verification code is ${code}. It expires in 10 minutes.`,
-  });
-  const response = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${btoa(`${accountSid}:${authToken}`)}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body,
+  return { serviceSid, username, password };
+};
+
+const twilioVerifyRequest = async (path: string, params: URLSearchParams) => {
+  const { serviceSid, username, password } = twilioVerifyConfig();
+  const response = await fetch(`https://verify.twilio.com/v2/Services/${serviceSid}/${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${btoa(`${username}:${password}`)}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
     },
-  );
+    body: params,
+  });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(clean(payload?.message) || 'SMS could not be sent.');
+    throw new Error(clean(payload?.message) || clean(payload?.error_message) || 'SMS verification request failed.');
   }
+  return payload;
+};
+
+const sendPhoneVerification = async (to: string) => {
+  const body = new URLSearchParams({
+    To: to,
+    Channel: 'sms',
+  });
+  await twilioVerifyRequest('Verifications', body);
+};
+
+const checkPhoneVerification = async (to: string, code: string) => {
+  const body = new URLSearchParams({
+    To: to,
+    Code: code,
+  });
+  const payload = await twilioVerifyRequest('VerificationCheck', body);
+  return clean(payload?.status) === 'approved' || payload?.valid === true;
 };
 
 Deno.serve(async (req) => {
@@ -136,13 +158,14 @@ Deno.serve(async (req) => {
     if (!profile) return json(200, { ok: false, error: 'Profile was not found.' });
 
     if (action === 'requestEmailCode' || action === 'requestPhoneCode') {
-      const destination = channel === 'email' ? clean(profile.email || user.email).toLowerCase() : clean(profile.phone || user.phone);
+      const destination = channel === 'email' ? clean(profile.email || user.email).toLowerCase() : phoneForTwilio(clean(profile.phone || user.phone));
       if (!destination) return json(200, { ok: false, error: channel === 'email' ? 'No email address is saved.' : 'No phone number is saved.' });
-      if (channel === 'phone' && (!env('TWILIO_ACCOUNT_SID') || !env('TWILIO_AUTH_TOKEN') || !env('TWILIO_FROM_PHONE'))) {
-        return json(200, {
-          ok: false,
-          error: 'SMS delivery is not configured. Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_PHONE secrets.',
-        });
+      if (channel === 'phone') {
+        if (!/^\+[1-9]\d{7,14}$/.test(destination)) {
+          return json(200, { ok: false, error: 'Enter the phone number with country code, for example +233256122555.' });
+        }
+        await sendPhoneVerification(destination);
+        return json(200, { ok: true });
       }
 
       const code = randomCode();
@@ -165,22 +188,28 @@ Deno.serve(async (req) => {
         });
       if (insertError) throw new Error(insertError.message);
 
-      if (channel === 'email') {
-        await sendEmail(destination, code);
-      } else {
-        await adminClient.from('sms_outbox').insert({
-          to_phone: destination,
-          body: 'A ProSME phone verification code was requested.',
-          related_user_id: user.id,
-        });
-        await sendSms(destination, code);
-      }
+      await sendEmail(destination, code);
       return json(200, { ok: true });
     }
 
     if (action === 'verifyEmailCode' || action === 'verifyPhoneCode') {
       const code = clean(body.code).replace(/\s+/g, '');
       if (!/^\d{6}$/.test(code)) return json(200, { ok: false, error: 'Enter the 6-digit code.' });
+      if (channel === 'phone') {
+        const destination = phoneForTwilio(clean(profile.phone || user.phone));
+        if (!/^\+[1-9]\d{7,14}$/.test(destination)) {
+          return json(200, { ok: false, error: 'Enter the phone number with country code, for example +233256122555.' });
+        }
+        const approved = await checkPhoneVerification(destination, code);
+        if (!approved) return json(200, { ok: false, error: 'Invalid verification code.' });
+        const { error: updateError } = await adminClient
+          .from('profiles')
+          .update({ phone_verified: true })
+          .eq('id', user.id);
+        if (updateError) throw new Error(updateError.message);
+        return json(200, { ok: true });
+      }
+
       const codeHash = await hashCode(user.id, channel, code);
       const { data: existing, error: findError } = await adminClient
         .from('profile_verification_codes')
