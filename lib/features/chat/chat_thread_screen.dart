@@ -24,6 +24,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
 
 class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   final _controller = TextEditingController();
+  final _scrollController = ScrollController();
   final _uuid = const Uuid();
   bool _sending = false;
   String? _editingMessageId;
@@ -34,7 +35,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   Future<void> _sendMessage() async {
@@ -749,6 +762,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
                 final messages = _sortMessages(snapshot.data!);
                 _latestMessages = messages;
+                _scrollToBottom();
                 if (user != null &&
                     messages.any((message) =>
                         message.senderId != user.id &&
@@ -764,6 +778,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   return const Center(child: Text('Start the conversation.'));
                 }
                 return ListView.builder(
+                  controller: _scrollController,
                   reverse: false,
                   padding: const EdgeInsets.all(16),
                   itemCount: messages.length,

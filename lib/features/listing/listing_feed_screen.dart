@@ -328,7 +328,8 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   Widget build(BuildContext context) {
     final listingService = ref.watch(listingServiceProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
-    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
+    final settings = ref.watch(appSettingsControllerProvider);
+    final currencyCode = settings.currencyCode;
     final scheme = Theme.of(context).colorScheme;
     if (!_appliedUserCountry && user != null) {
       _appliedUserCountry = true;
@@ -439,6 +440,10 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
 
         final featured = professionalsById.values.toList()
           ..sort((a, b) => b.listingCount.compareTo(a.listingCount));
+        final showingAllProfessionals = _showSearchResults &&
+            _serviceQuery.isEmpty &&
+            _locationQuery.isEmpty &&
+            _selectedCategory == null;
 
         if (_showSearchResults) {
           return PopScope(
@@ -459,7 +464,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                     ),
                     Expanded(
                       child: Text(
-                        'Search results',
+                        settings.t('Search results'),
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
@@ -501,7 +506,10 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   ),
                   const SizedBox(height: 16),
                 ],
-                Text('Matching requests',
+                Text(
+                    showingAllProfessionals
+                        ? settings.t('Open service requests')
+                        : settings.t('Matching requests'),
                     style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
                 _OpenJobsPreview(
@@ -511,7 +519,10 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   currencyCode: currencyCode,
                 ),
                 const SizedBox(height: 18),
-                Text('Matching professionals',
+                Text(
+                    showingAllProfessionals
+                        ? settings.t('All professionals')
+                        : settings.t('Matching professionals'),
                     style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
                 if (featured.isEmpty)
@@ -646,12 +657,12 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             _OpenJobsPreview(userId: user?.id, currencyCode: currencyCode),
             const SizedBox(height: 20),
             Text(
-              'Latest Artisan Updates',
+              settings.t('Latest Artisan Updates'),
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
             if (listings.isEmpty)
-              const Text('No artisan updates yet.')
+              Text(settings.t('No artisan updates yet.'))
             else
               ...listings.take(3).map(
                     (listing) => Card(
@@ -676,7 +687,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'Featured Professionals',
+                    settings.t('Featured Professionals'),
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
@@ -688,16 +699,19 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                       _serviceQuery = '';
                       _locationQuery = '';
                       _selectedCategory = null;
+                      _selectedRegion = null;
+                      _selectedCity = null;
+                      _selectedTown = null;
                       _showSearchResults = true;
                     });
                   },
-                  child: const Text('View All'),
+                  child: Text(settings.t('View All')),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             if (featured.isEmpty)
-              const Text('No professionals found for this search.')
+              Text(settings.t('No professionals found for this search.'))
             else
               ...featured.take(5).map(
                     (pro) => _ProfessionalCard(
@@ -991,53 +1005,80 @@ Future<_PickerResult<T>?> _pickOption<T>(
   required List<T> options,
   required String Function(T option) labelFor,
 }) {
+  String query = '';
   return showModalBottomSheet<_PickerResult<T>>(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
-    builder: (context) => SafeArea(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.72,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-              child: Row(
+    builder: (context) => StatefulBuilder(
+      builder: (context, setSheetState) {
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.78,
+            ),
+            child: Builder(
+              builder: (context) {
+                final filtered = query.isEmpty
+                    ? options
+                    : options
+                        .where((option) => labelFor(option)
+                            .toLowerCase()
+                            .contains(query.toLowerCase()))
+                        .toList(growable: false);
+                return Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleLarge,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close),
+                          tooltip: 'Close',
+                        ),
+                      ],
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Close',
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Search $title',
+                        prefixIcon: const Icon(Icons.search),
+                      ),
+                      onChanged: (value) =>
+                          setSheetState(() => query = value.trim()),
+                    ),
+                  ),
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final option = filtered[index];
+                        return ListTile(
+                          title: Text(labelFor(option)),
+                          onTap: () =>
+                              Navigator.of(context).pop(_PickerResult(option)),
+                        );
+                      },
+                    ),
                   ),
                 ],
-              ),
+              );
+              },
             ),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: options.length,
-                itemBuilder: (context, index) {
-                  final option = options[index];
-                  return ListTile(
-                    title: Text(labelFor(option)),
-                    onTap: () =>
-                        Navigator.of(context).pop(_PickerResult(option)),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     ),
   );
 }
@@ -1232,6 +1273,16 @@ class _ProfessionalCard extends StatelessWidget {
               Text(
                 'From ${formatMoney(pro.minPrice, currencyCode)}',
                 style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: onOpenProfile,
+                icon: const Icon(Icons.account_circle_outlined, size: 18),
+                label: Text(
+                  pro.ratingCount > 0
+                      ? 'Profile & ${pro.ratingCount} comment${pro.ratingCount == 1 ? '' : 's'}'
+                      : 'View profile & comments',
+                ),
               ),
               const SizedBox(height: 10),
               Row(

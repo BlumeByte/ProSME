@@ -8,7 +8,7 @@ import 'constants.dart';
 Future<void> initSupabase() async {
   await Supabase.initialize(
     url: kSupabaseUrl,
-    publishableKey: kSupabaseAnonKey,
+    anonKey: kSupabaseAnonKey,
   );
 }
 

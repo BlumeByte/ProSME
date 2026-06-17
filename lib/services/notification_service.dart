@@ -9,6 +9,23 @@ class NotificationService {
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: androidSettings);
     await _plugin.initialize(settings);
+    await requestPermissions();
+  }
+
+  Future<bool> requestPermissions() async {
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    final androidGranted =
+        await android?.requestNotificationsPermission() ?? true;
+    final ios = _plugin.resolvePlatformSpecificImplementation<
+        IOSFlutterLocalNotificationsPlugin>();
+    final iosGranted = await ios?.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        ) ??
+        true;
+    return androidGranted && iosGranted;
   }
 
   Future<void> showSimpleNotification({

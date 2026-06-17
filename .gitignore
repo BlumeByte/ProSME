@@ -57,6 +57,7 @@ unlinked_spec.ds
 **/android/key.properties
 *.jks
 supabase.local.json
+supabase/.temp/
 *.env
 
 # iOS/XCode related

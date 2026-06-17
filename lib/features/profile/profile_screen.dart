@@ -13,6 +13,7 @@ import '../../models/app_user.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/service_providers.dart';
 import '../../services/theme_mode_controller.dart';
 
@@ -319,6 +320,7 @@ Future<void> _showFullNameDialog(
 Future<void> _showSecuritySheet(
   BuildContext context,
   AuthService authService,
+  AppUser user,
 ) async {
   await showModalBottomSheet<void>(
     context: context,
@@ -352,18 +354,128 @@ Future<void> _showSecuritySheet(
                 _showChangePasswordDialog(context, authService);
               },
             ),
-            const ListTile(
-              leading: Icon(Icons.mark_email_read_outlined),
-              title: Text('Email verification'),
+            ListTile(
+              leading: Icon(
+                user.emailVerified
+                    ? Icons.mark_email_read_outlined
+                    : Icons.mark_email_unread_outlined,
+              ),
+              title: const Text('Email verification'),
               subtitle: Text(
-                  'Temporarily disabled while email delivery is repaired.'),
-              enabled: false,
+                user.emailVerified
+                    ? 'Your email is verified.'
+                    : 'Send a 6-digit code to ${user.email}.',
+              ),
+              trailing: user.emailVerified ? const Text('Verified') : null,
+              onTap: user.emailVerified
+                  ? null
+                  : () {
+                      Navigator.of(context).pop();
+                      _showVerificationCodeDialog(
+                        context,
+                        title: 'Verify email',
+                        requestCode: authService.requestEmailOtp,
+                        verifyCode: authService.verifyEmailOtp,
+                      );
+                    },
+            ),
+            ListTile(
+              leading: Icon(
+                user.phoneVerified
+                    ? Icons.phone_android
+                    : Icons.phonelink_ring_outlined,
+              ),
+              title: const Text('Phone verification'),
+              subtitle: Text(
+                user.phone.isEmpty
+                    ? 'Add a phone number first.'
+                    : user.phoneVerified
+                        ? 'Your phone is verified.'
+                        : 'Send a 6-digit code to ${user.phone}.',
+              ),
+              trailing: user.phoneVerified ? const Text('Verified') : null,
+              enabled: user.phone.isNotEmpty && !user.phoneVerified,
+              onTap: user.phone.isEmpty || user.phoneVerified
+                  ? null
+                  : () {
+                      Navigator.of(context).pop();
+                      _showVerificationCodeDialog(
+                        context,
+                        title: 'Verify phone',
+                        requestCode: authService.requestPhoneOtp,
+                        verifyCode: authService.verifyPhoneOtp,
+                      );
+                    },
             ),
           ],
         ),
       ),
     ),
   );
+}
+
+Future<void> _showVerificationCodeDialog(
+  BuildContext context, {
+  required String title,
+  required Future<void> Function() requestCode,
+  required Future<void> Function(String code) verifyCode,
+}) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  try {
+    await requestCode();
+    if (context.mounted && messenger != null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Verification code sent.')),
+      );
+    }
+  } catch (error) {
+    if (context.mounted && messenger != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not send code: $error')),
+      );
+    }
+    return;
+  }
+  if (!context.mounted) return;
+  final controller = TextEditingController();
+  final code = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        maxLength: 6,
+        decoration: const InputDecoration(labelText: '6-digit code'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+          child: const Text('Verify'),
+        ),
+      ],
+    ),
+  );
+  controller.dispose();
+  if (code == null || code.isEmpty) return;
+  try {
+    await verifyCode(code);
+    if (context.mounted && messenger != null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Verification complete.')),
+      );
+    }
+  } catch (error) {
+    if (context.mounted && messenger != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not verify code: $error')),
+      );
+    }
+  }
 }
 
 Future<void> _showChangePasswordDialog(
@@ -806,6 +918,7 @@ Future<void> _showAppSettingsSheet(
                     await ref
                         .read(appSettingsControllerProvider.notifier)
                         .setEmailNotifications(value);
+                    if (value) await NotificationService().requestPermissions();
                     await _saveRemoteSettings(ref, user);
                   },
                 ),
@@ -819,6 +932,7 @@ Future<void> _showAppSettingsSheet(
                     await ref
                         .read(appSettingsControllerProvider.notifier)
                         .setPhoneNotifications(value);
+                    if (value) await NotificationService().requestPermissions();
                     await _saveRemoteSettings(ref, user);
                   },
                 ),
@@ -1034,7 +1148,7 @@ Future<void> _showAccountSettingsSheet(
                 ),
                 onTap: () {
                   Navigator.of(context).pop();
-                  _showSecuritySheet(parentContext, authService);
+                  _showSecuritySheet(parentContext, authService, user);
                 },
               ),
               ListTile(

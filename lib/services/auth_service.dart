@@ -35,6 +35,9 @@ abstract class AuthService {
   Future<AppUser> signInWithGoogle();
   Future<void> requestPasswordReset(String email);
   Future<void> requestEmailOtp();
+  Future<void> verifyEmailOtp(String code);
+  Future<void> requestPhoneOtp();
+  Future<void> verifyPhoneOtp(String code);
   Future<void> updatePassword(String password, String emailOtp);
   Future<void> signOut();
   Future<void> updateRole(UserRole role);
@@ -157,6 +160,31 @@ class MockAuthService implements AuthService {
 
   @override
   Future<void> requestEmailOtp() async {}
+
+  @override
+  Future<void> verifyEmailOtp(String code) async {
+    if (_currentUser == null) {
+      throw StateError('No signed-in user.');
+    }
+    if (code.trim().length < 4) throw StateError('Enter the code sent to you.');
+    _currentUser = _currentUser!.copyWith(emailVerified: true);
+    _accountsByEmail[_currentUser!.email.toLowerCase()] = _currentUser!;
+    _controller.add(_currentUser);
+  }
+
+  @override
+  Future<void> requestPhoneOtp() async {}
+
+  @override
+  Future<void> verifyPhoneOtp(String code) async {
+    if (_currentUser == null) {
+      throw StateError('No signed-in user.');
+    }
+    if (code.trim().length < 4) throw StateError('Enter the code sent to you.');
+    _currentUser = _currentUser!.copyWith(phoneVerified: true);
+    _accountsByEmail[_currentUser!.email.toLowerCase()] = _currentUser!;
+    _controller.add(_currentUser);
+  }
 
   @override
   Future<void> updatePassword(String password, String emailOtp) async {
@@ -366,7 +394,7 @@ class SupabaseAuthService implements AuthService {
       final response = await _supabase
           .from('profiles')
           .select(
-            'id,username,full_name,phone,email,avatar_url,role,verification_status,country,country_code,description,is_busy,username_updated_at,created_at,updated_at',
+            'id,username,full_name,phone,email,avatar_url,role,verification_status,country,country_code,description,is_busy,email_verified,phone_verified,email_notifications,phone_notifications,app_language,currency_code,username_updated_at,created_at,updated_at',
           )
           .eq('id', userId)
           .maybeSingle();
@@ -403,6 +431,9 @@ class SupabaseAuthService implements AuthService {
       'country_code': existingProfile?['country_code'] ?? '+233',
       'description': existingProfile?['description'] ?? '',
       'is_busy': existingProfile?['is_busy'] ?? false,
+      'email_verified':
+          existingProfile?['email_verified'] ?? (user.emailConfirmedAt != null),
+      'phone_verified': existingProfile?['phone_verified'] ?? false,
       'role': role,
       'verification_status': (existingProfile?['verification_status'] ??
               VerificationStatus.pending.name)
@@ -470,6 +501,13 @@ class SupabaseAuthService implements AuthService {
           source['isBusy'] == true ||
           metadata['is_busy'] == true ||
           metadata['isBusy'] == true,
+      emailVerified: source['email_verified'] == true ||
+          source['emailVerified'] == true ||
+          metadata['email_verified'] == true ||
+          user.emailConfirmedAt != null,
+      phoneVerified: source['phone_verified'] == true ||
+          source['phoneVerified'] == true ||
+          metadata['phone_verified'] == true,
       verificationStatus: VerificationStatus.values.firstWhere(
         (status) =>
             status.name ==
@@ -655,8 +693,34 @@ class SupabaseAuthService implements AuthService {
 
   @override
   Future<void> requestEmailOtp() async {
-    // Temporarily disabled: Supabase auth email delivery is not reliable on
-    // the current project configuration.
+    await _invokeVerification('requestEmailCode');
+  }
+
+  @override
+  Future<void> verifyEmailOtp(String code) async {
+    await _invokeVerification('verifyEmailCode', code: code);
+    if (_resolvedCurrentUser != null) {
+      _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(
+        emailVerified: true,
+      );
+      _emitProfileUpdate();
+    }
+  }
+
+  @override
+  Future<void> requestPhoneOtp() async {
+    await _invokeVerification('requestPhoneCode');
+  }
+
+  @override
+  Future<void> verifyPhoneOtp(String code) async {
+    await _invokeVerification('verifyPhoneCode', code: code);
+    if (_resolvedCurrentUser != null) {
+      _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(
+        phoneVerified: true,
+      );
+      _emitProfileUpdate();
+    }
   }
 
   @override
@@ -776,10 +840,16 @@ class SupabaseAuthService implements AuthService {
       throw StateError('Phone cannot be empty.');
     }
 
-    await _updateProfile(user.id, {'phone': normalized});
+    await _updateProfile(user.id, {
+      'phone': normalized,
+      'phone_verified': false,
+    });
 
     if (_resolvedCurrentUser != null) {
-      _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(phone: normalized);
+      _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(
+        phone: normalized,
+        phoneVerified: false,
+      );
       _emitProfileUpdate();
     }
   }
@@ -803,6 +873,7 @@ class SupabaseAuthService implements AuthService {
       'phone': normalized,
       'country': country,
       'country_code': countryCode,
+      'phone_verified': false,
     });
 
     if (_resolvedCurrentUser != null) {
@@ -810,6 +881,7 @@ class SupabaseAuthService implements AuthService {
         phone: normalized,
         country: country,
         countryCode: countryCode,
+        phoneVerified: false,
       );
       _emitProfileUpdate();
     }
@@ -908,7 +980,10 @@ class SupabaseAuthService implements AuthService {
       throw StateError('Enter a valid email address.');
     }
 
-    await _updateProfile(user.id, {'email': normalized});
+    await _updateProfile(user.id, {
+      'email': normalized,
+      'email_verified': false,
+    });
     await _supabase.auth.updateUser(
       UserAttributes(
         email: normalized,
@@ -917,8 +992,35 @@ class SupabaseAuthService implements AuthService {
     );
 
     if (_resolvedCurrentUser != null) {
-      _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(email: normalized);
+      _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(
+        email: normalized,
+        emailVerified: false,
+      );
       _emitProfileUpdate();
+    }
+  }
+
+  Future<void> _invokeVerification(String action, {String? code}) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) throw StateError('No signed-in user.');
+    final response = await _supabase.functions.invoke(
+      'account-verification',
+      body: {
+        'action': action,
+        if (code != null) 'code': code.trim(),
+      },
+    );
+    final data = response.data;
+    final payload = data is Map ? Map<String, dynamic>.from(data) : {};
+    if (response.status < 200 || response.status >= 300) {
+      throw StateError(
+        (payload['error'] ?? 'Verification request failed.').toString(),
+      );
+    }
+    if (payload['ok'] != true) {
+      throw StateError(
+        (payload['error'] ?? 'Verification request failed.').toString(),
+      );
     }
   }
 
