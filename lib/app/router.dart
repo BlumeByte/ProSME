@@ -98,8 +98,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '${RouteNames.listingDetail}/:id',
-        builder: (context, state) =>
-            ListingDetailScreen(listingId: state.pathParameters['id']!),
+        builder: (context, state) => ListingDetailScreen(
+          listingId: state.pathParameters['id']!,
+          sourceArtisanId: state.uri.queryParameters['fromArtisan'],
+        ),
       ),
       GoRoute(
         path: '${RouteNames.artisanProfile}/:id',

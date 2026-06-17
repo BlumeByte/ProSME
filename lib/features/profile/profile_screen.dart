@@ -29,6 +29,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final settings = ref.watch(appSettingsControllerProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final authService = ref.read(authServiceProvider);
     if (user == null) {
@@ -36,12 +37,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         padding: const EdgeInsets.all(20),
         children: [
           const SizedBox(height: 24),
-          Text('Profile', style: Theme.of(context).textTheme.headlineMedium),
+          Text(settings.t('Profile'),
+              style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 16),
           ListTile(
             leading: const Icon(Icons.login),
-            title: const Text('Sign in to continue'),
-            subtitle: const Text('Manage your profile and settings.'),
+            title: Text(settings.t('Sign in to continue')),
+            subtitle: Text(settings.t('Manage your profile and settings.')),
             onTap: () => context.go(RouteNames.auth),
           ),
         ],
@@ -57,7 +59,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       padding: const EdgeInsets.all(20),
       children: [
         Text(
-          'Hello, $firstName',
+          '${settings.t('Hello')}, $firstName',
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
@@ -69,11 +71,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           onChangePhoto: () => _changeProfilePhoto(authService),
         ),
         const SizedBox(height: 20),
-        const _SectionTitle(title: 'Favourites'),
+        _SectionTitle(title: settings.t('Favourites')),
         const SizedBox(height: 12),
         _FavouritesBlock(userId: user.id),
         const SizedBox(height: 26),
-        const _SectionTitle(title: 'Profile'),
+        _SectionTitle(title: settings.t('Profile')),
         const SizedBox(height: 8),
         if (user.role == UserRole.artisan) ...[
           SwitchListTile(
@@ -81,11 +83,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               user.isBusy ? Icons.block : Icons.check_circle_outline,
               color: user.isBusy ? Colors.red : Colors.green,
             ),
-            title: const Text('Mark services unavailable'),
+            title: Text(settings.t('Mark services unavailable')),
             subtitle: Text(
               user.isBusy
-                  ? 'Chat and booking buttons show unavailable to users.'
-                  : 'Users can chat and book your active services.',
+                  ? settings
+                      .t('Chat and booking buttons show unavailable to users.')
+                  : settings.t('Users can chat and book your active services.'),
             ),
             value: user.isBusy,
             onChanged: (value) async {
@@ -96,15 +99,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   SnackBar(
                     content: Text(
                       value
-                          ? 'Services marked unavailable.'
-                          : 'Services marked available.',
+                          ? settings.t('Services marked unavailable.')
+                          : settings.t('Services marked available.'),
                     ),
                   ),
                 );
               } catch (error) {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Could not update status: $error')),
+                  SnackBar(
+                    content: Text(
+                        '${settings.t('Could not update status')}: $error'),
+                  ),
                 );
               }
             },
@@ -117,15 +123,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               : Icons.pending_actions_outlined,
           title: user.verificationStatus == VerificationStatus.verified
               ? (user.role == UserRole.artisan
-                  ? 'Verified artisan'
-                  : 'Verified account')
-              : 'Verification ${user.verificationStatus.name}',
+                  ? settings.t('Verified artisan')
+                  : settings.t('Verified account'))
+              : '${settings.t('Verification')} ${user.verificationStatus.name}',
           subtitle: user.verificationStatus == VerificationStatus.verified
-              ? 'Your profile shows a public verified checkmark.'
-              : 'Submit or update your ID for Support review.',
+              ? settings.t('Your profile shows a public verified checkmark.')
+              : settings.t('Submit or update your ID for Support review.'),
           trailingText: user.verificationStatus == VerificationStatus.verified
               ? null
-              : 'Upload',
+              : settings.t('Upload'),
           onTap: user.verificationStatus == VerificationStatus.verified
               ? () => ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -137,39 +143,40 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         const Divider(),
         _SettingsTile(
           icon: Icons.manage_accounts_outlined,
-          title: 'Account settings',
-          subtitle: 'Username, phone, email, password, and privacy.',
-          trailingText: 'Open',
+          title: settings.t('Account settings'),
+          subtitle:
+              settings.t('Username, phone, email, password, and privacy.'),
+          trailingText: settings.t('Open'),
           onTap: () =>
               _showAccountSettingsSheet(context, ref, authService, user),
         ),
         const Divider(),
         _SettingsTile(
           icon: Icons.tune_outlined,
-          title: 'App settings',
-          subtitle: 'Language, dark mode, and notifications.',
-          trailingText: 'Open',
+          title: settings.t('App settings'),
+          subtitle: settings.t('Language, dark mode, and notifications.'),
+          trailingText: settings.t('Open'),
           onTap: () => _showAppSettingsSheet(context, ref, user),
         ),
         const Divider(),
         _SettingsTile(
           icon: Icons.notifications_active_outlined,
-          title: 'Notifications',
-          subtitle: 'History, bid, chat, and account alerts.',
-          trailingText: 'Open',
+          title: settings.t('Notifications'),
+          subtitle: settings.t('History, bid, chat, and account alerts.'),
+          trailingText: settings.t('Open'),
           onTap: () => context.push(RouteNames.notifications),
         ),
         const SizedBox(height: 8),
         ListTile(
           leading: const Icon(Icons.logout),
-          title: const Text('Logout'),
+          title: Text(settings.t('Logout')),
           onTap: () => authService.signOut(),
         ),
         ListTile(
           leading: const Icon(Icons.delete_forever, color: Colors.red),
-          title: const Text(
-            'Delete account',
-            style: TextStyle(color: Colors.red),
+          title: Text(
+            settings.t('Delete account'),
+            style: const TextStyle(color: Colors.red),
           ),
           onTap: () => _confirmDeleteAccount(context, authService),
         ),
@@ -867,21 +874,21 @@ Future<void> _showAppSettingsSheet(
                   children: [
                     Expanded(
                       child: Text(
-                        'App settings',
+                        settings.t('App settings'),
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
                     IconButton(
                       onPressed: () => Navigator.of(context).pop(),
                       icon: const Icon(Icons.close),
-                      tooltip: 'Close',
+                      tooltip: settings.t('Close'),
                     ),
                   ],
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   secondary: const Icon(Icons.dark_mode_outlined),
-                  title: const Text('Dark mode'),
+                  title: Text(settings.t('Dark mode')),
                   value: isDarkMode,
                   onChanged: (value) {
                     setSheetState(() => isDarkMode = value);
@@ -893,7 +900,7 @@ Future<void> _showAppSettingsSheet(
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   secondary: const Icon(Icons.email_outlined),
-                  title: const Text('Email notifications'),
+                  title: Text(settings.t('Email notifications')),
                   value: emailNotifications,
                   onChanged: (value) async {
                     setSheetState(() => emailNotifications = value);
@@ -907,7 +914,7 @@ Future<void> _showAppSettingsSheet(
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   secondary: const Icon(Icons.notifications_active_outlined),
-                  title: const Text('Phone notifications'),
+                  title: Text(settings.t('Phone notifications')),
                   value: phoneNotifications,
                   onChanged: (value) async {
                     setSheetState(() => phoneNotifications = value);
@@ -921,9 +928,9 @@ Future<void> _showAppSettingsSheet(
                 DropdownButtonFormField<String>(
                   initialValue: language,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Language',
-                    prefixIcon: Icon(Icons.language_outlined),
+                  decoration: InputDecoration(
+                    labelText: settings.t('Language'),
+                    prefixIcon: const Icon(Icons.language_outlined),
                   ),
                   items: languages
                       .map(
@@ -946,9 +953,9 @@ Future<void> _showAppSettingsSheet(
                 DropdownButtonFormField<String>(
                   initialValue: currencyCode,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Currency',
-                    prefixIcon: Icon(Icons.payments_outlined),
+                  decoration: InputDecoration(
+                    labelText: settings.t('Currency'),
+                    prefixIcon: const Icon(Icons.payments_outlined),
                   ),
                   items: kCurrencyOptions
                       .map(
@@ -987,6 +994,7 @@ Future<void> _showAccountSettingsSheet(
   AppUser user,
 ) async {
   if (!context.mounted) return;
+  final settings = ref.read(appSettingsControllerProvider);
   final parentContext = context;
   await showModalBottomSheet<void>(
     context: context,
@@ -1006,14 +1014,14 @@ Future<void> _showAccountSettingsSheet(
                 children: [
                   Expanded(
                     child: Text(
-                      'Account settings',
+                      settings.t('Account settings'),
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.close),
-                    tooltip: 'Close',
+                    tooltip: settings.t('Close'),
                   ),
                 ],
               ),
@@ -1021,8 +1029,8 @@ Future<void> _showAccountSettingsSheet(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.person_outline),
                 title: Text(user.name),
-                subtitle: const Text('Username'),
-                trailing: const Text('Edit'),
+                subtitle: Text(settings.t('Username')),
+                trailing: Text(settings.t('Edit')),
                 onTap: () {
                   Navigator.of(context).pop();
                   _showChangeUsernameDialog(
@@ -1037,17 +1045,17 @@ Future<void> _showAccountSettingsSheet(
                 leading: const Icon(Icons.badge_outlined),
                 title: Text(
                   user.fullName.trim().isEmpty
-                      ? 'Add full name'
+                      ? settings.t('Add full name')
                       : user.fullName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
                   user.role == UserRole.artisan
-                      ? 'Full name or business contact name'
-                      : 'Full name',
+                      ? settings.t('Full name or business contact name')
+                      : settings.t('Full name'),
                 ),
-                trailing: const Text('Edit'),
+                trailing: Text(settings.t('Edit')),
                 onTap: () {
                   Navigator.of(context).pop();
                   _showFullNameDialog(
@@ -1060,9 +1068,10 @@ Future<void> _showAccountSettingsSheet(
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.phone_outlined),
-                title: Text(user.phone.isEmpty ? 'Add phone' : user.phone),
-                subtitle: const Text('Phone number and country code'),
-                trailing: const Text('Edit'),
+                title: Text(
+                    user.phone.isEmpty ? settings.t('Add phone') : user.phone),
+                subtitle: Text(settings.t('Phone number and country code')),
+                trailing: Text(settings.t('Edit')),
                 onTap: () {
                   Navigator.of(context).pop();
                   _showChangePhoneDialog(
@@ -1077,8 +1086,9 @@ Future<void> _showAccountSettingsSheet(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.public_outlined),
                 title: Text(user.country),
-                subtitle: Text('Country code ${user.countryCode}'),
-                trailing: const Text('Edit'),
+                subtitle:
+                    Text('${settings.t('Country code')} ${user.countryCode}'),
+                trailing: Text(settings.t('Edit')),
                 onTap: () {
                   Navigator.of(context).pop();
                   _showCountryDialog(parentContext, authService, user.country);
@@ -1089,17 +1099,17 @@ Future<void> _showAccountSettingsSheet(
                 leading: const Icon(Icons.badge_outlined),
                 title: Text(
                   user.description.isEmpty
-                      ? 'Add profile description'
+                      ? settings.t('Add profile description')
                       : user.description,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
                   user.role == UserRole.artisan
-                      ? 'Company or artisan profile description'
-                      : 'Customer profile description',
+                      ? settings.t('Company or artisan profile description')
+                      : settings.t('Customer profile description'),
                 ),
-                trailing: const Text('Edit'),
+                trailing: Text(settings.t('Edit')),
                 onTap: () {
                   Navigator.of(context).pop();
                   _showDescriptionDialog(
@@ -1113,7 +1123,7 @@ Future<void> _showAccountSettingsSheet(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.alternate_email_outlined),
                 title: Text(user.email),
-                trailing: const Text('Edit'),
+                trailing: Text(settings.t('Edit')),
                 onTap: () {
                   Navigator.of(context).pop();
                   _showChangeEmailDialog(
@@ -1124,9 +1134,11 @@ Future<void> _showAccountSettingsSheet(
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.security_outlined),
-                title: const Text('Account security'),
-                subtitle: const Text(
-                  'Email codes, password recovery, and Google verification are handled by Supabase.',
+                title: Text(settings.t('Account security')),
+                subtitle: Text(
+                  settings.t(
+                    'Email codes, password recovery, and Google verification are handled by Supabase.',
+                  ),
                 ),
                 onTap: () {
                   Navigator.of(context).pop();
@@ -1136,7 +1148,7 @@ Future<void> _showAccountSettingsSheet(
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.privacy_tip_outlined),
-                title: const Text('Privacy'),
+                title: Text(settings.t('Privacy')),
                 onTap: () {
                   Navigator.of(context).pop();
                   parentContext.push(RouteNames.privacy);
@@ -1145,7 +1157,7 @@ Future<void> _showAccountSettingsSheet(
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.support_agent_outlined),
-                title: const Text('Support'),
+                title: Text(settings.t('Support')),
                 onTap: () {
                   Navigator.of(context).pop();
                   parentContext.push(RouteNames.aiSupport);
@@ -1154,7 +1166,7 @@ Future<void> _showAccountSettingsSheet(
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.description_outlined),
-                title: const Text('Terms of Service'),
+                title: Text(settings.t('Terms of Service')),
                 onTap: () {
                   Navigator.of(context).pop();
                   parentContext.push(RouteNames.terms);
@@ -1163,13 +1175,15 @@ Future<void> _showAccountSettingsSheet(
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.info_outline),
-                title: const Text('About'),
+                title: Text(settings.t('About')),
                 onTap: () {
                   Navigator.of(context).pop();
                   _showInfoSheet(
                     parentContext,
-                    'About Pro SME',
-                    'Pro SME helps customers connect with verified SMEs and artisans.',
+                    settings.t('About Pro SME'),
+                    settings.t(
+                      'Pro SME helps customers connect with verified SMEs and artisans.',
+                    ),
                   );
                 },
               ),
@@ -1287,6 +1301,8 @@ class _ProfilePhotoHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settings =
+        ProviderScope.containerOf(context).read(appSettingsControllerProvider);
     final scheme = Theme.of(context).colorScheme;
     final imageProvider = _profileImageProvider(user.photoUrl);
     final hasPhoto = imageProvider != null;
@@ -1336,8 +1352,8 @@ class _ProfilePhotoHeader extends StatelessWidget {
           Text(
             user.description.trim().isEmpty
                 ? (user.role == UserRole.artisan
-                    ? 'Artisan profile'
-                    : 'Customer profile')
+                    ? settings.t('Artisan profile')
+                    : settings.t('Customer profile'))
                 : user.description.trim(),
             textAlign: TextAlign.center,
             maxLines: 2,
@@ -1422,6 +1438,7 @@ class _FavouritesBlock extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     final scheme = Theme.of(context).colorScheme;
     final savedIdsAsync = ref.watch(savedListingIdsProvider(userId));
 
@@ -1444,8 +1461,8 @@ class _FavouritesBlock extends ConsumerWidget {
                 children: [
                   Text(
                     hasAny
-                        ? '$count saved listing${count == 1 ? '' : 's'}'
-                        : 'No favourites added',
+                        ? '$count ${settings.t(count == 1 ? 'saved listing' : 'saved listings')}'
+                        : settings.t('No favourites added'),
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
@@ -1454,8 +1471,9 @@ class _FavouritesBlock extends ConsumerWidget {
                   const SizedBox(height: 8),
                   Text(
                     hasAny
-                        ? 'Tap to view your saved listings.'
-                        : 'Save all your favourites in one place using the bookmark icon.',
+                        ? settings.t('Tap to view your saved listings.')
+                        : settings.t(
+                            'Save all your favourites in one place using the bookmark icon.'),
                   ),
                 ],
               ),

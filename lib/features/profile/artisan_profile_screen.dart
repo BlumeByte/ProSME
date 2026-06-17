@@ -20,7 +20,8 @@ class ArtisanProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final listingsFuture = ref.watch(listingServiceProvider).fetchListings();
-    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
+    final settings = ref.watch(appSettingsControllerProvider);
+    final currencyCode = settings.currencyCode;
     final bids = ref.watch(artisanBidsProvider(artisanId)).valueOrNull ??
         const <JobBid>[];
     final ratings = ref.watch(artisanRatingsProvider(artisanId)).valueOrNull ??
@@ -29,21 +30,21 @@ class ArtisanProfileScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         leading: const SafeBackButton(),
-        title: const Text('Professional profile'),
+        title: Text(settings.t('Professional profile')),
       ),
       body: FutureBuilder<List<Listing>>(
         future: listingsFuture,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return const Center(
+            return Center(
               child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('Could not load professional profile.'),
+                padding: const EdgeInsets.all(16),
+                child: Text(settings.t('Could not load professional profile.')),
               ),
             );
           }
           if (!snapshot.hasData) {
-            return const LoadingState(label: 'Loading profile...');
+            return LoadingState(label: settings.t('Loading profile...'));
           }
 
           final listings = snapshot.data!
@@ -52,7 +53,7 @@ class ArtisanProfileScreen extends ConsumerWidget {
           final first = listings.isEmpty ? null : listings.first;
           final name = first?.artisanName?.trim().isNotEmpty == true
               ? first!.artisanName!.trim()
-              : 'Professional';
+              : settings.t('Professional');
           final avatarUrl = first?.artisanPhotoUrl;
           final isVerified = listings.any((listing) => listing.verifiedOnly);
           final isBusy = listings.any((listing) => listing.artisanBusy);
@@ -109,7 +110,7 @@ class ArtisanProfileScreen extends ConsumerWidget {
                           size: 16,
                         ),
                         label: Text(
-                          isBusy ? 'Unavailable' : 'Available',
+                          settings.t(isBusy ? 'Unavailable' : 'Available'),
                         ),
                         backgroundColor: isBusy
                             ? Colors.red.withValues(alpha: 0.12)
@@ -122,15 +123,15 @@ class ArtisanProfileScreen extends ConsumerWidget {
                         runSpacing: 8,
                         children: [
                           _MetricChip(
-                            label: 'Active services',
+                            label: settings.t('Active services'),
                             value: listings.length.toString(),
                           ),
                           _MetricChip(
-                            label: 'Bids won',
+                            label: settings.t('Bids won'),
                             value: wonBids.toString(),
                           ),
                           _MetricChip(
-                            label: 'Completed reviews',
+                            label: settings.t('Completed reviews'),
                             value: ratings.length.toString(),
                           ),
                         ],
@@ -151,13 +152,14 @@ class ArtisanProfileScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              Text('Services', style: Theme.of(context).textTheme.titleLarge),
+              Text(settings.t('Services'),
+                  style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
               if (listings.isEmpty)
-                const Card(
+                Card(
                   child: ListTile(
-                    leading: Icon(Icons.storefront_outlined),
-                    title: Text('No active services'),
+                    leading: const Icon(Icons.storefront_outlined),
+                    title: Text(settings.t('No active services')),
                   ),
                 )
               else
@@ -170,19 +172,21 @@ class ArtisanProfileScreen extends ConsumerWidget {
                         '${listing.location} - ${formatMoney(listing.priceMin, currencyCode)}',
                       ),
                       trailing: const Icon(Icons.chevron_right),
-                      onTap: () => context
-                          .push('${RouteNames.listingDetail}/${listing.id}'),
+                      onTap: () => context.push(
+                        '${RouteNames.listingDetail}/${listing.id}?fromArtisan=$artisanId',
+                      ),
                     ),
                   ),
                 ),
               const SizedBox(height: 16),
-              Text('Comments', style: Theme.of(context).textTheme.titleLarge),
+              Text(settings.t('Comments'),
+                  style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
               if (ratings.where((rating) => rating.comment.isNotEmpty).isEmpty)
-                const Card(
+                Card(
                   child: ListTile(
-                    leading: Icon(Icons.comment_outlined),
-                    title: Text('No comments yet'),
+                    leading: const Icon(Icons.comment_outlined),
+                    title: Text(settings.t('No comments yet')),
                   ),
                 )
               else

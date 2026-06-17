@@ -44,7 +44,8 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
     }
     setState(() => _isSubmitting = true);
     try {
-      final currencyCode = ref.read(appSettingsControllerProvider).currencyCode;
+      final settings = ref.read(appSettingsControllerProvider);
+      final currencyCode = settings.currencyCode;
       await ref.read(jobsRepositoryProvider).createJob(
             title: _titleController.text.trim(),
             description: _descriptionController.text.trim(),
@@ -61,13 +62,16 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
       _locationController.clear();
       _budgetController.clear();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Request uploaded successfully.')),
+        SnackBar(content: Text(settings.t('Request uploaded successfully.'))),
       );
     } catch (_) {
       if (!mounted) return;
+      final settings = ref.read(appSettingsControllerProvider);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not upload request. Check Supabase setup.'),
+        SnackBar(
+          content: Text(
+            settings.t('Could not upload request. Check Supabase setup.'),
+          ),
         ),
       );
     } finally {
@@ -79,14 +83,15 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final settings = ref.watch(appSettingsControllerProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
-    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
+    final currencyCode = settings.currencyCode;
     if (user == null) {
       return Center(
         child: FilledButton.icon(
           onPressed: () => context.go(RouteNames.auth),
           icon: const Icon(Icons.login),
-          label: const Text('Sign in to upload requests'),
+          label: Text(settings.t('Sign in to upload requests')),
         ),
       );
     }
@@ -99,7 +104,7 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('Upload service request',
+        Text(settings.t('Upload service request'),
             style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 12),
         Form(
@@ -108,42 +113,45 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
             children: [
               TextFormField(
                 controller: _titleController,
-                decoration: const InputDecoration(labelText: 'Service title'),
+                decoration: InputDecoration(
+                  labelText: settings.t('Service title'),
+                ),
                 validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Title is required'
+                    ? settings.t('Title is required')
                     : null,
               ),
               const SizedBox(height: 10),
               TextFormField(
                 controller: _descriptionController,
-                decoration:
-                    const InputDecoration(labelText: 'Describe your need'),
+                decoration: InputDecoration(
+                  labelText: settings.t('Describe your need'),
+                ),
                 minLines: 3,
                 maxLines: 4,
                 validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Description is required'
+                    ? settings.t('Description is required')
                     : null,
               ),
               const SizedBox(height: 10),
               TextFormField(
                 controller: _locationController,
-                decoration: const InputDecoration(labelText: 'Location'),
+                decoration: InputDecoration(labelText: settings.t('Location')),
                 validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Location is required'
+                    ? settings.t('Location is required')
                     : null,
               ),
               const SizedBox(height: 10),
               TextFormField(
                 controller: _budgetController,
                 decoration: InputDecoration(
-                  labelText: 'Budget ($currencyCode)',
+                  labelText: '${settings.t('Budget')} ($currencyCode)',
                 ),
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
                   final budget = double.tryParse((value ?? '').trim());
                   if (budget == null || budget <= 0) {
-                    return 'Enter a valid budget';
+                    return settings.t('Enter a valid budget');
                   }
                   return null;
                 },
@@ -153,21 +161,23 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
                 width: double.infinity,
                 child: FilledButton(
                   onPressed: _isSubmitting ? null : _submit,
-                  child: Text(_isSubmitting ? 'Uploading...' : 'Upload'),
+                  child: Text(
+                    settings.t(_isSubmitting ? 'Uploading...' : 'Upload'),
+                  ),
                 ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 20),
-        Text('My uploaded requests',
+        Text(settings.t('My uploaded requests'),
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         if (jobsAsync.hasError)
-          const Text(
-              'Could not load uploads. Check Supabase credentials and try again.')
+          Text(settings.t(
+              'Could not load uploads. Check Supabase credentials and try again.'))
         else if (myUploads.isEmpty)
-          const Text('No uploads yet.')
+          Text(settings.t('No uploads yet.'))
         else
           ...myUploads.map(
             (job) => Card(

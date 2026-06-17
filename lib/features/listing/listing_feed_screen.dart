@@ -531,6 +531,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   ...featured.map((pro) => _ProfessionalCard(
                         pro: pro,
                         currencyCode: currencyCode,
+                        settings: settings,
                         onOpenProfile: () => context.push(
                           '${RouteNames.artisanProfile}/${pro.artisanId}',
                         ),
@@ -583,7 +584,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             if (categoryCards.isNotEmpty) ...[
               const SizedBox(height: 22),
               Text(
-                'Popular Services',
+                settings.t('Popular Services'),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
@@ -624,7 +625,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${item.count} pros',
+                              '${item.count} ${settings.t('pros')}',
                               style: TextStyle(color: scheme.onSurfaceVariant),
                             ),
                           ],
@@ -640,7 +641,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'Open Service Requests',
+                    settings.t('Open Service Requests'),
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
@@ -649,7 +650,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                       ? () => context.go(RouteNames.auth)
                       : widget.onOpenUploadTab,
                   icon: const Icon(Icons.add),
-                  label: const Text('Post'),
+                  label: Text(settings.t('Post')),
                 ),
               ],
             ),
@@ -717,6 +718,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                     (pro) => _ProfessionalCard(
                       pro: pro,
                       currencyCode: currencyCode,
+                      settings: settings,
                       onOpenProfile: () => context.push(
                         '${RouteNames.artisanProfile}/${pro.artisanId}',
                       ),
@@ -1027,53 +1029,53 @@ Future<_PickerResult<T>?> _pickOption<T>(
                             .contains(query.toLowerCase()))
                         .toList(growable: false);
                 return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: Theme.of(context).textTheme.titleLarge,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
                           ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(Icons.close),
-                          tooltip: 'Close',
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: 'Search $title',
-                        prefixIcon: const Icon(Icons.search),
+                          IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.close),
+                            tooltip: 'Close',
+                          ),
+                        ],
                       ),
-                      onChanged: (value) =>
-                          setSheetState(() => query = value.trim()),
                     ),
-                  ),
-                  Flexible(
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: filtered.length,
-                      itemBuilder: (context, index) {
-                        final option = filtered[index];
-                        return ListTile(
-                          title: Text(labelFor(option)),
-                          onTap: () =>
-                              Navigator.of(context).pop(_PickerResult(option)),
-                        );
-                      },
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                      child: TextField(
+                        decoration: InputDecoration(
+                          hintText: 'Search $title',
+                          prefixIcon: const Icon(Icons.search),
+                        ),
+                        onChanged: (value) =>
+                            setSheetState(() => query = value.trim()),
+                      ),
                     ),
-                  ),
-                ],
-              );
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final option = filtered[index];
+                          return ListTile(
+                            title: Text(labelFor(option)),
+                            onTap: () => Navigator.of(context)
+                                .pop(_PickerResult(option)),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
               },
             ),
           ),
@@ -1145,6 +1147,7 @@ class _ProfessionalCard extends StatelessWidget {
   const _ProfessionalCard({
     required this.pro,
     required this.currencyCode,
+    required this.settings,
     required this.onOpenProfile,
     required this.onChat,
     required this.onBook,
@@ -1152,6 +1155,7 @@ class _ProfessionalCard extends StatelessWidget {
 
   final _ProfessionalPreview pro;
   final String currencyCode;
+  final AppSettings settings;
   final VoidCallback onOpenProfile;
   final VoidCallback onChat;
   final VoidCallback onBook;
@@ -1210,15 +1214,15 @@ class _ProfessionalCard extends StatelessWidget {
                                   color: Colors.blue.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(999),
                                 ),
-                                child: const Row(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.verified,
+                                    const Icon(Icons.verified,
                                         size: 14, color: Colors.blue),
-                                    SizedBox(width: 4),
+                                    const SizedBox(width: 4),
                                     Text(
-                                      'Verified',
-                                      style: TextStyle(
+                                      settings.t('Verified'),
+                                      style: const TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w600,
                                         color: Colors.blue,
@@ -1236,18 +1240,18 @@ class _ProfessionalCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${pro.listingCount} active service${pro.listingCount == 1 ? '' : 's'}',
+                          '${pro.listingCount} ${settings.t(pro.listingCount == 1 ? 'active service' : 'active services')}',
                           style: TextStyle(color: scheme.onSurfaceVariant),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${pro.ratingAverage.toStringAsFixed(1)}/5 (${pro.ratingCount}) - ${pro.wonBidCount} won bids',
+                          '${pro.ratingAverage.toStringAsFixed(1)}/5 (${pro.ratingCount}) - ${pro.wonBidCount} ${settings.t('won bids')}',
                           style: TextStyle(color: scheme.onSurfaceVariant),
                         ),
                         if (pro.isBusy) ...[
                           const SizedBox(height: 4),
                           Text(
-                            'Unavailable',
+                            settings.t('Unavailable'),
                             style: TextStyle(
                               color: unavailableColor,
                               fontWeight: FontWeight.w700,
@@ -1271,7 +1275,7 @@ class _ProfessionalCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'From ${formatMoney(pro.minPrice, currencyCode)}',
+                '${settings.t('From')} ${formatMoney(pro.minPrice, currencyCode)}',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
@@ -1280,8 +1284,8 @@ class _ProfessionalCard extends StatelessWidget {
                 icon: const Icon(Icons.account_circle_outlined, size: 18),
                 label: Text(
                   pro.ratingCount > 0
-                      ? 'Profile & ${pro.ratingCount} comment${pro.ratingCount == 1 ? '' : 's'}'
-                      : 'View profile & comments',
+                      ? '${settings.t('Profile')} & ${pro.ratingCount} ${settings.t(pro.ratingCount == 1 ? 'comment' : 'comments')}'
+                      : settings.t('View profile & comments'),
                 ),
               ),
               const SizedBox(height: 10),
@@ -1294,7 +1298,8 @@ class _ProfessionalCard extends StatelessWidget {
                         pro.isBusy ? Icons.block : Icons.chat_bubble_outline,
                         size: 18,
                       ),
-                      label: Text(pro.isBusy ? 'Unavailable' : 'Chat'),
+                      label:
+                          Text(settings.t(pro.isBusy ? 'Unavailable' : 'Chat')),
                       style: pro.isBusy
                           ? OutlinedButton.styleFrom(
                               foregroundColor: unavailableColor,
@@ -1311,7 +1316,7 @@ class _ProfessionalCard extends StatelessWidget {
                               backgroundColor: unavailableColor,
                             )
                           : null,
-                      child: Text(pro.isBusy ? 'Busy' : 'Book Now'),
+                      child: Text(settings.t(pro.isBusy ? 'Busy' : 'Book Now')),
                     ),
                   ),
                 ],

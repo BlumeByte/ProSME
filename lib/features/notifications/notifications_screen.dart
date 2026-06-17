@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/widgets/loading_state.dart';
 import '../../core/widgets/safe_back_button.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
@@ -81,15 +82,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final settings = ref.watch(appSettingsControllerProvider);
     return Scaffold(
       appBar: AppBar(
         leading: const SafeBackButton(),
-        title: const Text('Notifications'),
+        title: Text(settings.t('Notifications')),
         actions: [
           IconButton(
             onPressed: () => setState(() => _future = _loadNotifications()),
             icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
+            tooltip: settings.t('Refresh'),
           ),
         ],
       ),
@@ -97,10 +99,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return const Center(child: Text('Could not load notifications.'));
+            return Center(
+              child: Text(settings.t('Could not load notifications.')),
+            );
           }
           if (!snapshot.hasData) {
-            return const LoadingState(label: 'Loading notifications...');
+            return LoadingState(label: settings.t('Loading notifications...'));
           }
           final items = snapshot.data!;
           final types = items.map((item) => item.type).toSet().toList()..sort();
@@ -114,10 +118,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 runSpacing: 8,
                 children: [
                   SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'all', label: Text('All')),
-                      ButtonSegment(value: 'unread', label: Text('Unread')),
-                      ButtonSegment(value: 'read', label: Text('Read')),
+                    segments: [
+                      ButtonSegment(
+                        value: 'all',
+                        label: Text(settings.t('All')),
+                      ),
+                      ButtonSegment(
+                        value: 'unread',
+                        label: Text(settings.t('Unread')),
+                      ),
+                      ButtonSegment(
+                        value: 'read',
+                        label: Text(settings.t('Read')),
+                      ),
                     ],
                     selected: {_statusFilter},
                     onSelectionChanged: (selection) =>
@@ -125,9 +138,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   ),
                   DropdownMenu<String>(
                     initialSelection: _typeFilter,
-                    label: const Text('Type'),
+                    label: Text(settings.t('Type')),
                     dropdownMenuEntries: [
-                      const DropdownMenuEntry(value: 'all', label: 'All'),
+                      DropdownMenuEntry(
+                        value: 'all',
+                        label: settings.t('All'),
+                      ),
                       ...types.map(
                         (type) => DropdownMenuEntry(
                           value: type,
@@ -143,7 +159,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     icon: const Icon(Icons.date_range),
                     label: Text(
                       _dateRange == null
-                          ? 'Date'
+                          ? settings.t('Date')
                           : '${DateFormat.MMMd().format(_dateRange!.start)} - ${DateFormat.MMMd().format(_dateRange!.end)}',
                     ),
                   ),
@@ -151,16 +167,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     IconButton(
                       onPressed: () => setState(() => _dateRange = null),
                       icon: const Icon(Icons.clear),
-                      tooltip: 'Clear date filter',
+                      tooltip: settings.t('Clear date filter'),
                     ),
                 ],
               ),
               const SizedBox(height: 12),
               if (filtered.isEmpty)
-                const Card(
+                Card(
                   child: ListTile(
-                    leading: Icon(Icons.notifications_none),
-                    title: Text('No notifications'),
+                    leading: const Icon(Icons.notifications_none),
+                    title: Text(settings.t('No notifications')),
                   ),
                 )
               else
@@ -186,7 +202,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                           : IconButton(
                               onPressed: () => _markRead(item),
                               icon: const Icon(Icons.done),
-                              tooltip: 'Mark read',
+                              tooltip: settings.t('Mark read'),
                             ),
                     ),
                   ),

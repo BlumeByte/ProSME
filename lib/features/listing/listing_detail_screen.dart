@@ -11,15 +11,21 @@ import '../../services/service_providers.dart';
 import '../../models/listing.dart';
 
 class ListingDetailScreen extends ConsumerWidget {
-  const ListingDetailScreen({super.key, required this.listingId});
+  const ListingDetailScreen({
+    super.key,
+    required this.listingId,
+    this.sourceArtisanId,
+  });
 
   final String listingId;
+  final String? sourceArtisanId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final listingService = ref.watch(listingServiceProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
-    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
+    final settings = ref.watch(appSettingsControllerProvider);
+    final currencyCode = settings.currencyCode;
 
     // Watch saved IDs in real-time when the user is logged in.
     final savedIds = user == null
@@ -30,29 +36,32 @@ class ListingDetailScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         leading: const SafeBackButton(),
-        title: const Text('Listing'),
+        title: Text(settings.t('Listing')),
       ),
       body: FutureBuilder<List<Listing>>(
         future: listingService.fetchListings(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return const Center(
+            return Center(
               child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Text(
-                  'Could not load this listing. Check your connection and try again.',
+                  settings.t(
+                    'Could not load this listing. Check your connection and try again.',
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),
             );
           }
           if (!snapshot.hasData) {
-            return const LoadingState(label: 'Loading listing...');
+            return LoadingState(label: settings.t('Loading listing...'));
           }
           final listings = snapshot.data!;
           if (listings.isEmpty) {
-            return const Center(
-                child: Text('This listing is no longer available.'));
+            return Center(
+              child: Text(settings.t('This listing is no longer available.')),
+            );
           }
           Listing? listing;
           for (final item in listings) {
@@ -62,11 +71,13 @@ class ListingDetailScreen extends ConsumerWidget {
             }
           }
           if (listing == null) {
-            return const Center(
-                child: Text('This listing is no longer available.'));
+            return Center(
+              child: Text(settings.t('This listing is no longer available.')),
+            );
           }
           final listingData = listing;
           final isBusy = listingData.artisanBusy;
+          final isSourceProfile = sourceArtisanId == listingData.artisanId;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -123,7 +134,7 @@ class ListingDetailScreen extends ConsumerWidget {
                         child: Text(
                           listingData.artisanName?.trim().isNotEmpty == true
                               ? listingData.artisanName!
-                              : 'Professional',
+                              : settings.t('Professional'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -134,12 +145,15 @@ class ListingDetailScreen extends ConsumerWidget {
                     ],
                   ),
                   subtitle: Text(isBusy
-                      ? 'Unavailable now'
-                      : '${listingData.wonBidCount} won bids'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push(
-                    '${RouteNames.artisanProfile}/${listingData.artisanId}',
-                  ),
+                      ? settings.t('Unavailable now')
+                      : '${listingData.wonBidCount} ${settings.t('won bids')}'),
+                  trailing:
+                      isSourceProfile ? null : const Icon(Icons.chevron_right),
+                  onTap: isSourceProfile
+                      ? null
+                      : () => context.push(
+                            '${RouteNames.artisanProfile}/${listingData.artisanId}',
+                          ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -157,13 +171,15 @@ class ListingDetailScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               PrimaryButton(
-                label: isBusy ? 'Artisan unavailable' : 'Chat',
+                label: settings.t(isBusy ? 'Artisan unavailable' : 'Chat'),
                 icon: isBusy ? Icons.block : Icons.chat,
                 onPressed: () async {
                   if (isBusy) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('This artisan is currently unavailable.'),
+                      SnackBar(
+                        content: Text(
+                          settings.t('This artisan is currently unavailable.'),
+                        ),
                       ),
                     );
                     return;
@@ -174,8 +190,9 @@ class ListingDetailScreen extends ConsumerWidget {
                   }
                   if (user.id == listingData.artisanId) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('You cannot chat with yourself.'),
+                      SnackBar(
+                        content:
+                            Text(settings.t('You cannot chat with yourself.')),
                       ),
                     );
                     return;
@@ -192,9 +209,9 @@ class ListingDetailScreen extends ConsumerWidget {
                   } catch (_) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content:
-                              Text('Could not start chat. Please try again.'),
+                        SnackBar(
+                          content: Text(settings
+                              .t('Could not start chat. Please try again.')),
                         ),
                       );
                     }
@@ -203,7 +220,7 @@ class ListingDetailScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               PrimaryButton(
-                label: isSaved ? 'Bookmarked' : 'Bookmark',
+                label: settings.t(isSaved ? 'Bookmarked' : 'Bookmark'),
                 icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
                 onPressed: () async {
                   if (user == null) {
