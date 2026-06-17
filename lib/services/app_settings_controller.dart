@@ -14,6 +14,12 @@ const _currencyRateKeyPrefix = 'settings_currency_rate_';
 const _emailNotificationsKey = 'settings_email_notifications';
 const _phoneNotificationsKey = 'settings_phone_notifications';
 
+const kSupportedAppLanguages = [
+  'English',
+  'French',
+  'Spanish',
+];
+
 final appSettingsControllerProvider =
     StateNotifierProvider<AppSettingsController, AppSettings>((ref) {
   return AppSettingsController(AppSettingsController._initialSettings);
@@ -35,71 +41,6 @@ class AppSettings {
   String t(String text) {
     if (language == 'English') return text;
     return _translations[language]?[text] ?? text;
-  }
-
-  Locale? get locale {
-    switch (language) {
-      case 'Arabic':
-        return const Locale('ar');
-      case 'Bengali':
-        return const Locale('bn');
-      case 'Chinese':
-        return const Locale('zh');
-      case 'Dutch':
-        return const Locale('nl');
-      case 'Ewe':
-        return const Locale('en');
-      case 'French':
-        return const Locale('fr');
-      case 'Ga':
-        return const Locale('en');
-      case 'German':
-        return const Locale('de');
-      case 'Greek':
-        return const Locale('el');
-      case 'Hausa':
-        return const Locale('ha');
-      case 'Hindi':
-        return const Locale('hi');
-      case 'Indonesian':
-        return const Locale('id');
-      case 'Italian':
-        return const Locale('it');
-      case 'Japanese':
-        return const Locale('ja');
-      case 'Korean':
-        return const Locale('ko');
-      case 'Malay':
-        return const Locale('ms');
-      case 'Spanish':
-        return const Locale('es');
-      case 'Portuguese':
-        return const Locale('pt');
-      case 'Russian':
-        return const Locale('ru');
-      case 'Swahili':
-        return const Locale('sw');
-      case 'Tamil':
-        return const Locale('ta');
-      case 'Thai':
-        return const Locale('th');
-      case 'Twi':
-        return const Locale('en');
-      case 'Turkish':
-        return const Locale('tr');
-      case 'Ukrainian':
-        return const Locale('uk');
-      case 'Urdu':
-        return const Locale('ur');
-      case 'Vietnamese':
-        return const Locale('vi');
-      case 'Yoruba':
-        return const Locale('yo');
-      case 'Zulu':
-        return const Locale('zu');
-      default:
-        return const Locale('en');
-    }
   }
 
   AppSettings copyWith({
@@ -380,8 +321,15 @@ class AppSettingsController extends StateNotifier<AppSettings> {
 
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
+    final savedLanguage = prefs.getString(_languageKey) ?? 'English';
+    final language = kSupportedAppLanguages.contains(savedLanguage)
+        ? savedLanguage
+        : 'English';
+    if (language != savedLanguage) {
+      await prefs.setString(_languageKey, language);
+    }
     _initialSettings = AppSettings(
-      language: prefs.getString(_languageKey) ?? 'English',
+      language: language,
       currencyCode: prefs.getString(_currencyCodeKey) ?? 'GHS',
       emailNotifications: prefs.getBool(_emailNotificationsKey) ?? true,
       phoneNotifications: prefs.getBool(_phoneNotificationsKey) ?? true,
@@ -431,9 +379,11 @@ class AppSettingsController extends StateNotifier<AppSettings> {
   }
 
   Future<void> setLanguage(String language) async {
-    state = state.copyWith(language: language);
+    final normalized =
+        kSupportedAppLanguages.contains(language) ? language : 'English';
+    state = state.copyWith(language: normalized);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_languageKey, language);
+    await prefs.setString(_languageKey, normalized);
   }
 
   Future<void> setEmailNotifications(bool enabled) async {

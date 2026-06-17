@@ -820,40 +820,10 @@ Future<void> _showAppSettingsSheet(
   var settings = ref.read(appSettingsControllerProvider);
   var emailNotifications = settings.emailNotifications;
   var phoneNotifications = settings.phoneNotifications;
-  var language = settings.language;
+  var language = kSupportedAppLanguages.contains(settings.language)
+      ? settings.language
+      : 'English';
   var currencyCode = settings.currencyCode;
-  const languages = [
-    'English',
-    'Arabic',
-    'Bengali',
-    'Chinese',
-    'Dutch',
-    'Ewe',
-    'French',
-    'Ga',
-    'German',
-    'Greek',
-    'Hausa',
-    'Hindi',
-    'Indonesian',
-    'Italian',
-    'Japanese',
-    'Korean',
-    'Malay',
-    'Portuguese',
-    'Russian',
-    'Spanish',
-    'Swahili',
-    'Tamil',
-    'Thai',
-    'Twi',
-    'Turkish',
-    'Ukrainian',
-    'Urdu',
-    'Vietnamese',
-    'Yoruba',
-    'Zulu',
-  ];
   if (!context.mounted) return;
   await showModalBottomSheet<void>(
     context: context,
@@ -932,7 +902,7 @@ Future<void> _showAppSettingsSheet(
                     labelText: settings.t('Language'),
                     prefixIcon: const Icon(Icons.language_outlined),
                   ),
-                  items: languages
+                  items: kSupportedAppLanguages
                       .map(
                         (item) => DropdownMenuItem(
                           value: item,
@@ -1288,7 +1258,7 @@ Future<void> _confirmDeleteAccount(
   }
 }
 
-class _ProfilePhotoHeader extends StatelessWidget {
+class _ProfilePhotoHeader extends ConsumerWidget {
   const _ProfilePhotoHeader({
     required this.user,
     required this.uploading,
@@ -1300,9 +1270,8 @@ class _ProfilePhotoHeader extends StatelessWidget {
   final VoidCallback onChangePhoto;
 
   @override
-  Widget build(BuildContext context) {
-    final settings =
-        ProviderScope.containerOf(context).read(appSettingsControllerProvider);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     final scheme = Theme.of(context).colorScheme;
     final imageProvider = _profileImageProvider(user.photoUrl);
     final hasPhoto = imageProvider != null;
