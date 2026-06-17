@@ -380,32 +380,14 @@ Future<void> _showSecuritySheet(
                     },
             ),
             ListTile(
-              leading: Icon(
-                user.phoneVerified
-                    ? Icons.phone_android
-                    : Icons.phonelink_ring_outlined,
-              ),
-              title: const Text('Phone verification'),
+              leading: const Icon(Icons.phone_android_outlined),
+              title: const Text('Phone number'),
               subtitle: Text(
                 user.phone.isEmpty
-                    ? 'Add a phone number first.'
-                    : user.phoneVerified
-                        ? 'Your phone is verified.'
-                        : 'Send a 6-digit code to ${user.phone}.',
+                    ? 'Add a phone number in account settings.'
+                    : user.phone,
               ),
-              trailing: user.phoneVerified ? const Text('Verified') : null,
-              enabled: user.phone.isNotEmpty && !user.phoneVerified,
-              onTap: user.phone.isEmpty || user.phoneVerified
-                  ? null
-                  : () {
-                      Navigator.of(context).pop();
-                      _showVerificationCodeDialog(
-                        context,
-                        title: 'Verify phone',
-                        requestCode: authService.requestPhoneOtp,
-                        verifyCode: authService.verifyPhoneOtp,
-                      );
-                    },
+              onTap: null,
             ),
           ],
         ),

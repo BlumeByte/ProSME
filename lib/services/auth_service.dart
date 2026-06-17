@@ -842,13 +842,11 @@ class SupabaseAuthService implements AuthService {
 
     await _updateProfile(user.id, {
       'phone': normalized,
-      'phone_verified': false,
     });
 
     if (_resolvedCurrentUser != null) {
       _resolvedCurrentUser = _resolvedCurrentUser!.copyWith(
         phone: normalized,
-        phoneVerified: false,
       );
       _emitProfileUpdate();
     }
@@ -873,7 +871,6 @@ class SupabaseAuthService implements AuthService {
       'phone': normalized,
       'country': country,
       'country_code': countryCode,
-      'phone_verified': false,
     });
 
     if (_resolvedCurrentUser != null) {
@@ -881,7 +878,6 @@ class SupabaseAuthService implements AuthService {
         phone: normalized,
         country: country,
         countryCode: countryCode,
-        phoneVerified: false,
       );
       _emitProfileUpdate();
     }
