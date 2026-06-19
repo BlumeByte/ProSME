@@ -3,7 +3,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'config/theme.dart';
 import 'app/router.dart';
-import 'services/app_settings_controller.dart';
 import 'services/theme_mode_controller.dart';
 
 class ProSMEApp extends ConsumerWidget {

@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,6 +17,8 @@ const kSupportedAppLanguages = [
   'English',
   'French',
   'Spanish',
+  'Arabic',
+  'Twi',
 ];
 
 final appSettingsControllerProvider =
@@ -150,6 +151,13 @@ const _translations = <String, Map<String, String>>{
     'Uploading...': 'Publication...',
     'My uploaded requests': 'Mes demandes publiees',
     'No uploads yet.': 'Aucune publication pour le moment.',
+    'Enter a known address or use your phone location.':
+        'Entrez une adresse connue ou utilisez la localisation du telephone.',
+    'Use current location': 'Utiliser la localisation actuelle',
+    'Location added to request.': 'Localisation ajoutee a la demande.',
+    'Could not get location': 'Impossible d obtenir la localisation',
+    'Location permission is required.':
+        'L autorisation de localisation est requise.',
     'Sign in to upload requests': 'Connectez-vous pour publier des demandes',
     'Request uploaded successfully.': 'Demande publiee avec succes.',
     'Could not upload request. Check Supabase setup.':
@@ -168,6 +176,19 @@ const _translations = <String, Map<String, String>>{
     'Clear date filter': 'Effacer le filtre de date',
     'No notifications': 'Aucune notification',
     'Mark read': 'Marquer comme lue',
+    'Notification deleted.': 'Notification supprimee.',
+    'Wallet': 'Portefeuille',
+    'Track accepted bids and money flow.':
+        'Suivez les offres acceptees et les flux d argent.',
+    'Tracked accepted bids': 'Offres acceptees suivies',
+    'Money flow from accepted work.': 'Flux d argent des travaux acceptes.',
+    'No wallet activity yet': 'Aucune activite de portefeuille',
+    'Could not load wallet.': 'Impossible de charger le portefeuille.',
+    'Loading wallet...': 'Chargement du portefeuille...',
+    'bid accepted': 'offre acceptee',
+    'Wallet flow': 'Flux du portefeuille',
+    'Latest accepted bid money flow.':
+        'Dernier flux d argent des offres acceptees.',
     'Hello': 'Bonjour',
     'Favourites': 'Favoris',
     'Mark services unavailable': 'Marquer les services indisponibles',
@@ -179,6 +200,27 @@ const _translations = <String, Map<String, String>>{
     'Services marked available.': 'Services marques disponibles.',
     'Could not update status': 'Impossible de mettre a jour le statut',
     'Verified artisan': 'Artisan verifie',
+    'Verification needed': 'Verification requise',
+    'Customers can see your verified badge.':
+        'Les clients peuvent voir votre badge verifie.',
+    'Upload ID documents so Support can verify your profile.':
+        'Televersez vos pieces pour que le support verifie votre profil.',
+    'Manage your services': 'Gerez vos services',
+    'My listings': 'Mes annonces',
+    'Requests': 'Demandes',
+    'Negotiations': 'Negociations',
+    'New Job Requests': 'Nouvelles demandes',
+    'Could not load requests': 'Impossible de charger les demandes',
+    'No customer requests yet': 'Aucune demande client pour le moment',
+    'New jobs will appear here when users post them.':
+        'Les nouveaux travaux apparaitront ici quand les clients les publient.',
+    'Bid': 'Offrir',
+    'Won': 'Gagne',
+    'Bid sent. Chat opens after the customer accepts it.':
+        'Offre envoyee. La discussion s ouvre apres acceptation du client.',
+    'Bid updated. Chat opens after the customer accepts it.':
+        'Offre mise a jour. La discussion s ouvre apres acceptation du client.',
+    'Chat after accept': 'Discussion apres acceptation',
     'Verified account': 'Compte verifie',
     'Verification': 'Verification',
     'Your profile shows a public verified checkmark.':
@@ -273,6 +315,46 @@ const _translations = <String, Map<String, String>>{
     'View All': 'Ver todo',
     'No professionals found for this search.':
         'No se encontraron profesionales para esta busqueda.',
+    'Notifications': 'Notificaciones',
+    'All': 'Todo',
+    'Unread': 'No leidas',
+    'Read': 'Leidas',
+    'Type': 'Tipo',
+    'Date': 'Fecha',
+    'Mark read': 'Marcar como leida',
+    'Notification deleted.': 'Notificacion eliminada.',
+    'Wallet': 'Billetera',
+    'Track accepted bids and money flow.':
+        'Controla ofertas aceptadas y flujo de dinero.',
+    'Tracked accepted bids': 'Ofertas aceptadas registradas',
+    'Money flow from accepted work.': 'Flujo de dinero de trabajos aceptados.',
+    'No wallet activity yet': 'Sin actividad en la billetera',
+    'Could not load wallet.': 'No se pudo cargar la billetera.',
+    'Loading wallet...': 'Cargando billetera...',
+    'Hello': 'Hola',
+    'Manage your services': 'Gestiona tus servicios',
+    'Services': 'Servicios',
+    'Bids': 'Ofertas',
+    'Won': 'Ganadas',
+    'Verified artisan': 'Artesano verificado',
+    'Verification needed': 'Verificacion necesaria',
+    'Customers can see your verified badge.':
+        'Los clientes pueden ver tu insignia verificada.',
+    'Upload ID documents so Support can verify your profile.':
+        'Sube documentos para que soporte verifique tu perfil.',
+    'My listings': 'Mis anuncios',
+    'Requests': 'Solicitudes',
+    'Negotiations': 'Negociaciones',
+    'New Job Requests': 'Nuevas solicitudes',
+    'Bid': 'Ofertar',
+    'Chat after accept': 'Chat tras aceptar',
+    'Enter a known address or use your phone location.':
+        'Ingresa una direccion conocida o usa la ubicacion del telefono.',
+    'Use current location': 'Usar ubicacion actual',
+    'Location added to request.': 'Ubicacion agregada a la solicitud.',
+    'Could not get location': 'No se pudo obtener la ubicacion',
+    'Location permission is required.':
+        'Se requiere permiso de ubicacion.',
   },
   'Arabic': {
     'ProSME   Find Professionals': 'ProSME   ابحث عن محترفين',
@@ -298,6 +380,10 @@ const _translations = <String, Map<String, String>>{
         'حذف هذه المحادثة من الدردشات؟',
     'Cancel': 'إلغاء',
     'Delete': 'حذف',
+    'Wallet': 'المحفظة',
+    'Bid': 'عرض',
+    'Requests': 'الطلبات',
+    'Notifications': 'الإشعارات',
   },
   'Twi': {
     'ProSME   Find Professionals': 'ProSME   Hwehwɛ adwumayɛfo',
@@ -311,6 +397,11 @@ const _translations = <String, Map<String, String>>{
     'Listings': 'Nnwuma',
     'Jobs': 'Adwuma',
     'Settings': 'Nhyehyɛe',
+    'Wallet': 'Sika kotoku',
+    'Bid': 'Fa bo',
+    'Requests': 'Abisade',
+    'Notifications': 'Amanesebɔ',
+    'Delete': 'Yi fi hɔ',
   },
 };
 

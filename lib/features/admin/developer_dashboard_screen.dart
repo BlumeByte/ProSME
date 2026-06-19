@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../config/constants.dart';
+import '../../core/utils/currency.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/admin_service.dart';
 import '../../services/service_providers.dart';
 
@@ -113,8 +115,51 @@ class _DeveloperOverview extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 16),
+            const _WalletFlowPreview(),
+            const SizedBox(height: 16),
             const _RecentReportsPreview(),
           ],
+        );
+      },
+    );
+  }
+}
+
+class _WalletFlowPreview extends ConsumerWidget {
+  const _WalletFlowPreview();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: shouldUseSupabase()
+          ? ref
+              .watch(supabaseClientProvider)
+              .from('wallet_transactions')
+              .select()
+              .order('created_at', ascending: false)
+              .limit(5)
+          : Future.value(const <Map<String, dynamic>>[]),
+      builder: (context, snapshot) {
+        final rows = snapshot.data ?? const <Map<String, dynamic>>[];
+        final total = rows.fold<double>(
+          0,
+          (sum, row) => sum + ((row['amount'] as num?)?.toDouble() ?? 0),
+        );
+        return Card(
+          child: ListTile(
+            leading: const Icon(Icons.account_balance_wallet_outlined),
+            title: Text(settings.t('Wallet flow')),
+            subtitle: Text(
+              rows.isEmpty
+                  ? settings.t('No wallet activity yet')
+                  : settings.t('Latest accepted bid money flow.'),
+            ),
+            trailing: Text(
+              formatMoney(total, settings.currencyCode),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
         );
       },
     );

@@ -25,7 +25,6 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
   final _amountController = TextEditingController();
   final _messageController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  final _uuid = const Uuid();
   bool _submitting = false;
 
   @override
@@ -144,21 +143,6 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
             amount: amount,
             message: _messageController.text.trim(),
           );
-      final thread = await ref.read(chatServiceProvider).createOrOpenThread(
-            userId: job.createdBy,
-            artisanId: user.id,
-          );
-      await ref.read(chatServiceProvider).sendMessage(
-            ChatMessage(
-              id: _uuid.v4(),
-              threadId: thread.id,
-              senderId: user.id,
-              type: MessageType.offer,
-              content:
-                  'Bid submitted: ${formatMoney(bid.amount, currencyCode)}. ${bid.message}',
-              createdAt: DateTime.now(),
-            ),
-          );
       if (!mounted) return;
       _amountController.clear();
       _messageController.clear();
@@ -167,12 +151,11 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
           content: Text(
             bid.createdAt.isBefore(
                     DateTime.now().subtract(const Duration(seconds: 2)))
-                ? 'Bid updated. Chat opened for negotiation.'
-                : 'Bid sent. Chat opened for negotiation.',
+                ? 'Bid updated. Chat opens after the customer accepts it.'
+                : 'Bid sent. Chat opens after the customer accepts it.',
           ),
         ),
       );
-      context.push('${RouteNames.chatThread}/${thread.id}');
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -646,9 +629,13 @@ class _BidTile extends ConsumerWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () => _openChat(context, ref),
+                    onPressed: bid.status == 'accepted'
+                        ? () => _openChat(context, ref)
+                        : null,
                     icon: const Icon(Icons.chat_bubble_outline),
-                    label: const Text('Chat'),
+                    label: Text(
+                      bid.status == 'accepted' ? 'Chat' : 'Chat after accept',
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -703,7 +690,25 @@ class _BidTile extends ConsumerWidget {
     try {
       await ref.read(jobsRepositoryProvider).acceptBid(bid.id);
       if (!context.mounted) return;
-      await _openChat(context, ref);
+      final thread = await ref.read(chatServiceProvider).createOrOpenThread(
+            userId: job.createdBy,
+            artisanId: bid.artisanId,
+          );
+      final locationLine = _jobLocationMessage(job);
+      await ref.read(chatServiceProvider).sendMessage(
+            ChatMessage(
+              id: const Uuid().v4(),
+              threadId: thread.id,
+              senderId: job.createdBy,
+              type: MessageType.offer,
+              content:
+                  'Bid accepted for ${job.title}: ${formatMoney(bid.amount, currencyCode)}.\n$locationLine',
+              createdAt: DateTime.now(),
+            ),
+          );
+      if (context.mounted) {
+        context.push('${RouteNames.chatThread}/${thread.id}');
+      }
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -815,4 +820,14 @@ class _MessageState extends StatelessWidget {
 
 String? _required(String? value) {
   return value == null || value.trim().isEmpty ? 'Required' : null;
+}
+
+String _jobLocationMessage(JobFeedItem job) {
+  final hasCoordinates = job.locationLat != null && job.locationLng != null;
+  if (!hasCoordinates) {
+    return 'Work location: ${job.location}';
+  }
+  final mapsUrl =
+      'https://www.google.com/maps/search/?api=1&query=${job.locationLat},${job.locationLng}';
+  return 'Work location: ${job.location}\nDirections: $mapsUrl';
 }

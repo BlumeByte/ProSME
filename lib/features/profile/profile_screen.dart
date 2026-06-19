@@ -166,6 +166,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           trailingText: settings.t('Open'),
           onTap: () => context.push(RouteNames.notifications),
         ),
+        const Divider(),
+        _SettingsTile(
+          icon: Icons.account_balance_wallet_outlined,
+          title: settings.t('Wallet'),
+          subtitle: settings.t('Track accepted bids and money flow.'),
+          trailingText: settings.t('Open'),
+          onTap: () => context.push(RouteNames.wallet),
+        ),
         const SizedBox(height: 8),
         ListTile(
           leading: const Icon(Icons.logout),

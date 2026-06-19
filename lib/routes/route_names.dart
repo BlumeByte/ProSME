@@ -14,6 +14,7 @@ class RouteNames {
   static const aiSupport = '/support';
   static const notifications = '/notifications';
   static const saved = '/saved';
+  static const wallet = '/wallet';
   static const privacy = '/privacy';
   static const terms = '/terms';
   static const security = '/security';

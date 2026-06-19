@@ -17,6 +17,9 @@ class JobFeedItem {
     required this.createdAt,
     this.images = const [],
     this.status = 'open',
+    this.locationLat,
+    this.locationLng,
+    this.locationSource = 'typed',
   });
 
   final String id;
@@ -28,6 +31,9 @@ class JobFeedItem {
   final DateTime createdAt;
   final List<String> images;
   final String status;
+  final double? locationLat;
+  final double? locationLng;
+  final String locationSource;
 }
 
 class JobBid {
@@ -96,6 +102,9 @@ abstract class JobsRepository {
     required double budget,
     required String createdBy,
     List<String> images = const [],
+    double? locationLat,
+    double? locationLng,
+    String locationSource = 'typed',
   });
 
   Future<JobFeedItem> updateJob({
@@ -105,6 +114,9 @@ abstract class JobsRepository {
     required String location,
     required double budget,
     List<String> images = const [],
+    double? locationLat,
+    double? locationLng,
+    String locationSource = 'typed',
   });
 
   Future<void> deleteJob(String jobId);
@@ -309,6 +321,9 @@ class SupabaseJobsRepository implements JobsRepository {
     required double budget,
     required String createdBy,
     List<String> images = const [],
+    double? locationLat,
+    double? locationLng,
+    String locationSource = 'typed',
   }) async {
     final row = await _client
         .from('jobs')
@@ -319,6 +334,9 @@ class SupabaseJobsRepository implements JobsRepository {
           'budget': budget,
           'created_by': createdBy,
           'images': images,
+          'location_lat': locationLat,
+          'location_lng': locationLng,
+          'location_source': locationSource,
         })
         .select()
         .single();
@@ -334,6 +352,9 @@ class SupabaseJobsRepository implements JobsRepository {
     required String location,
     required double budget,
     List<String> images = const [],
+    double? locationLat,
+    double? locationLng,
+    String locationSource = 'typed',
   }) async {
     final row = await _client
         .from('jobs')
@@ -343,6 +364,9 @@ class SupabaseJobsRepository implements JobsRepository {
           'location': location,
           'budget': budget,
           'images': images,
+          'location_lat': locationLat,
+          'location_lng': locationLng,
+          'location_source': locationSource,
         })
         .eq('id', jobId)
         .select()
@@ -387,29 +411,18 @@ class SupabaseJobsRepository implements JobsRepository {
         .from('job_bids')
         .update({'status': 'accepted'})
         .eq('id', bidId)
-        .select('job_id')
+        .select('job_id,artisan_id,amount')
         .single();
     final jobId = (accepted['job_id'] ?? '').toString();
     if (jobId.isNotEmpty) {
       await _client
           .from('jobs')
-          .update({'status': 'completed'}).eq('id', jobId);
-    }
-    final bid = await _client
-        .from('job_bids')
-        .select('artisan_id')
-        .eq('id', bidId)
-        .maybeSingle();
-    final artisanId = (bid?['artisan_id'] ?? '').toString();
-    if (artisanId.isNotEmpty) {
-      await _client.from('admin_notifications').insert({
-        'type': 'bid_accepted',
-        'title': 'Bid accepted',
-        'body': 'Your bid was accepted and the request was moved to history.',
-        'related_user_id': artisanId,
-        'related_table': 'job_bids',
-        'related_id': bidId,
-      });
+          .update({
+            'status': 'completed',
+            'accepted_bid_id': bidId,
+            'accepted_amount': accepted['amount'],
+          })
+          .eq('id', jobId);
     }
   }
 
@@ -450,6 +463,9 @@ class SupabaseJobsRepository implements JobsRepository {
       createdAt: DateTime.tryParse((row['created_at'] as String?) ?? '') ??
           DateTime.now(),
       status: (row['status'] as String?) ?? 'open',
+      locationLat: (row['location_lat'] as num?)?.toDouble(),
+      locationLng: (row['location_lng'] as num?)?.toDouble(),
+      locationSource: (row['location_source'] as String?) ?? 'typed',
       images: List<String>.from(
         (row['images'] ?? const <dynamic>[]) as List<dynamic>,
       ),
@@ -543,6 +559,9 @@ class MockJobsRepository implements JobsRepository {
     required double budget,
     required String createdBy,
     List<String> images = const [],
+    double? locationLat,
+    double? locationLng,
+    String locationSource = 'typed',
   }) async {
     final job = JobFeedItem(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -554,6 +573,9 @@ class MockJobsRepository implements JobsRepository {
       createdAt: DateTime.now(),
       images: images,
       status: 'open',
+      locationLat: locationLat,
+      locationLng: locationLng,
+      locationSource: locationSource,
     );
     _jobs.insert(0, job);
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
@@ -568,6 +590,9 @@ class MockJobsRepository implements JobsRepository {
     required String location,
     required double budget,
     List<String> images = const [],
+    double? locationLat,
+    double? locationLng,
+    String locationSource = 'typed',
   }) async {
     final index = _jobs.indexWhere((job) => job.id == jobId);
     if (index == -1) {
@@ -578,6 +603,9 @@ class MockJobsRepository implements JobsRepository {
         budget: budget,
         createdBy: '',
         images: images,
+        locationLat: locationLat,
+        locationLng: locationLng,
+        locationSource: locationSource,
       );
     }
     final current = _jobs[index];
@@ -591,6 +619,9 @@ class MockJobsRepository implements JobsRepository {
       createdAt: current.createdAt,
       images: images,
       status: current.status,
+      locationLat: locationLat,
+      locationLng: locationLng,
+      locationSource: locationSource,
     );
     _jobs[index] = updated;
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));

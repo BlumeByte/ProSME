@@ -67,6 +67,22 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     setState(() => _future = _loadNotifications());
   }
 
+  Future<void> _deleteNotification(_NotificationItem item) async {
+    if (!shouldUseSupabase()) return;
+    final settings = ref.read(appSettingsControllerProvider);
+    await ref
+        .read(supabaseClientProvider)
+        .from('admin_notifications')
+        .delete()
+        .eq('id', item.id);
+    setState(() => _future = _loadNotifications());
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(settings.t('Notification deleted.'))),
+      );
+    }
+  }
+
   Future<void> _pickDateRange() async {
     final now = DateTime.now();
     final selected = await showDateRangePicker(
@@ -181,35 +197,74 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 )
               else
                 ...filtered.map(
-                  (item) => Card(
-                    child: ListTile(
-                      leading: Icon(
-                        item.isRead
-                            ? Icons.notifications_none
-                            : Icons.notifications_active,
-                      ),
-                      title: Text(item.title),
-                      subtitle: Text(
-                        [
-                          if (item.body.isNotEmpty) item.body,
-                          DateFormat('MMM d, y h:mm a').format(item.createdAt),
-                          item.type.replaceAll('_', ' '),
-                        ].join('\n'),
-                      ),
-                      isThreeLine: true,
-                      trailing: item.isRead
-                          ? null
-                          : IconButton(
-                              onPressed: () => _markRead(item),
-                              icon: const Icon(Icons.done),
-                              tooltip: settings.t('Mark read'),
+                  (item) => Dismissible(
+                    key: ValueKey(item.id),
+                    direction: DismissDirection.horizontal,
+                    background: const _DeleteBackground(alignment: Alignment.centerLeft),
+                    secondaryBackground:
+                        const _DeleteBackground(alignment: Alignment.centerRight),
+                    confirmDismiss: (_) async {
+                      await _deleteNotification(item);
+                      return true;
+                    },
+                    child: Card(
+                      child: ListTile(
+                        leading: Icon(
+                          item.isRead
+                              ? Icons.notifications_none
+                              : Icons.notifications_active,
+                        ),
+                        title: Text(settings.t(item.title)),
+                        subtitle: Text(
+                          [
+                            if (item.body.isNotEmpty) settings.t(item.body),
+                            DateFormat('MMM d, y h:mm a').format(item.createdAt),
+                            settings.t(item.type.replaceAll('_', ' ')),
+                          ].join('\n'),
+                        ),
+                        isThreeLine: true,
+                        trailing: Wrap(
+                          spacing: 4,
+                          children: [
+                            if (!item.isRead)
+                              IconButton(
+                                onPressed: () => _markRead(item),
+                                icon: const Icon(Icons.done),
+                                tooltip: settings.t('Mark read'),
+                              ),
+                            IconButton(
+                              onPressed: () => _deleteNotification(item),
+                              icon: const Icon(Icons.delete_outline),
+                              tooltip: settings.t('Delete'),
                             ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _DeleteBackground extends StatelessWidget {
+  const _DeleteBackground({required this.alignment});
+
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      alignment: alignment,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      color: Theme.of(context).colorScheme.errorContainer,
+      child: Icon(
+        Icons.delete_outline,
+        color: Theme.of(context).colorScheme.onErrorContainer,
       ),
     );
   }

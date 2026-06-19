@@ -37,7 +37,8 @@ class _ArtisanDashboardScreenState
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
-    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
+    final settings = ref.watch(appSettingsControllerProvider);
+    final currencyCode = settings.currencyCode;
     final jobsAsync = ref.watch(jobsStreamProvider);
     final bidsAsync = user == null
         ? const AsyncValue<List<JobBid>>.data(<JobBid>[])
@@ -50,14 +51,16 @@ class _ArtisanDashboardScreenState
       padding: const EdgeInsets.all(16),
       children: [
         Text(
-          'Artisan',
+          settings.t('Artisan'),
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.w800,
               ),
         ),
         const SizedBox(height: 6),
         Text(
-          user == null ? 'Manage your services' : 'Hello, ${user.name}',
+          user == null
+              ? settings.t('Manage your services')
+              : '${settings.t('Hello')}, ${user.name}',
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 16),
@@ -75,6 +78,7 @@ class _ArtisanDashboardScreenState
                 onOpenListings: widget.onOpenListings,
                 onOpenRequests: widget.onOpenJobs,
                 onOpenPending: widget.onOpenChats,
+                settings: settings,
               ),
               error: (_, __) => _StatRow(
                 listings: myListings.length,
@@ -83,6 +87,7 @@ class _ArtisanDashboardScreenState
                 onOpenListings: widget.onOpenListings,
                 onOpenRequests: widget.onOpenJobs,
                 onOpenPending: widget.onOpenChats,
+                settings: settings,
               ),
               data: (jobs) => _StatRow(
                 listings: myListings.length,
@@ -91,6 +96,7 @@ class _ArtisanDashboardScreenState
                 onOpenListings: widget.onOpenListings,
                 onOpenRequests: widget.onOpenJobs,
                 onOpenPending: widget.onOpenChats,
+                settings: settings,
               ),
             );
           },
@@ -103,11 +109,12 @@ class _ArtisanDashboardScreenState
               color: isVerified ? Colors.green : Colors.orange,
             ),
             title:
-                Text(isVerified ? 'Verified artisan' : 'Verification needed'),
+                Text(settings.t(
+                    isVerified ? 'Verified artisan' : 'Verification needed')),
             subtitle: Text(
-              isVerified
+              settings.t(isVerified
                   ? 'Customers can see your verified badge.'
-                  : 'Upload ID documents so Support can verify your profile.',
+                  : 'Upload ID documents so Support can verify your profile.'),
             ),
             trailing: isVerified ? null : const Icon(Icons.info_outline),
           ),
@@ -118,7 +125,7 @@ class _ArtisanDashboardScreenState
             Expanded(
               child: _DashboardAction(
                 icon: Icons.storefront,
-                label: 'My listings',
+                label: settings.t('My listings'),
                 onTap: widget.onOpenListings,
               ),
             ),
@@ -126,7 +133,7 @@ class _ArtisanDashboardScreenState
             Expanded(
               child: _DashboardAction(
                 icon: Icons.work_outline,
-                label: 'Requests',
+                label: settings.t('Requests'),
                 onTap: widget.onOpenJobs,
               ),
             ),
@@ -138,7 +145,7 @@ class _ArtisanDashboardScreenState
             Expanded(
               child: _DashboardAction(
                 icon: Icons.chat_bubble_outline,
-                label: 'Negotiations',
+                label: settings.t('Negotiations'),
                 onTap: widget.onOpenChats,
               ),
             ),
@@ -146,7 +153,7 @@ class _ArtisanDashboardScreenState
             Expanded(
               child: _DashboardAction(
                 icon: Icons.settings_outlined,
-                label: 'Settings',
+                label: settings.t('Settings'),
                 onTap: widget.onOpenSettings,
               ),
             ),
@@ -157,12 +164,13 @@ class _ArtisanDashboardScreenState
           children: [
             Expanded(
               child: Text(
-                'New Job Requests',
+                settings.t('New Job Requests'),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
             TextButton(
-                onPressed: widget.onOpenJobs, child: const Text('View All')),
+                onPressed: widget.onOpenJobs,
+                child: Text(settings.t('View All'))),
           ],
         ),
         const SizedBox(height: 8),
@@ -173,16 +181,17 @@ class _ArtisanDashboardScreenState
               child: CircularProgressIndicator(),
             ),
           ),
-          error: (error, _) => Text('Could not load requests: $error'),
+          error: (error, _) =>
+              Text('${settings.t('Could not load requests')}: $error'),
           data: (jobs) {
             _notifyOnNewJob(jobs);
             if (jobs.isEmpty) {
-              return const Card(
+              return Card(
                 child: ListTile(
-                  leading: Icon(Icons.inbox_outlined),
-                  title: Text('No customer requests yet'),
-                  subtitle:
-                      Text('New jobs will appear here when users post them.'),
+                  leading: const Icon(Icons.inbox_outlined),
+                  title: Text(settings.t('No customer requests yet')),
+                  subtitle: Text(settings
+                      .t('New jobs will appear here when users post them.')),
                 ),
               );
             }
@@ -199,7 +208,7 @@ class _ArtisanDashboardScreenState
                       trailing: FilledButton(
                         onPressed: () =>
                             context.push('${RouteNames.jobDetail}/${job.id}'),
-                        child: const Text('Bid'),
+                        child: Text(settings.t('Bid')),
                       ),
                       onTap: () =>
                           context.push('${RouteNames.jobDetail}/${job.id}'),
@@ -245,6 +254,7 @@ class _StatRow extends StatelessWidget {
     required this.onOpenListings,
     required this.onOpenRequests,
     required this.onOpenPending,
+    required this.settings,
   });
 
   final int listings;
@@ -253,6 +263,7 @@ class _StatRow extends StatelessWidget {
   final VoidCallback onOpenListings;
   final VoidCallback onOpenRequests;
   final VoidCallback onOpenPending;
+  final AppSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -261,7 +272,7 @@ class _StatRow extends StatelessWidget {
         Expanded(
           child: _StatTile(
             value: listings.toString(),
-            label: 'Services',
+            label: settings.t('Services'),
             icon: Icons.storefront_outlined,
             onTap: onOpenListings,
           ),
@@ -270,7 +281,7 @@ class _StatRow extends StatelessWidget {
         Expanded(
           child: _StatTile(
             value: bids.toString(),
-            label: 'Bids',
+            label: settings.t('Bids'),
             icon: Icons.request_quote_outlined,
             onTap: onOpenRequests,
           ),
@@ -279,7 +290,7 @@ class _StatRow extends StatelessWidget {
         Expanded(
           child: _StatTile(
             value: won.toString(),
-            label: 'Won',
+            label: settings.t('Won'),
             icon: Icons.emoji_events_outlined,
             onTap: onOpenPending,
           ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/utils/currency.dart';
@@ -23,6 +24,10 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
   final _budgetController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isSubmitting = false;
+  bool _locating = false;
+  double? _locationLat;
+  double? _locationLng;
+  String _locationSource = 'typed';
 
   @override
   void dispose() {
@@ -50,6 +55,9 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
             title: _titleController.text.trim(),
             description: _descriptionController.text.trim(),
             location: _locationController.text.trim(),
+            locationLat: _locationLat,
+            locationLng: _locationLng,
+            locationSource: _locationSource,
             budget: convertToGhs(
               double.parse(_budgetController.text.trim()),
               currencyCode,
@@ -60,6 +68,9 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
       _titleController.clear();
       _descriptionController.clear();
       _locationController.clear();
+      _locationLat = null;
+      _locationLng = null;
+      _locationSource = 'typed';
       _budgetController.clear();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(settings.t('Request uploaded successfully.'))),
@@ -78,6 +89,48 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
       if (mounted) {
         setState(() => _isSubmitting = false);
       }
+    }
+  }
+
+  Future<void> _useCurrentLocation() async {
+    final settings = ref.read(appSettingsControllerProvider);
+    setState(() => _locating = true);
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw StateError(settings.t('Location permission is required.'));
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      setState(() {
+        _locationLat = position.latitude;
+        _locationLng = position.longitude;
+        _locationSource = 'device';
+        if (_locationController.text.trim().isEmpty) {
+          _locationController.text =
+              '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
+        }
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(settings.t('Location added to request.'))),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${settings.t('Could not get location')}: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _locating = false);
     }
   }
 
@@ -135,7 +188,22 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
               const SizedBox(height: 10),
               TextFormField(
                 controller: _locationController,
-                decoration: InputDecoration(labelText: settings.t('Location')),
+                decoration: InputDecoration(
+                  labelText: settings.t('Location'),
+                  helperText: settings.t(
+                    'Enter a known address or use your phone location.',
+                  ),
+                  suffixIcon: IconButton(
+                    onPressed: _locating ? null : _useCurrentLocation,
+                    icon: _locating
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.my_location),
+                    tooltip: settings.t('Use current location'),
+                  ),
+                ),
                 validator: (value) => value == null || value.trim().isEmpty
                     ? settings.t('Location is required')
                     : null,

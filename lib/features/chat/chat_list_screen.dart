@@ -113,61 +113,93 @@ class ChatListScreen extends ConsumerWidget {
                 : (thread.artisanName ?? 'Artisan');
             final photoUrl =
                 showingCustomer ? thread.userPhotoUrl : thread.artisanPhotoUrl;
-            return ListTile(
-              leading: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    onPressed: () =>
-                        _deleteThread(context, ref, thread.id, user.id),
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: 'Delete chat',
-                  ),
-                  CircleAvatar(
-                    backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
-                        ? NetworkImage(photoUrl)
-                        : null,
-                    child: (photoUrl == null || photoUrl.isEmpty)
-                        ? const Icon(Icons.person)
-                        : null,
-                  ),
-                ],
-              ),
-              title: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+            return Dismissible(
+              key: ValueKey(thread.id),
+              direction: DismissDirection.horizontal,
+              background:
+                  const _ChatDeleteBackground(alignment: Alignment.centerLeft),
+              secondaryBackground:
+                  const _ChatDeleteBackground(alignment: Alignment.centerRight),
+              confirmDismiss: (_) async {
+                await _deleteThread(context, ref, thread.id, user.id);
+                return false;
+              },
+              child: ListTile(
+                leading: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      onPressed: () =>
+                          _deleteThread(context, ref, thread.id, user.id),
+                      icon: const Icon(Icons.delete_outline),
+                      tooltip: settings.t('Delete chat'),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    DateFormat('MMM d, h:mm a').format(thread.updatedAt),
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                ],
-              ),
-              subtitle: Text(
-                thread.lastMessage.isEmpty
-                    ? settings.t('No messages yet')
-                    : thread.lastMessage,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: thread.unreadCount <= 0
-                  ? null
-                  : Badge.count(
-                      count: thread.unreadCount,
-                      child: const Icon(Icons.mark_chat_unread_outlined),
+                    CircleAvatar(
+                      backgroundImage:
+                          (photoUrl != null && photoUrl.isNotEmpty)
+                              ? NetworkImage(photoUrl)
+                              : null,
+                      child: (photoUrl == null || photoUrl.isEmpty)
+                          ? const Icon(Icons.person)
+                          : null,
                     ),
-              onTap: () =>
-                  context.push('${RouteNames.chatThread}/${thread.id}'),
+                  ],
+                ),
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      DateFormat('MMM d, h:mm a').format(thread.updatedAt),
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ],
+                ),
+                subtitle: Text(
+                  thread.lastMessage.isEmpty
+                      ? settings.t('No messages yet')
+                      : thread.lastMessage,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: thread.unreadCount <= 0
+                    ? null
+                    : Badge.count(
+                        count: thread.unreadCount,
+                        child: const Icon(Icons.mark_chat_unread_outlined),
+                      ),
+                onTap: () =>
+                    context.push('${RouteNames.chatThread}/${thread.id}'),
+              ),
             );
           },
         );
       },
+    );
+  }
+}
+
+class _ChatDeleteBackground extends StatelessWidget {
+  const _ChatDeleteBackground({required this.alignment});
+
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      alignment: alignment,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      color: Theme.of(context).colorScheme.errorContainer,
+      child: Icon(
+        Icons.delete_outline,
+        color: Theme.of(context).colorScheme.onErrorContainer,
+      ),
     );
   }
 }
