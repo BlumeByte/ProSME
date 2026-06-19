@@ -407,23 +407,12 @@ class SupabaseJobsRepository implements JobsRepository {
 
   @override
   Future<void> acceptBid(String bidId) async {
-    final accepted = await _client
+    await _client
         .from('job_bids')
         .update({'status': 'accepted'})
         .eq('id', bidId)
-        .select('job_id,artisan_id,amount')
+        .select('id')
         .single();
-    final jobId = (accepted['job_id'] ?? '').toString();
-    if (jobId.isNotEmpty) {
-      await _client
-          .from('jobs')
-          .update({
-            'status': 'completed',
-            'accepted_bid_id': bidId,
-            'accepted_amount': accepted['amount'],
-          })
-          .eq('id', jobId);
-    }
   }
 
   @override
