@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/listing_card.dart';
 import '../../core/widgets/loading_state.dart';
@@ -16,16 +17,17 @@ class SavedScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authStateProvider).valueOrNull;
+    final settings = ref.watch(appSettingsControllerProvider);
 
     return Scaffold(
       appBar: AppBar(
         leading: const SafeBackButton(),
-        title: const Text('Saved listings'),
+        title: Text(settings.t('Saved listings')),
       ),
       body: user == null
-          ? const EmptyState(
-              title: 'Saved items',
-              subtitle: 'Sign in to see your bookmarked listings.',
+          ? EmptyState(
+              title: settings.t('Saved items'),
+              subtitle: settings.t('Sign in to see your bookmarked listings.'),
             )
           : _SavedBody(userId: user.id),
     );
@@ -40,16 +42,21 @@ class _SavedBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final savedIdsAsync = ref.watch(savedListingIdsProvider(userId));
-    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
+    final settings = ref.watch(appSettingsControllerProvider);
+    final currencyCode = settings.currencyCode;
 
     return savedIdsAsync.when(
-      loading: () => const LoadingState(label: 'Loading saved listings…'),
-      error: (e, _) => Center(child: Text('Error: $e')),
+      loading: () =>
+          LoadingState(label: settings.t('Loading saved listings...')),
+      error: (error, _) =>
+          Center(child: Text('${settings.t('Error')}: $error')),
       data: (savedIds) {
         if (savedIds.isEmpty) {
-          return const EmptyState(
-            title: 'No saved listings',
-            subtitle: 'Tap the bookmark icon on any listing to save it here.',
+          return EmptyState(
+            title: settings.t('No saved listings'),
+            subtitle: settings.t(
+              'Tap the bookmark icon on any listing to save it here.',
+            ),
           );
         }
 
@@ -58,17 +65,20 @@ class _SavedBody extends ConsumerWidget {
           future: listingService.fetchListings(),
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
-              return const LoadingState(label: 'Loading saved listings…');
+              return LoadingState(
+                label: settings.t('Loading saved listings...'),
+              );
             }
             final saved = snapshot.data!
-                .where((l) => savedIds.contains(l.id))
+                .where((listing) => savedIds.contains(listing.id))
                 .toList(growable: false);
 
             if (saved.isEmpty) {
-              return const EmptyState(
-                title: 'No saved listings',
-                subtitle:
-                    'Tap the bookmark icon on any listing to save it here.',
+              return EmptyState(
+                title: settings.t('No saved listings'),
+                subtitle: settings.t(
+                  'Tap the bookmark icon on any listing to save it here.',
+                ),
               );
             }
 

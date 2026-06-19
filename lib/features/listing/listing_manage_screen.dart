@@ -20,9 +20,10 @@ class ListingManageScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authStateProvider).valueOrNull;
-    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
+    final settings = ref.watch(appSettingsControllerProvider);
+    final currencyCode = settings.currencyCode;
     if (user == null) {
-      return const Center(child: Text('Sign in to manage listings.'));
+      return Center(child: Text(settings.t('Sign in to manage listings.')));
     }
 
     final listingService = ref.watch(listingServiceProvider);
@@ -30,11 +31,13 @@ class ListingManageScreen extends ConsumerWidget {
       stream: listingService.watchListings(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const Center(
+          return Center(
             child: Padding(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: Text(
-                'Could not load listings. Check Supabase credentials and try again.',
+                settings.t(
+                  'Could not load listings. Check Supabase credentials and try again.',
+                ),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -55,24 +58,26 @@ class ListingManageScreen extends ConsumerWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'My Listings',
+                    settings.t('My Listings'),
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
                 FilledButton.icon(
                   onPressed: () => _openCreateListingSheet(context, ref),
                   icon: const Icon(Icons.add),
-                  label: const Text('Create'),
+                  label: Text(settings.t('Create')),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             if (listings.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 48),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 48),
                 child: Center(
                   child: Text(
-                    'No listings yet. Create your first service listing.',
+                    settings.t(
+                      'No listings yet. Create your first service listing.',
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -111,9 +116,15 @@ class ListingManageScreen extends ConsumerWidget {
                           await _deleteListing(context, ref, listing);
                         }
                       },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(value: 'edit', child: Text('Edit')),
-                        PopupMenuItem(value: 'delete', child: Text('Delete')),
+                      itemBuilder: (context) => [
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: Text(settings.t('Edit')),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Text(settings.t('Delete')),
+                        ),
                       ],
                     ),
                   ),
@@ -136,7 +147,8 @@ Future<void> _openListingSheet(
   WidgetRef ref, {
   Listing? existing,
 }) async {
-  final currencyCode = ref.read(appSettingsControllerProvider).currencyCode;
+  final settings = ref.read(appSettingsControllerProvider);
+  final currencyCode = settings.currencyCode;
   final titleController = TextEditingController(text: existing?.title ?? '');
   final descriptionController =
       TextEditingController(text: existing?.description ?? '');
@@ -187,24 +199,28 @@ Future<void> _openListingSheet(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(existing == null ? 'Create listing' : 'Edit listing',
+                  Text(
+                      settings.t(
+                        existing == null ? 'Create listing' : 'Edit listing',
+                      ),
                       style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: titleController,
                     decoration:
-                        const InputDecoration(labelText: 'Service title'),
-                    validator: _required,
+                        InputDecoration(labelText: settings.t('Service title')),
+                    validator: (value) => _required(value, settings),
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     initialValue: selectedCategory,
-                    decoration: const InputDecoration(labelText: 'Category'),
+                    decoration:
+                        InputDecoration(labelText: settings.t('Category')),
                     items: kServiceCategories
                         .map(
                           (category) => DropdownMenuItem(
                             value: category.name,
-                            child: Text(category.name),
+                            child: Text(settings.t(category.name)),
                           ),
                         )
                         .toList(growable: false),
@@ -217,9 +233,10 @@ Future<void> _openListingSheet(
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: otherCategoryController,
-                      decoration:
-                          const InputDecoration(labelText: 'Custom category'),
-                      validator: _required,
+                      decoration: InputDecoration(
+                        labelText: settings.t('Custom category'),
+                      ),
+                      validator: (value) => _required(value, settings),
                     ),
                   ],
                   const SizedBox(height: 8),
@@ -227,14 +244,16 @@ Future<void> _openListingSheet(
                     controller: descriptionController,
                     minLines: 3,
                     maxLines: 4,
-                    decoration: const InputDecoration(labelText: 'Description'),
-                    validator: _required,
+                    decoration:
+                        InputDecoration(labelText: settings.t('Description')),
+                    validator: (value) => _required(value, settings),
                   ),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: locationController,
-                    decoration: const InputDecoration(labelText: 'Location'),
-                    validator: _required,
+                    decoration:
+                        InputDecoration(labelText: settings.t('Location')),
+                    validator: (value) => _required(value, settings),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -243,11 +262,12 @@ Future<void> _openListingSheet(
                         child: TextFormField(
                           controller: priceMinController,
                           decoration: InputDecoration(
-                            labelText: 'Min price ($currencyCode)',
+                            labelText:
+                                '${settings.t('Min price')} ($currencyCode)',
                           ),
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true),
-                          validator: _positiveMoney,
+                          validator: (value) => _positiveMoney(value, settings),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -255,11 +275,12 @@ Future<void> _openListingSheet(
                         child: TextFormField(
                           controller: priceMaxController,
                           decoration: InputDecoration(
-                            labelText: 'Max price ($currencyCode)',
+                            labelText:
+                                '${settings.t('Max price')} ($currencyCode)',
                           ),
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true),
-                          validator: _positiveMoney,
+                          validator: (value) => _positiveMoney(value, settings),
                         ),
                       ),
                     ],
@@ -281,8 +302,8 @@ Future<void> _openListingSheet(
                       icon: const Icon(Icons.photo_library_outlined),
                       label: Text(
                         totalImages == 0
-                            ? 'Upload images'
-                            : '$totalImages/3 images selected',
+                            ? settings.t('Upload images')
+                            : '$totalImages/3 ${settings.t('images selected')}',
                       ),
                     );
                   }),
@@ -379,9 +400,12 @@ Future<void> _openListingSheet(
                         );
                         if (maxPrice < minPrice) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
+                            SnackBar(
                               content: Text(
-                                  'Max price must be greater than min price.'),
+                                settings.t(
+                                  'Max price must be greater than min price.',
+                                ),
+                              ),
                             ),
                           );
                           return;
@@ -399,7 +423,7 @@ Future<void> _openListingSheet(
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  'Could not upload listing image: $error',
+                                  '${settings.t('Could not upload listing image')}: $error',
                                 ),
                               ),
                             );
@@ -442,8 +466,8 @@ Future<void> _openListingSheet(
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(existing == null
-                                    ? 'Listing created.'
-                                    : 'Listing updated.'),
+                                    ? settings.t('Listing created.')
+                                    : settings.t('Listing updated.')),
                               ),
                             );
                           }
@@ -453,8 +477,8 @@ Future<void> _openListingSheet(
                               SnackBar(
                                 content: Text(
                                   existing == null
-                                      ? 'Could not create listing: $error'
-                                      : 'Could not save listing: $error',
+                                      ? '${settings.t('Could not create listing')}: $error'
+                                      : '${settings.t('Could not save listing')}: $error',
                                 ),
                               ),
                             );
@@ -462,7 +486,9 @@ Future<void> _openListingSheet(
                         }
                       },
                       child: Text(
-                        existing == null ? 'Create listing' : 'Save listing',
+                        settings.t(
+                          existing == null ? 'Create listing' : 'Save listing',
+                        ),
                       ),
                     ),
                   ),
@@ -488,19 +514,22 @@ Future<void> _deleteListing(
   WidgetRef ref,
   Listing listing,
 ) async {
+  final settings = ref.read(appSettingsControllerProvider);
   final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Delete listing'),
-          content: Text('Delete "${listing.title}" permanently?'),
+          title: Text(settings.t('Delete listing')),
+          content: Text(
+            '${settings.t('Delete')} "${listing.title}" ${settings.t('permanently?')}',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(settings.t('Cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Delete'),
+              child: Text(settings.t('Delete')),
             ),
           ],
         ),
@@ -511,13 +540,15 @@ Future<void> _deleteListing(
     await ref.read(listingServiceProvider).deleteListing(listing.id);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Listing deleted.')),
+        SnackBar(content: Text(settings.t('Listing deleted.'))),
       );
     }
   } catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not delete listing: $error')),
+        SnackBar(
+          content: Text('${settings.t('Could not delete listing')}: $error'),
+        ),
       );
     }
   }
@@ -593,12 +624,12 @@ Future<List<String>> _uploadListingImages(
   return urls;
 }
 
-String? _required(String? value) {
-  return value == null || value.trim().isEmpty ? 'Required' : null;
+String? _required(String? value, AppSettings settings) {
+  return value == null || value.trim().isEmpty ? settings.t('Required') : null;
 }
 
-String? _positiveMoney(String? value) {
+String? _positiveMoney(String? value, AppSettings settings) {
   final amount = double.tryParse((value ?? '').trim());
-  if (amount == null || amount <= 0) return 'Enter a valid amount';
+  if (amount == null || amount <= 0) return settings.t('Enter a valid amount');
   return null;
 }

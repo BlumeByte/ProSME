@@ -45,13 +45,15 @@ class ChatListScreen extends ConsumerWidget {
           );
       if (context.mounted) {
         messenger?.showSnackBar(
-          const SnackBar(content: Text('Chat deleted.')),
+          SnackBar(content: Text(settings.t('Chat deleted.'))),
         );
       }
     } catch (error) {
       if (context.mounted) {
         messenger?.showSnackBar(
-          SnackBar(content: Text('Could not delete chat: $error')),
+          SnackBar(
+            content: Text('${settings.t('Could not delete chat')}: $error'),
+          ),
         );
       }
     }
@@ -75,18 +77,20 @@ class ChatListScreen extends ConsumerWidget {
       stream: chatService.watchThreads(user.id),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const Center(
+          return Center(
             child: Padding(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: Text(
-                'Could not load chats. Check your Supabase setup and try again.',
+                settings.t(
+                  'Could not load chats. Check your Supabase setup and try again.',
+                ),
                 textAlign: TextAlign.center,
               ),
             ),
           );
         }
         if (!snapshot.hasData) {
-          return const LoadingState(label: 'Loading chats...');
+          return LoadingState(label: settings.t('Loading chats...'));
         }
         final threads = snapshot.data!;
         if (threads.isEmpty) {
@@ -135,10 +139,9 @@ class ChatListScreen extends ConsumerWidget {
                       tooltip: settings.t('Delete chat'),
                     ),
                     CircleAvatar(
-                      backgroundImage:
-                          (photoUrl != null && photoUrl.isNotEmpty)
-                              ? NetworkImage(photoUrl)
-                              : null,
+                      backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+                          ? NetworkImage(photoUrl)
+                          : null,
                       child: (photoUrl == null || photoUrl.isEmpty)
                           ? const Icon(Icons.person)
                           : null,

@@ -199,8 +199,11 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         if (mounted) {
+          final settings = ref.read(appSettingsControllerProvider);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location permission is required.')),
+            SnackBar(
+              content: Text(settings.t('Location permission is required.')),
+            ),
           );
         }
         return;
@@ -218,8 +221,13 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
       _applySearch();
     } catch (error) {
       if (mounted) {
+        final settings = ref.read(appSettingsControllerProvider);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not access phone location: $error')),
+          SnackBar(
+            content: Text(
+              '${settings.t('Could not access phone location')}: $error',
+            ),
+          ),
         );
       }
     } finally {
@@ -240,21 +248,22 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
 
   Future<bool> _confirmUnverified(_ProfessionalPreview pro) async {
     if (pro.isVerified) return true;
+    final settings = ref.read(appSettingsControllerProvider);
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Unverified artisan'),
+            title: Text(settings.t('Unverified artisan')),
             content: Text(
-              '${pro.name} has not been verified by ProSME Support yet. Continue only if you are comfortable engaging this artisan.',
+              '${pro.name} ${settings.t('has not been verified by ProSME Support yet. Continue only if you are comfortable engaging this artisan.')}',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
+                child: Text(settings.t('Cancel')),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Continue'),
+                child: Text(settings.t('Continue')),
               ),
             ],
           ),
@@ -273,8 +282,9 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
       return;
     }
     if (user.id == pro.artisanId) {
+      final settings = ref.read(appSettingsControllerProvider);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You cannot chat with yourself.')),
+        SnackBar(content: Text(settings.t('You cannot chat with yourself.'))),
       );
       return;
     }
@@ -289,9 +299,11 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
       }
     } catch (_) {
       if (!mounted) return;
+      final settings = ref.read(appSettingsControllerProvider);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Could not start chat. Please try again.')),
+        SnackBar(
+          content: Text(settings.t('Could not start chat. Please try again.')),
+        ),
       );
     }
   }
@@ -307,8 +319,11 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
       return;
     }
     if (user.id == pro.artisanId) {
+      final settings = ref.read(appSettingsControllerProvider);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You cannot book your own listing.')),
+        SnackBar(
+          content: Text(settings.t('You cannot book your own listing.')),
+        ),
       );
       return;
     }
@@ -319,8 +334,11 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   }
 
   void _showUnavailable() {
+    final settings = ref.read(appSettingsControllerProvider);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('This artisan is currently unavailable.')),
+      SnackBar(
+        content: Text(settings.t('This artisan is currently unavailable.')),
+      ),
     );
   }
 
@@ -344,11 +362,13 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
       stream: listingService.watchListings(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const Center(
+          return Center(
             child: Padding(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: Text(
-                'Could not load professionals. Check Supabase credentials and try again.',
+                settings.t(
+                  'Could not load professionals. Check Supabase credentials and try again.',
+                ),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -460,7 +480,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                     IconButton(
                       onPressed: _clearSearchResults,
                       icon: const Icon(Icons.arrow_back),
-                      tooltip: 'Back',
+                      tooltip: settings.t('Back'),
                     ),
                     Expanded(
                       child: Text(
@@ -494,11 +514,13 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   onTownChanged: (town) => setState(() => _selectedTown = town),
                   onSearch: _applySearch,
                   onUseLocation: _usePhoneLocation,
+                  settings: settings,
                 ),
                 const SizedBox(height: 16),
                 if (_recentSearches.isNotEmpty) ...[
                   _RecentSearches(
                     searches: _recentSearches,
+                    settings: settings,
                     onTap: (value) {
                       _serviceController.text = value;
                       _applySearch();
@@ -517,6 +539,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   query: _serviceQuery,
                   locationQuery: _locationQuery,
                   currencyCode: currencyCode,
+                  settings: settings,
                 ),
                 const SizedBox(height: 18),
                 Text(
@@ -526,7 +549,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                     style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
                 if (featured.isEmpty)
-                  const Text('No professionals found.')
+                  Text(settings.t('No professionals found.'))
                 else
                   ...featured.map((pro) => _ProfessionalCard(
                         pro: pro,
@@ -570,11 +593,13 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               onTownChanged: (town) => setState(() => _selectedTown = town),
               onSearch: _applySearch,
               onUseLocation: _usePhoneLocation,
+              settings: settings,
             ),
             if (_recentSearches.isNotEmpty) ...[
               const SizedBox(height: 12),
               _RecentSearches(
                 searches: _recentSearches,
+                settings: settings,
                 onTap: (value) {
                   _serviceController.text = value;
                   _applySearch();
@@ -655,7 +680,11 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            _OpenJobsPreview(userId: user?.id, currencyCode: currencyCode),
+            _OpenJobsPreview(
+              userId: user?.id,
+              currencyCode: currencyCode,
+              settings: settings,
+            ),
             const SizedBox(height: 20),
             Text(
               settings.t('Latest Artisan Updates'),
@@ -746,7 +775,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     final settings = ref.read(appSettingsControllerProvider);
     if (!settings.phoneNotifications) return;
     NotificationService().showSimpleNotification(
-      title: 'New listing',
+      title: settings.t('New listing'),
       body: latest.title,
     );
   }
@@ -778,6 +807,7 @@ class _SearchControls extends StatelessWidget {
     required this.onTownChanged,
     required this.onSearch,
     required this.onUseLocation,
+    required this.settings,
   });
 
   final TextEditingController serviceController;
@@ -796,6 +826,7 @@ class _SearchControls extends StatelessWidget {
   final ValueChanged<String?> onTownChanged;
   final VoidCallback onSearch;
   final VoidCallback onUseLocation;
+  final AppSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -808,9 +839,9 @@ class _SearchControls extends StatelessWidget {
         TextField(
           controller: serviceController,
           onSubmitted: (_) => onSearch(),
-          decoration: const InputDecoration(
-            hintText: 'What service or job do you need?',
-            prefixIcon: Icon(Icons.search),
+          decoration: InputDecoration(
+            hintText: settings.t('What service or job do you need?'),
+            prefixIcon: const Icon(Icons.search),
           ),
         ),
         const SizedBox(height: 10),
@@ -818,7 +849,7 @@ class _SearchControls extends StatelessWidget {
           controller: locationController,
           onSubmitted: (_) => onSearch(),
           decoration: InputDecoration(
-            hintText: 'Type location, street, or area',
+            hintText: settings.t('Type location, street, or area'),
             prefixIcon: const Icon(Icons.location_on_outlined),
             suffixIcon: IconButton(
               onPressed: locating || lookingUpLocation ? null : onUseLocation,
@@ -828,7 +859,7 @@ class _SearchControls extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.my_location),
-              tooltip: 'Use phone location',
+              tooltip: settings.t('Use phone location'),
             ),
           ),
         ),
@@ -837,14 +868,15 @@ class _SearchControls extends StatelessWidget {
           children: [
             Expanded(
               child: _PickerField(
-                label: 'Country',
-                value: selectedCountry?.name ?? 'Any',
+                label: settings.t('Country'),
+                value: selectedCountry?.name ?? settings.t('Any'),
                 onTap: () async {
                   final selected = await _pickOption<CountryOption?>(
                     context,
-                    title: 'Country',
+                    title: settings.t('Country'),
                     options: <CountryOption?>[null, ...countries],
-                    labelFor: (country) => country?.name ?? 'Any',
+                    labelFor: (country) => country?.name ?? settings.t('Any'),
+                    settings: settings,
                   );
                   if (selected != null) onCountryChanged(selected.value);
                 },
@@ -853,21 +885,23 @@ class _SearchControls extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: _PickerField(
-                label: 'Region',
+                label: settings.t('Region'),
                 value: loadingLocations
-                    ? 'Loading...'
-                    : selectedRegion?.name ?? 'Any',
+                    ? settings.t('Loading...')
+                    : selectedRegion?.name ?? settings.t('Any'),
                 onTap: loadingLocations
                     ? () {}
                     : () async {
                         final selected = await _pickOption<RegionOption?>(
                           context,
-                          title: 'Region',
+                          title: settings.t('Region'),
                           options: <RegionOption?>[
                             null,
                             ...regions,
                           ],
-                          labelFor: (region) => region?.name ?? 'Any',
+                          labelFor: (region) =>
+                              region?.name ?? settings.t('Any'),
+                          settings: settings,
                         );
                         if (selected != null) onRegionChanged(selected.value);
                       },
@@ -880,14 +914,15 @@ class _SearchControls extends StatelessWidget {
           children: [
             Expanded(
               child: _PickerField(
-                label: 'City',
-                value: selectedCity?.name ?? 'Any',
+                label: settings.t('City'),
+                value: selectedCity?.name ?? settings.t('Any'),
                 onTap: () async {
                   final selected = await _pickOption<CityOption?>(
                     context,
-                    title: 'City',
+                    title: settings.t('City'),
                     options: <CityOption?>[null, ...cities],
-                    labelFor: (city) => city?.name ?? 'Any',
+                    labelFor: (city) => city?.name ?? settings.t('Any'),
+                    settings: settings,
                   );
                   if (selected != null) onCityChanged(selected.value);
                 },
@@ -896,14 +931,15 @@ class _SearchControls extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: _PickerField(
-                label: 'Town',
-                value: selectedTown ?? 'Any',
+                label: settings.t('Town'),
+                value: selectedTown ?? settings.t('Any'),
                 onTap: () async {
                   final selected = await _pickOption<String?>(
                     context,
-                    title: 'Town',
+                    title: settings.t('Town'),
                     options: <String?>[null, ...towns],
-                    labelFor: (town) => town ?? 'Any',
+                    labelFor: (town) => town ?? settings.t('Any'),
+                    settings: settings,
                   );
                   if (selected != null) onTownChanged(selected.value);
                 },
@@ -920,7 +956,7 @@ class _SearchControls extends StatelessWidget {
               foregroundColor: scheme.onPrimary,
             ),
             onPressed: onSearch,
-            child: const Text('Search'),
+            child: Text(settings.t('Search')),
           ),
         ),
       ],
@@ -929,17 +965,23 @@ class _SearchControls extends StatelessWidget {
 }
 
 class _RecentSearches extends StatelessWidget {
-  const _RecentSearches({required this.searches, required this.onTap});
+  const _RecentSearches({
+    required this.searches,
+    required this.onTap,
+    required this.settings,
+  });
 
   final List<String> searches;
   final ValueChanged<String> onTap;
+  final AppSettings settings;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Recent searches', style: Theme.of(context).textTheme.titleMedium),
+        Text(settings.t('Recent searches'),
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -1006,6 +1048,7 @@ Future<_PickerResult<T>?> _pickOption<T>(
   required String title,
   required List<T> options,
   required String Function(T option) labelFor,
+  required AppSettings settings,
 }) {
   String query = '';
   return showModalBottomSheet<_PickerResult<T>>(
@@ -1044,7 +1087,7 @@ Future<_PickerResult<T>?> _pickOption<T>(
                           IconButton(
                             onPressed: () => Navigator.of(context).pop(),
                             icon: const Icon(Icons.close),
-                            tooltip: 'Close',
+                            tooltip: settings.t('Close'),
                           ),
                         ],
                       ),
@@ -1053,7 +1096,7 @@ Future<_PickerResult<T>?> _pickOption<T>(
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                       child: TextField(
                         decoration: InputDecoration(
-                          hintText: 'Search $title',
+                          hintText: '${settings.t('Search')} $title',
                           prefixIcon: const Icon(Icons.search),
                         ),
                         onChanged: (value) =>
@@ -1089,12 +1132,14 @@ class _OpenJobsPreview extends ConsumerWidget {
   const _OpenJobsPreview({
     required this.userId,
     required this.currencyCode,
+    required this.settings,
     this.query = '',
     this.locationQuery = '',
   });
 
   final String? userId;
   final String currencyCode;
+  final AppSettings settings;
   final String query;
   final String locationQuery;
 
@@ -1106,8 +1151,10 @@ class _OpenJobsPreview extends ConsumerWidget {
         padding: EdgeInsets.symmetric(vertical: 18),
         child: Center(child: CircularProgressIndicator()),
       ),
-      error: (_, __) => const Text(
-        'Could not load service requests. Check Supabase credentials and try again.',
+      error: (_, __) => Text(
+        settings.t(
+          'Could not load service requests. Check Supabase credentials and try again.',
+        ),
       ),
       data: (jobs) {
         final filtered = jobs.where((job) {
@@ -1119,7 +1166,7 @@ class _OpenJobsPreview extends ConsumerWidget {
           return queryMatches && locationMatches;
         }).toList(growable: false);
         if (filtered.isEmpty) {
-          return const Text('No service requests posted yet.');
+          return Text(settings.t('No service requests posted yet.'));
         }
         return Column(
           children: filtered.take(8).map((job) {

@@ -37,23 +37,24 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
-    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
+    final settings = ref.watch(appSettingsControllerProvider);
+    final currencyCode = settings.currencyCode;
     final jobsAsync = ref.watch(jobsStreamProvider);
     return Scaffold(
       appBar: AppBar(
         leading: const SafeBackButton(),
-        title: const Text('Job details'),
+        title: Text(settings.t('Job details')),
       ),
       body: jobsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => _MessageState(
-          message: 'Could not load this job: $error',
+          message: '${settings.t('Could not load this job')}: $error',
         ),
         data: (jobs) {
           final job = _findJob(jobs, widget.jobId);
           if (job == null) {
-            return const _MessageState(
-              message: 'This job is no longer available.',
+            return _MessageState(
+              message: settings.t('This job is no longer available.'),
             );
           }
 
@@ -77,14 +78,20 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _JobSummary(job: job, currencyCode: currencyCode),
+              _JobSummary(
+                job: job,
+                currencyCode: currencyCode,
+                settings: settings,
+              ),
               const SizedBox(height: 16),
-              const Card(
+              Card(
                 child: ListTile(
-                  leading: Icon(Icons.warning_amber_outlined),
-                  title: Text('Before you continue'),
+                  leading: const Icon(Icons.warning_amber_outlined),
+                  title: Text(settings.t('Before you continue')),
                   subtitle: Text(
-                    'Negotiate in chat and confirm verification status before payment or site visits.',
+                    settings.t(
+                      'Negotiate in chat and confirm verification status before payment or site visits.',
+                    ),
                   ),
                 ),
               ),
@@ -92,7 +99,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
               if (user == null)
                 FilledButton(
                   onPressed: () => context.go(RouteNames.auth),
-                  child: const Text('Sign in to bid or chat'),
+                  child: Text(settings.t('Sign in to bid or chat')),
                 )
               else if (isOwner) ...[
                 _EditJobCard(job: job, currencyCode: currencyCode),
@@ -106,11 +113,14 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                   submitting: _submitting,
                   existingBid: existingBid,
                   currencyCode: currencyCode,
+                  settings: settings,
                   onSubmit: () => _submitBid(job),
                 )
               else
-                const _MessageState(
-                  message: 'Only artisans can bid on service requests.',
+                _MessageState(
+                  message: settings.t(
+                    'Only artisans can bid on service requests.',
+                  ),
                 ),
             ],
           );
@@ -149,17 +159,23 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            bid.createdAt.isBefore(
-                    DateTime.now().subtract(const Duration(seconds: 2)))
-                ? 'Bid updated. Chat opens after the customer accepts it.'
-                : 'Bid sent. Chat opens after the customer accepts it.',
+            ref.read(appSettingsControllerProvider).t(
+                  bid.createdAt.isBefore(
+                          DateTime.now().subtract(const Duration(seconds: 2)))
+                      ? 'Bid updated. Chat opens after the customer accepts it.'
+                      : 'Bid sent. Chat opens after the customer accepts it.',
+                ),
           ),
         ),
       );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not send bid: $error')),
+        SnackBar(
+          content: Text(
+            '${ref.read(appSettingsControllerProvider).t('Could not send bid')}: $error',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -168,10 +184,15 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
 }
 
 class _JobSummary extends StatelessWidget {
-  const _JobSummary({required this.job, required this.currencyCode});
+  const _JobSummary({
+    required this.job,
+    required this.currencyCode,
+    required this.settings,
+  });
 
   final JobFeedItem job;
   final String currencyCode;
+  final AppSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -197,7 +218,7 @@ class _JobSummary extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              '${formatMoney(job.budget, currencyCode)} budget',
+              '${formatMoney(job.budget, currencyCode)} ${settings.t('budget')}',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 16),
@@ -230,21 +251,22 @@ class _EditJobCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     return Card(
       child: Column(
         children: [
           ListTile(
             leading: const Icon(Icons.edit_outlined),
-            title: const Text('Edit job'),
-            subtitle: const Text('Update details or add an image URL.'),
+            title: Text(settings.t('Edit job')),
+            subtitle: Text(settings.t('Update details or add an image URL.')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _editJob(context, ref),
           ),
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.delete_outline),
-            title: const Text('Delete job'),
-            subtitle: const Text('Permanently remove this request.'),
+            title: Text(settings.t('Delete job')),
+            subtitle: Text(settings.t('Permanently remove this request.')),
             onTap: () => _deleteJob(context, ref),
           ),
         ],
@@ -253,20 +275,23 @@ class _EditJobCard extends ConsumerWidget {
   }
 
   Future<void> _deleteJob(BuildContext context, WidgetRef ref) async {
+    final settings = ref.read(appSettingsControllerProvider);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete job request'),
-        content: Text('Delete "${job.title}" permanently?'),
+        title: Text(settings.t('Delete job request')),
+        content: Text(
+          '${settings.t('Delete')} "${job.title}" ${settings.t('permanently?')}',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(settings.t('Cancel')),
           ),
           FilledButton.icon(
             onPressed: () => Navigator.of(context).pop(true),
             icon: const Icon(Icons.delete),
-            label: const Text('Delete'),
+            label: Text(settings.t('Delete')),
           ),
         ],
       ),
@@ -277,20 +302,24 @@ class _EditJobCard extends ConsumerWidget {
       ref.invalidate(jobsStreamProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Job request deleted.')),
+          SnackBar(content: Text(settings.t('Job request deleted.'))),
         );
         context.pop();
       }
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not delete job request: $error')),
+          SnackBar(
+            content:
+                Text('${settings.t('Could not delete job request')}: $error'),
+          ),
         );
       }
     }
   }
 
   Future<void> _editJob(BuildContext context, WidgetRef ref) async {
+    final settings = ref.read(appSettingsControllerProvider);
     final titleController = TextEditingController(text: job.title);
     final descriptionController = TextEditingController(text: job.description);
     final locationController = TextEditingController(text: job.location);
@@ -304,7 +333,7 @@ class _EditJobCard extends ConsumerWidget {
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Edit job'),
+        title: Text(settings.t('Edit job')),
         content: SingleChildScrollView(
           child: Form(
             key: formKey,
@@ -313,22 +342,24 @@ class _EditJobCard extends ConsumerWidget {
               children: [
                 TextFormField(
                   controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Title'),
-                  validator: _required,
+                  decoration: InputDecoration(labelText: settings.t('Title')),
+                  validator: (value) => _required(value, settings),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: descriptionController,
                   minLines: 3,
                   maxLines: 4,
-                  decoration: const InputDecoration(labelText: 'Description'),
-                  validator: _required,
+                  decoration:
+                      InputDecoration(labelText: settings.t('Description')),
+                  validator: (value) => _required(value, settings),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: locationController,
-                  decoration: const InputDecoration(labelText: 'Location'),
-                  validator: _required,
+                  decoration:
+                      InputDecoration(labelText: settings.t('Location')),
+                  validator: (value) => _required(value, settings),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -339,15 +370,18 @@ class _EditJobCard extends ConsumerWidget {
                       InputDecoration(labelText: 'Budget ($currencyCode)'),
                   validator: (value) {
                     final parsed = double.tryParse((value ?? '').trim());
-                    if (parsed == null || parsed <= 0) return 'Required';
+                    if (parsed == null || parsed <= 0) {
+                      return settings.t('Required');
+                    }
                     return null;
                   },
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: imageController,
-                  decoration:
-                      const InputDecoration(labelText: 'Image URL (optional)'),
+                  decoration: InputDecoration(
+                    labelText: settings.t('Image URL (optional)'),
+                  ),
                 ),
               ],
             ),
@@ -356,14 +390,14 @@ class _EditJobCard extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(settings.t('Cancel')),
           ),
           FilledButton(
             onPressed: () {
               if (!formKey.currentState!.validate()) return;
               Navigator.of(context).pop(true);
             },
-            child: const Text('Save'),
+            child: Text(settings.t('Save')),
           ),
         ],
       ),
@@ -385,13 +419,15 @@ class _EditJobCard extends ConsumerWidget {
             );
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Job updated.')),
+            SnackBar(content: Text(settings.t('Job updated.'))),
           );
         }
       } catch (error) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not update job: $error')),
+            SnackBar(
+              content: Text('${settings.t('Could not update job')}: $error'),
+            ),
           );
         }
       }
@@ -413,6 +449,7 @@ class _BidForm extends StatelessWidget {
     required this.submitting,
     required this.existingBid,
     required this.currencyCode,
+    required this.settings,
     required this.onSubmit,
   });
 
@@ -422,6 +459,7 @@ class _BidForm extends StatelessWidget {
   final bool submitting;
   final JobBid? existingBid;
   final String currencyCode;
+  final AppSettings settings;
   final VoidCallback onSubmit;
 
   @override
@@ -435,28 +473,32 @@ class _BidForm extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                existingBid == null ? 'Send a bid' : 'Edit your bid',
+                settings
+                    .t(existingBid == null ? 'Send a bid' : 'Edit your bid'),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               if (existingBid != null) ...[
                 const SizedBox(height: 6),
                 Text(
-                  existingBid!.status == 'accepted'
-                      ? 'This bid has been accepted and can no longer be changed.'
-                      : 'You already bid on this job. Update your amount or message here.',
+                  settings.t(
+                    existingBid!.status == 'accepted'
+                        ? 'This bid has been accepted and can no longer be changed.'
+                        : 'You already bid on this job. Update your amount or message here.',
+                  ),
                 ),
               ],
               const SizedBox(height: 12),
               TextFormField(
                 controller: amountController,
-                decoration:
-                    InputDecoration(labelText: 'Your price ($currencyCode)'),
+                decoration: InputDecoration(
+                  labelText: '${settings.t('Your price')} ($currencyCode)',
+                ),
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
                   final amount = double.tryParse((value ?? '').trim());
                   if (amount == null || amount <= 0) {
-                    return 'Enter a valid price';
+                    return settings.t('Enter a valid price');
                   }
                   return null;
                 },
@@ -466,13 +508,15 @@ class _BidForm extends StatelessWidget {
                 controller: messageController,
                 minLines: 3,
                 maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Message',
-                  hintText: 'Explain your offer, availability, or questions.',
+                decoration: InputDecoration(
+                  labelText: settings.t('Message'),
+                  hintText: settings.t(
+                    'Explain your offer, availability, or questions.',
+                  ),
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Message is required';
+                    return settings.t('Message is required');
                   }
                   return null;
                 },
@@ -491,9 +535,11 @@ class _BidForm extends StatelessWidget {
                         )
                       : const Icon(Icons.send),
                   label: Text(
-                    existingBid == null
-                        ? 'Send bid and open chat'
-                        : 'Update bid and open chat',
+                    settings.t(
+                      existingBid == null
+                          ? 'Send bid and open chat'
+                          : 'Update bid and open chat',
+                    ),
                   ),
                 ),
               ),
@@ -513,22 +559,25 @@ class _BidsForOwner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     final bidsAsync = ref.watch(jobBidsProvider(job.id));
     return bidsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) =>
-          _MessageState(message: 'Could not load bids: $error'),
+      error: (error, _) => _MessageState(
+          message: '${settings.t('Could not load bids')}: $error'),
       data: (bids) {
         if (bids.isEmpty) {
-          return const _MessageState(
-            message:
-                'No bids yet. Artisans will appear here after they respond.',
+          return _MessageState(
+            message: settings.t(
+              'No bids yet. Artisans will appear here after they respond.',
+            ),
           );
         }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Bids', style: Theme.of(context).textTheme.titleLarge),
+            Text(settings.t('Bids'),
+                style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             ...bids.map(
               (bid) => _BidTile(job: job, bid: bid, currencyCode: currencyCode),
@@ -554,6 +603,7 @@ class _BidTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authStateProvider).valueOrNull;
+    final settings = ref.watch(appSettingsControllerProvider);
     final ratings = ref.watch(jobRatingsProvider(job.id)).valueOrNull ??
         const <JobRating>[];
     final existingRating = ratings
@@ -590,7 +640,7 @@ class _BidTile extends ConsumerWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${bid.acceptedBidCount} won bid${bid.acceptedBidCount == 1 ? '' : 's'}',
+                        '${bid.acceptedBidCount} ${settings.t(bid.acceptedBidCount == 1 ? 'won bid' : 'won bids')}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -603,7 +653,9 @@ class _BidTile extends ConsumerWidget {
                         : Icons.pending_actions_outlined,
                     size: 16,
                   ),
-                  label: Text(bid.artisanVerified ? 'Verified' : bid.status),
+                  label: Text(
+                    bid.artisanVerified ? settings.t('Verified') : bid.status,
+                  ),
                 ),
               ],
             ),
@@ -621,7 +673,7 @@ class _BidTile extends ConsumerWidget {
             if (existingRating != null) ...[
               const SizedBox(height: 8),
               Text(
-                'Rated ${existingRating.stars}/5${existingRating.comment.isEmpty ? '' : ': ${existingRating.comment}'}',
+                '${settings.t('Rated')} ${existingRating.stars}/5${existingRating.comment.isEmpty ? '' : ': ${existingRating.comment}'}',
               ),
             ],
             const SizedBox(height: 12),
@@ -634,7 +686,9 @@ class _BidTile extends ConsumerWidget {
                         : null,
                     icon: const Icon(Icons.chat_bubble_outline),
                     label: Text(
-                      bid.status == 'accepted' ? 'Chat' : 'Chat after accept',
+                      settings.t(
+                        bid.status == 'accepted' ? 'Chat' : 'Chat after accept',
+                      ),
                     ),
                   ),
                 ),
@@ -644,7 +698,7 @@ class _BidTile extends ConsumerWidget {
                     onPressed: bid.status == 'accepted'
                         ? null
                         : () => _acceptBid(context, ref),
-                    child: const Text('Accept'),
+                    child: Text(settings.t('Accept')),
                   ),
                 ),
               ],
@@ -657,7 +711,9 @@ class _BidTile extends ConsumerWidget {
                   onPressed: () => _rateArtisan(context, ref, user.id),
                   icon: const Icon(Icons.star_outline),
                   label: Text(
-                    existingRating == null ? 'Rate artisan' : 'Update rating',
+                    settings.t(
+                      existingRating == null ? 'Rate artisan' : 'Update rating',
+                    ),
                   ),
                 ),
               ),
@@ -680,7 +736,11 @@ class _BidTile extends ConsumerWidget {
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open chat: $error')),
+          SnackBar(
+            content: Text(
+              '${ref.read(appSettingsControllerProvider).t('Could not open chat')}: $error',
+            ),
+          ),
         );
       }
     }
@@ -694,7 +754,8 @@ class _BidTile extends ConsumerWidget {
             userId: job.createdBy,
             artisanId: bid.artisanId,
           );
-      final locationLine = _jobLocationMessage(job);
+      final settings = ref.read(appSettingsControllerProvider);
+      final locationLine = _jobLocationMessage(job, settings);
       await ref.read(chatServiceProvider).sendMessage(
             ChatMessage(
               id: const Uuid().v4(),
@@ -702,7 +763,7 @@ class _BidTile extends ConsumerWidget {
               senderId: job.createdBy,
               type: MessageType.offer,
               content:
-                  'Bid accepted for ${job.title}: ${formatMoney(bid.amount, currencyCode)}.\n$locationLine',
+                  '${settings.t('Bid accepted for')} ${job.title}: ${formatMoney(bid.amount, currencyCode)}.\n$locationLine',
               createdAt: DateTime.now(),
             ),
           );
@@ -712,7 +773,11 @@ class _BidTile extends ConsumerWidget {
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not accept bid: $error')),
+          SnackBar(
+            content: Text(
+              '${ref.read(appSettingsControllerProvider).t('Could not accept bid')}: $error',
+            ),
+          ),
         );
       }
     }
@@ -723,6 +788,7 @@ class _BidTile extends ConsumerWidget {
     WidgetRef ref,
     String userId,
   ) async {
+    final settings = ref.read(appSettingsControllerProvider);
     var stars = 5;
     final commentController = TextEditingController();
     final submitted = await showDialog<bool>(
@@ -730,7 +796,7 @@ class _BidTile extends ConsumerWidget {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text('Rate artisan'),
+            title: Text(settings.t('Rate artisan')),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -752,9 +818,9 @@ class _BidTile extends ConsumerWidget {
                   controller: commentController,
                   minLines: 2,
                   maxLines: 4,
-                  decoration: const InputDecoration(
-                    labelText: 'Comment',
-                    hintText: 'Describe the completed job.',
+                  decoration: InputDecoration(
+                    labelText: settings.t('Comment'),
+                    hintText: settings.t('Describe the completed job.'),
                   ),
                 ),
               ],
@@ -762,11 +828,11 @@ class _BidTile extends ConsumerWidget {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
+                child: Text(settings.t('Cancel')),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Save rating'),
+                child: Text(settings.t('Save rating')),
               ),
             ],
           );
@@ -789,13 +855,15 @@ class _BidTile extends ConsumerWidget {
           );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Rating saved.')),
+          SnackBar(content: Text(settings.t('Rating saved.'))),
         );
       }
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save rating: $error')),
+          SnackBar(
+            content: Text('${settings.t('Could not save rating')}: $error'),
+          ),
         );
       }
     }
@@ -818,16 +886,16 @@ class _MessageState extends StatelessWidget {
   }
 }
 
-String? _required(String? value) {
-  return value == null || value.trim().isEmpty ? 'Required' : null;
+String? _required(String? value, AppSettings settings) {
+  return value == null || value.trim().isEmpty ? settings.t('Required') : null;
 }
 
-String _jobLocationMessage(JobFeedItem job) {
+String _jobLocationMessage(JobFeedItem job, AppSettings settings) {
   final hasCoordinates = job.locationLat != null && job.locationLng != null;
   if (!hasCoordinates) {
-    return 'Work location: ${job.location}';
+    return '${settings.t('Work location')}: ${job.location}';
   }
   final mapsUrl =
       'https://www.google.com/maps/search/?api=1&query=${job.locationLat},${job.locationLng}';
-  return 'Work location: ${job.location}\nDirections: $mapsUrl';
+  return '${settings.t('Work location')}: ${job.location}\n${settings.t('Directions')}: $mapsUrl';
 }

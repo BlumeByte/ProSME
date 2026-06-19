@@ -63,34 +63,38 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     if (!mounted) return;
     setState(() => _hiddenJobIds = next);
     if (showNotice) {
+      final settings = ref.read(appSettingsControllerProvider);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Request removed from your list.')),
+        SnackBar(content: Text(settings.t('Request removed from your list.'))),
       );
     }
   }
 
   Future<void> _confirmDeleteOrHideJob(JobFeedItem job) async {
+    final settings = ref.read(appSettingsControllerProvider);
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
     final ownsJob = job.createdBy == user.id;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(ownsJob ? 'Delete job request' : 'Remove job request'),
+        title: Text(
+          settings.t(ownsJob ? 'Delete job request' : 'Remove job request'),
+        ),
         content: Text(
           ownsJob
-              ? 'Delete "${job.title}" permanently?'
-              : 'Remove "${job.title}" from your list?',
+              ? '${settings.t('Delete')} "${job.title}" ${settings.t('permanently?')}'
+              : '${settings.t('Remove')} "${job.title}" ${settings.t('from your list?')}',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(settings.t('Cancel')),
           ),
           FilledButton.icon(
             onPressed: () => Navigator.of(context).pop(true),
             icon: const Icon(Icons.delete),
-            label: Text(ownsJob ? 'Delete' : 'Remove'),
+            label: Text(settings.t(ownsJob ? 'Delete' : 'Remove')),
           ),
         ],
       ),
@@ -107,16 +111,19 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            ownsJob
+            settings.t(ownsJob
                 ? 'Job request deleted.'
-                : 'Request removed from your list.',
+                : 'Request removed from your list.'),
           ),
         ),
       );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not delete job request: $error')),
+        SnackBar(
+          content:
+              Text('${settings.t('Could not delete job request')}: $error'),
+        ),
       );
     }
   }
@@ -124,9 +131,10 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
-    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
+    final settings = ref.watch(appSettingsControllerProvider);
+    final currencyCode = settings.currencyCode;
     if (user == null) {
-      return const Center(child: Text('Please sign in to view jobs.'));
+      return Center(child: Text(settings.t('Please sign in to view jobs.')));
     }
 
     final canCreateJob =
@@ -140,13 +148,13 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     return Scaffold(
       appBar: widget.showAppBar
           ? AppBar(
-              title: const Text('Bookings'),
+              title: Text(settings.t('Bookings')),
               actions: [
                 if (canCreateJob)
                   IconButton(
                     onPressed: () => _openCreateJobSheet(context, ref),
                     icon: const Icon(Icons.add),
-                    tooltip: 'Create job',
+                    tooltip: settings.t('Create job'),
                   ),
               ],
             )
@@ -157,7 +165,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              'Could not load jobs: $error',
+              '${settings.t('Could not load jobs')}: $error',
               textAlign: TextAlign.center,
             ),
           ),
@@ -169,8 +177,10 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
             isArtisan: isArtisan,
           );
           if (jobs.isEmpty) {
-            return const Center(
-              child: Text('No bookings yet. Create your first request.'),
+            return Center(
+              child: Text(
+                settings.t('No bookings yet. Create your first request.'),
+              ),
             );
           }
           return RefreshIndicator(
@@ -202,6 +212,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                     onScopeChanged: (value) => setState(() => _scope = value),
                     onSortChanged: () =>
                         setState(() => _newestFirst = !_newestFirst),
+                    settings: settings,
                   );
                 }
                 final job = visibleJobs[index - (isArtisan ? 1 : 0)];
@@ -218,10 +229,10 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                           context.push('${RouteNames.jobDetail}/${job.id}'),
                       child: Text(
                         isArtisan
-                            ? (hasBid ? 'Edit bid' : 'Bid')
+                            ? settings.t(hasBid ? 'Edit bid' : 'Bid')
                             : job.createdBy == user.id
-                                ? 'View bids'
-                                : 'View',
+                                ? settings.t('View bids')
+                                : settings.t('View'),
                       ),
                     ),
                     onTap: () =>
@@ -257,7 +268,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
           ? FloatingActionButton.extended(
               onPressed: () => _openCreateJobSheet(context, ref),
               icon: const Icon(Icons.add),
-              label: const Text('Create'),
+              label: Text(settings.t('Create')),
             )
           : null,
     );
@@ -319,6 +330,7 @@ class _ArtisanJobFilters extends StatelessWidget {
     required this.onRegionChanged,
     required this.onScopeChanged,
     required this.onSortChanged,
+    required this.settings,
   });
 
   final TextEditingController searchController;
@@ -334,6 +346,7 @@ class _ArtisanJobFilters extends StatelessWidget {
   final ValueChanged<RegionOption?> onRegionChanged;
   final ValueChanged<String> onScopeChanged;
   final VoidCallback onSortChanged;
+  final AppSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -345,9 +358,9 @@ class _ArtisanJobFilters extends StatelessWidget {
         TextField(
           controller: searchController,
           onChanged: onSearchChanged,
-          decoration: const InputDecoration(
-            prefixIcon: Icon(Icons.search),
-            hintText: 'Search job requests',
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.search),
+            hintText: settings.t('Search job requests'),
           ),
         ),
         const SizedBox(height: 8),
@@ -357,11 +370,12 @@ class _ArtisanJobFilters extends StatelessWidget {
               child: DropdownButtonFormField<String>(
                 initialValue: category,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Type'),
+                decoration: InputDecoration(labelText: settings.t('Type')),
                 items: categories
                     .map((item) => DropdownMenuItem(
                           value: item,
-                          child: Text(item, overflow: TextOverflow.ellipsis),
+                          child: Text(settings.t(item),
+                              overflow: TextOverflow.ellipsis),
                         ))
                     .toList(growable: false),
                 onChanged: (value) {
@@ -375,7 +389,8 @@ class _ArtisanJobFilters extends StatelessWidget {
               icon: Icon(
                 newestFirst ? Icons.arrow_downward : Icons.arrow_upward,
               ),
-              tooltip: newestFirst ? 'Newest first' : 'Oldest first',
+              tooltip:
+                  settings.t(newestFirst ? 'Newest first' : 'Oldest first'),
             ),
           ],
         ),
@@ -386,7 +401,7 @@ class _ArtisanJobFilters extends StatelessWidget {
               child: DropdownButtonFormField<CountryOption?>(
                 initialValue: selectedCountry,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Country'),
+                decoration: InputDecoration(labelText: settings.t('Country')),
                 items: <CountryOption?>[null, ...kCountries]
                     .map(
                       (country) => DropdownMenuItem(
@@ -406,7 +421,7 @@ class _ArtisanJobFilters extends StatelessWidget {
               child: DropdownButtonFormField<RegionOption?>(
                 initialValue: selectedRegion,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Region'),
+                decoration: InputDecoration(labelText: settings.t('Region')),
                 items: <RegionOption?>[null, ...regions]
                     .map(
                       (region) => DropdownMenuItem(
@@ -425,10 +440,10 @@ class _ArtisanJobFilters extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'open', label: Text('Open')),
-            ButtonSegment(value: 'bids', label: Text('My bids')),
-            ButtonSegment(value: 'all', label: Text('All')),
+          segments: [
+            ButtonSegment(value: 'open', label: Text(settings.t('Open'))),
+            ButtonSegment(value: 'bids', label: Text(settings.t('My bids'))),
+            ButtonSegment(value: 'all', label: Text(settings.t('All'))),
           ],
           selected: {scope},
           onSelectionChanged: (selection) => onScopeChanged(selection.first),
@@ -444,7 +459,8 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
   final locationController = TextEditingController();
   final budgetController = TextEditingController();
   final formKey = GlobalKey<FormState>();
-  final currencyCode = ref.read(appSettingsControllerProvider).currencyCode;
+  final settings = ref.read(appSettingsControllerProvider);
+  final currencyCode = settings.currencyCode;
 
   await showModalBottomSheet<void>(
     context: context,
@@ -469,7 +485,7 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
                   children: [
                     Expanded(
                       child: Text(
-                        'Create job',
+                        settings.t('Create job'),
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
@@ -482,9 +498,9 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Title'),
+                  decoration: InputDecoration(labelText: settings.t('Title')),
                   validator: (value) => value == null || value.trim().isEmpty
-                      ? 'Title is required'
+                      ? settings.t('Title is required')
                       : null,
                 ),
                 const SizedBox(height: 8),
@@ -492,17 +508,19 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
                   controller: descriptionController,
                   minLines: 3,
                   maxLines: 4,
-                  decoration: const InputDecoration(labelText: 'Description'),
+                  decoration:
+                      InputDecoration(labelText: settings.t('Description')),
                   validator: (value) => value == null || value.trim().isEmpty
-                      ? 'Description is required'
+                      ? settings.t('Description is required')
                       : null,
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: locationController,
-                  decoration: const InputDecoration(labelText: 'Location'),
+                  decoration:
+                      InputDecoration(labelText: settings.t('Location')),
                   validator: (value) => value == null || value.trim().isEmpty
-                      ? 'Location is required'
+                      ? settings.t('Location is required')
                       : null,
                 ),
                 const SizedBox(height: 8),
@@ -542,8 +560,10 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
                         if (context.mounted) {
                           Navigator.of(context).pop();
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Job created successfully.'),
+                            SnackBar(
+                              content: Text(
+                                settings.t('Job created successfully.'),
+                              ),
                             ),
                           );
                         }
@@ -552,14 +572,14 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                'Failed to create job: $error',
+                                '${settings.t('Failed to create job')}: $error',
                               ),
                             ),
                           );
                         }
                       }
                     },
-                    child: const Text('Create job'),
+                    child: Text(settings.t('Create job')),
                   ),
                 ),
               ],

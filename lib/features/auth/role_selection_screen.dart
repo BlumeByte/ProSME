@@ -5,6 +5,7 @@ import '../../config/constants.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../core/widgets/safe_back_button.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 
 class RoleSelectionScreen extends ConsumerWidget {
@@ -29,10 +30,11 @@ class RoleSelectionScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     return Scaffold(
       appBar: AppBar(
         leading: const SafeBackButton(),
-        title: const Text('Choose role'),
+        title: Text(settings.t('Choose role')),
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
@@ -40,13 +42,13 @@ class RoleSelectionScreen extends ConsumerWidget {
           children: [
             const SizedBox(height: 24),
             PrimaryButton(
-              label: 'I need a service',
+              label: settings.t('I need a service'),
               icon: Icons.person,
               onPressed: () => _selectRole(ref, context, UserRole.customer),
             ),
             const SizedBox(height: 16),
             PrimaryButton(
-              label: 'I am an artisan',
+              label: settings.t('I am an artisan'),
               icon: Icons.handyman,
               onPressed: () => _selectRole(ref, context, UserRole.artisan),
             ),

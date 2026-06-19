@@ -70,7 +70,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
                     setState(() => _currentIndex = 4);
                   },
                   icon: const Icon(Icons.person_outline),
-                  tooltip: 'Profile',
+                  tooltip: settings.t('Profile'),
                 ),
               ]
             : null,
@@ -118,19 +118,20 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
   }
 
   Future<void> _confirmExitApp() async {
+    final settings = ref.read(appSettingsControllerProvider);
     final shouldExit = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Exit ProSME?'),
-        content: const Text('Do you want to close the app?'),
+        title: Text(settings.t('Exit ProSME?')),
+        content: Text(settings.t('Do you want to close the app?')),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Stay'),
+            child: Text(settings.t('Stay')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Exit'),
+            child: Text(settings.t('Exit')),
           ),
         ],
       ),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../config/constants.dart';
 import '../../models/artisan_profile.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 import 'developer_dashboard_screen.dart';
 
@@ -19,6 +20,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final settings = ref.watch(appSettingsControllerProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     if (user?.role == UserRole.developer) {
       return const DeveloperDashboardScreen();
@@ -41,7 +43,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Support Dashboard')),
+      appBar: AppBar(title: Text(settings.t('Support Dashboard'))),
       body: Row(
         children: [
           NavigationRail(
@@ -50,18 +52,18 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
               setState(() => _selectedIndex = index);
             },
             labelType: NavigationRailLabelType.all,
-            destinations: const [
+            destinations: [
               NavigationRailDestination(
-                icon: Icon(Icons.verified_user_outlined),
-                label: Text('Verify'),
+                icon: const Icon(Icons.verified_user_outlined),
+                label: Text(settings.t('Verify')),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.work_outline),
-                label: Text('Jobs'),
+                icon: const Icon(Icons.work_outline),
+                label: Text(settings.t('Jobs')),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.analytics_outlined),
-                label: Text('Reports'),
+                icon: const Icon(Icons.analytics_outlined),
+                label: Text(settings.t('Reports')),
               ),
             ],
           ),
@@ -78,16 +80,19 @@ class _VerificationQueue extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     final adminService = ref.watch(adminServiceProvider);
     return StreamBuilder<List<ArtisanProfile>>(
       stream: adminService.watchVerificationQueue(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const Center(
+          return Center(
             child: Padding(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: Text(
-                'Could not load verification queue. Check Supabase policies.',
+                settings.t(
+                  'Could not load verification queue. Check Supabase policies.',
+                ),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -130,15 +135,19 @@ class _VerificationQueue extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text('Front ID: ${profile.nationalIdUrl}'),
+                    Text('${settings.t('Front ID')}: ${profile.nationalIdUrl}'),
                     if (profile.nationalIdBackUrl.isNotEmpty)
-                      Text('Back ID: ${profile.nationalIdBackUrl}'),
+                      Text(
+                        '${settings.t('Back ID')}: ${profile.nationalIdBackUrl}',
+                      ),
                     if (profile.phone.isNotEmpty)
-                      Text('Phone: ${profile.phone}'),
+                      Text('${settings.t('Phone')}: ${profile.phone}'),
                     if (profile.location.isNotEmpty)
-                      Text('Location: ${profile.location}'),
+                      Text('${settings.t('Location')}: ${profile.location}'),
                     if (profile.categories.isNotEmpty)
-                      Text('Categories: ${profile.categories.join(', ')}'),
+                      Text(
+                        '${settings.t('Categories')}: ${profile.categories.join(', ')}',
+                      ),
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -151,7 +160,7 @@ class _VerificationQueue extends ConsumerWidget {
                               approved: false,
                             ),
                             icon: const Icon(Icons.close),
-                            label: const Text('Reject'),
+                            label: Text(settings.t('Reject')),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -164,7 +173,7 @@ class _VerificationQueue extends ConsumerWidget {
                               approved: true,
                             ),
                             icon: const Icon(Icons.check),
-                            label: const Text('Approve'),
+                            label: Text(settings.t('Approve')),
                           ),
                         ),
                       ],
@@ -193,21 +202,31 @@ class _VerificationQueue extends ConsumerWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(approved ? 'Account verified.' : 'Account rejected.'),
+            content: Text(
+              ref
+                  .read(appSettingsControllerProvider)
+                  .t(approved ? 'Account verified.' : 'Account rejected.'),
+            ),
           ),
         );
       }
     } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not update verification.')),
+          SnackBar(
+            content: Text(
+              ref
+                  .read(appSettingsControllerProvider)
+                  .t('Could not update verification.'),
+            ),
+          ),
         );
       }
     }
   }
 }
 
-class _AdminInfoPanel extends StatelessWidget {
+class _AdminInfoPanel extends ConsumerWidget {
   const _AdminInfoPanel({
     required this.title,
     required this.body,
@@ -219,7 +238,8 @@ class _AdminInfoPanel extends StatelessWidget {
   final IconData icon;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -228,9 +248,10 @@ class _AdminInfoPanel extends StatelessWidget {
           children: [
             Icon(icon, size: 56, color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: 12),
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            Text(settings.t(title),
+                style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            Text(body, textAlign: TextAlign.center),
+            Text(settings.t(body), textAlign: TextAlign.center),
           ],
         ),
       ),

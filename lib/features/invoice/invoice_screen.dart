@@ -21,11 +21,14 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
   PaymentMethod _selected = PaymentMethod.cash;
 
   Future<void> _handlePayment() async {
+    final settings = ref.read(appSettingsControllerProvider);
     if (_selected == PaymentMethod.cash) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Cash payment selected. Confirm payment with the artisan.'),
+        SnackBar(
+          content: Text(
+            settings
+                .t('Cash payment selected. Confirm payment with the artisan.'),
+          ),
         ),
       );
       return;
@@ -33,8 +36,9 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
 
     if (kPaystackCheckoutUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Paystack checkout URL is not configured yet.'),
+        SnackBar(
+          content:
+              Text(settings.t('Paystack checkout URL is not configured yet.')),
         ),
       );
       return;
@@ -47,7 +51,8 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open Paystack checkout.')),
+        SnackBar(
+            content: Text(settings.t('Could not open Paystack checkout.'))),
       );
     }
   }
@@ -55,19 +60,22 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
   @override
   Widget build(BuildContext context) {
     final listing = widget.listing;
+    final settings = ref.watch(appSettingsControllerProvider);
     if (listing == null) {
       return Scaffold(
         appBar: AppBar(
           leading: const SafeBackButton(),
-          title: const Text('Invoice'),
+          title: Text(settings.t('Invoice')),
         ),
-        body: const Center(
-          child: Text('No listing selected. Open invoice from a listing.'),
+        body: Center(
+          child: Text(
+            settings.t('No listing selected. Open invoice from a listing.'),
+          ),
         ),
       );
     }
     final user = ref.watch(authStateProvider).valueOrNull;
-    final currencyCode = ref.watch(appSettingsControllerProvider).currencyCode;
+    final currencyCode = settings.currencyCode;
     final unitAmount = (listing.priceMin + listing.priceMax) / 2;
     final subtotal = unitAmount;
     final fee = subtotal * 0.05;
@@ -77,12 +85,12 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: const SafeBackButton(),
-        title: const Text('Invoice'),
+        title: Text(settings.t('Invoice')),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Invoice #$invoiceId',
+          Text('${settings.t('Invoice')} #$invoiceId',
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
           ...[
@@ -104,33 +112,33 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
           ),
           const Divider(),
           ListTile(
-            title: const Text('Subtotal'),
+            title: Text(settings.t('Subtotal')),
             trailing:
                 Text(formatCurrency(subtotal, currencyCode: currencyCode)),
           ),
           ListTile(
-            title: const Text('Service Fee'),
+            title: Text(settings.t('Service Fee')),
             trailing: Text(formatCurrency(fee, currencyCode: currencyCode)),
           ),
           ListTile(
-            title: const Text('Total'),
+            title: Text(settings.t('Total')),
             trailing: Text(formatCurrency(total, currencyCode: currencyCode)),
           ),
           const SizedBox(height: 16),
-          Text('Payment method',
+          Text(settings.t('Payment method'),
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           SegmentedButton<PaymentMethod>(
-            segments: const [
+            segments: [
               ButtonSegment(
                 value: PaymentMethod.cash,
-                icon: Icon(Icons.payments_outlined),
-                label: Text('Cash'),
+                icon: const Icon(Icons.payments_outlined),
+                label: Text(settings.t('Cash')),
               ),
               ButtonSegment(
                 value: PaymentMethod.paystack,
-                icon: Icon(Icons.phone_android_outlined),
-                label: Text('MoMo'),
+                icon: const Icon(Icons.phone_android_outlined),
+                label: Text(settings.t('MoMo')),
               ),
             ],
             selected: {_selected},
@@ -140,9 +148,9 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
           ),
           const SizedBox(height: 16),
           PrimaryButton(
-            label: _selected == PaymentMethod.cash
+            label: settings.t(_selected == PaymentMethod.cash
                 ? 'Confirm cash payment'
-                : 'Pay with Paystack',
+                : 'Pay with Paystack'),
             icon: Icons.payment,
             onPressed: _handlePayment,
           ),

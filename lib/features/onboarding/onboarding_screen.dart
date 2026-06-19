@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_launch_service.dart';
+import '../../services/app_settings_controller.dart';
 
-class OnboardingScreen extends StatelessWidget {
+class OnboardingScreen extends ConsumerWidget {
   const OnboardingScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -24,18 +27,18 @@ class OnboardingScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               Text(
-                'Find trusted artisans fast',
+                settings.t('Find trusted artisans fast'),
                 style: Theme.of(context).textTheme.headlineSmall,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Simple, icon-driven steps for customers and SMEs.',
+              Text(
+                settings.t('Simple, icon-driven steps for customers and SMEs.'),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
               PrimaryButton(
-                label: 'Get Started',
+                label: settings.t('Get Started'),
                 icon: Icons.arrow_forward,
                 onPressed: () async {
                   await AppLaunchService.markWelcomeSeen();
@@ -52,7 +55,7 @@ class OnboardingScreen extends StatelessWidget {
                     context.go(RouteNames.auth);
                   }
                 },
-                child: const Text('Sign in / Sign up'),
+                child: Text(settings.t('Sign in / Sign up')),
               ),
             ],
           ),

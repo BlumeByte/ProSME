@@ -9,6 +9,7 @@ import 'package:image/image.dart' as img;
 import '../../config/constants.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -259,13 +260,15 @@ class _ArtisanVerificationScreenState
   }
 
   void _showMessage(String message) {
+    final settings = ref.read(appSettingsControllerProvider);
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+        .showSnackBar(SnackBar(content: Text(settings.t(message))));
   }
 
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
+    final settings = ref.watch(appSettingsControllerProvider);
     final retryAfter = _retryAfter;
     final isRetryLocked =
         retryAfter != null && retryAfter.isAfter(DateTime.now());
@@ -273,9 +276,9 @@ class _ArtisanVerificationScreenState
         isRetryLocked ? retryAfter.difference(DateTime.now()).inDays + 1 : 0;
     return Scaffold(
       appBar: AppBar(
-        title: Text(user?.role == UserRole.artisan
+        title: Text(settings.t(user?.role == UserRole.artisan
             ? 'Artisan verification'
-            : 'Account verification'),
+            : 'Account verification')),
         leading: BackButton(
           onPressed: () => context.go(
             user?.role == UserRole.artisan
@@ -295,56 +298,59 @@ class _ArtisanVerificationScreenState
           else if (user?.verificationStatus == VerificationStatus.verified)
             _StatusPanel(
               icon: Icons.verified,
-              title: 'Verification approved',
-              message: user?.role == UserRole.artisan
+              title: settings.t('Verification approved'),
+              message: settings.t(user?.role == UserRole.artisan
                   ? 'Your artisan profile now shows a verified checkmark.'
-                  : 'Your account now shows a verified checkmark.',
+                  : 'Your account now shows a verified checkmark.'),
             )
           else if (_hasSubmittedDocuments &&
               user?.verificationStatus == VerificationStatus.pending)
-            const _StatusPanel(
+            _StatusPanel(
               icon: Icons.pending_actions,
-              title: 'Submitted and under review',
-              message:
-                  'Your documents are with Support. You cannot submit again until review is complete.',
+              title: settings.t('Submitted and under review'),
+              message: settings.t(
+                'Your documents are with Support. You cannot submit again until review is complete.',
+              ),
             )
           else if (isRetryLocked)
             _StatusPanel(
               icon: Icons.lock_clock,
-              title: 'Verification paused',
+              title: settings.t('Verification paused'),
               message:
-                  'Your documents were not accepted. You can upload again in $remainingDays day(s). Use clear front/back National ID images and valid business certificates where available.',
+                  '${settings.t('Your documents were not accepted. You can upload again in')} $remainingDays ${settings.t('day(s). Use clear front/back National ID images and valid business certificates where available.')}',
             )
           else ...[
             Text(
-              'Upload verification documents',
+              settings.t('Upload verification documents'),
               style: Theme.of(context).textTheme.titleLarge,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            const Text(
-              'PDF up to 1 MB, or JPG/PNG up to 5 MB. Images are resized before review.',
+            Text(
+              settings.t(
+                'PDF up to 1 MB, or JPG/PNG up to 5 MB. Images are resized before review.',
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
             TextField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Telephone number *',
-                prefixIcon: Icon(Icons.phone_outlined),
+              decoration: InputDecoration(
+                labelText: settings.t('Telephone number *'),
+                prefixIcon: const Icon(Icons.phone_outlined),
               ),
             ),
             const SizedBox(height: 16),
             _FileTile(
-              title: 'National ID front',
+              title: settings.t('National ID front'),
               required: true,
               file: _frontId,
               onTap: () => _pickRequired(front: true),
             ),
             const SizedBox(height: 10),
             _FileTile(
-              title: 'National ID back',
+              title: settings.t('National ID back'),
               required: true,
               file: _backId,
               onTap: () => _pickRequired(front: false),
@@ -354,7 +360,7 @@ class _ArtisanVerificationScreenState
               (file) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: _FileTile(
-                  title: 'Business certificate',
+                  title: settings.t('Business certificate'),
                   file: file,
                   onTap: () {},
                 ),
@@ -363,11 +369,13 @@ class _ArtisanVerificationScreenState
             OutlinedButton.icon(
               onPressed: _pickCertificate,
               icon: const Icon(Icons.add),
-              label: const Text('Add business certificate'),
+              label: Text(settings.t('Add business certificate')),
             ),
             const SizedBox(height: 16),
             PrimaryButton(
-              label: _isSubmitting ? 'Submitting...' : 'Submit for review',
+              label: settings.t(
+                _isSubmitting ? 'Submitting...' : 'Submit for review',
+              ),
               icon: Icons.upload_file,
               onPressed: _isSubmitting ? null : _submit,
             ),
@@ -408,7 +416,7 @@ class _StatusPanel extends StatelessWidget {
   }
 }
 
-class _FileTile extends StatelessWidget {
+class _FileTile extends ConsumerWidget {
   const _FileTile({
     required this.title,
     required this.file,
@@ -422,7 +430,8 @@ class _FileTile extends StatelessWidget {
   final bool required;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     return ListTile(
       shape: RoundedRectangleBorder(
         side: BorderSide(color: Theme.of(context).dividerColor),
@@ -430,8 +439,11 @@ class _FileTile extends StatelessWidget {
       ),
       leading: const Icon(Icons.attach_file),
       title: Text(required ? '$title *' : title),
-      subtitle:
-          Text(file == null ? 'PDF max 1 MB. Images max 5 MB.' : file!.name),
+      subtitle: Text(
+        file == null
+            ? settings.t('PDF max 1 MB. Images max 5 MB.')
+            : file!.name,
+      ),
       trailing: const Icon(Icons.upload_file),
       onTap: onTap,
     );

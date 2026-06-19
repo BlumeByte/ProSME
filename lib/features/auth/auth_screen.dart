@@ -6,6 +6,7 @@ import '../../config/constants.dart';
 import '../../models/app_user.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/auth_service.dart';
 import '../../services/service_providers.dart';
 
@@ -66,24 +67,25 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   Future<void> _showForgotPasswordDialog(AuthService authService) async {
+    final settings = ref.read(appSettingsControllerProvider);
     final controller = TextEditingController(text: _email);
     final email = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Reset password'),
+        title: Text(settings.t('Reset password')),
         content: TextField(
           controller: controller,
           keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(labelText: 'Email'),
+          decoration: InputDecoration(labelText: settings.t('Email')),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            child: Text(settings.t('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('Send email'),
+            child: Text(settings.t('Send email')),
           ),
         ],
       ),
@@ -94,14 +96,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       await authService.requestPasswordReset(email);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Password reset email sent. Check your inbox.'),
+        SnackBar(
+          content: Text(
+            settings.t('Password reset email sent. Check your inbox.'),
+          ),
         ),
       );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_friendlyError(error))),
+        SnackBar(content: Text(settings.t(_friendlyError(error)))),
       );
     }
   }
@@ -161,8 +165,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       }
     } catch (error) {
       if (!mounted) return;
+      final settings = ref.read(appSettingsControllerProvider);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_friendlyError(error))),
+        SnackBar(content: Text(settings.t(_friendlyError(error)))),
       );
     } finally {
       if (mounted) {
@@ -182,11 +187,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     final authService = ref.watch(authServiceProvider);
+    final settings = ref.watch(appSettingsControllerProvider);
     final title = _isCreateAccountMode ? 'Create account' : 'Sign in';
     return Scaffold(
       appBar: AppBar(
         leading: const SafeBackButton(),
-        title: Text(title),
+        title: Text(settings.t(title)),
       ),
       body: SafeArea(
         child: ListView(
@@ -195,11 +201,14 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             const Icon(Icons.lock_outline, size: 64),
             const SizedBox(height: 16),
             SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment<bool>(value: false, label: Text('Sign in')),
+              segments: [
+                ButtonSegment<bool>(
+                  value: false,
+                  label: Text(settings.t('Sign in')),
+                ),
                 ButtonSegment<bool>(
                   value: true,
-                  label: Text('Create account'),
+                  label: Text(settings.t('Create account')),
                 ),
               ],
               selected: {_isCreateAccountMode},
@@ -214,16 +223,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             const SizedBox(height: 16),
             if (_isCreateAccountMode) ...[
               SegmentedButton<UserRole>(
-                segments: const [
+                segments: [
                   ButtonSegment<UserRole>(
                     value: UserRole.customer,
-                    icon: Icon(Icons.person_outline),
-                    label: Text('User'),
+                    icon: const Icon(Icons.person_outline),
+                    label: Text(settings.t('User')),
                   ),
                   ButtonSegment<UserRole>(
                     value: UserRole.artisan,
-                    icon: Icon(Icons.handyman_outlined),
-                    label: Text('Artisan'),
+                    icon: const Icon(Icons.handyman_outlined),
+                    label: Text(settings.t('Artisan')),
                   ),
                 ],
                 selected: {_selectedRole},
@@ -236,19 +245,19 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: _usernameController,
-                decoration: const InputDecoration(labelText: 'Username'),
+                decoration: InputDecoration(labelText: settings.t('Username')),
               ),
               const SizedBox(height: 12),
             ],
             TextField(
               controller: _emailController,
-              decoration: const InputDecoration(labelText: 'Email'),
+              decoration: InputDecoration(labelText: settings.t('Email')),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _passwordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Password'),
+              decoration: InputDecoration(labelText: settings.t('Password')),
             ),
             if (!_isCreateAccountMode)
               Align(
@@ -257,16 +266,18 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   onPressed: _isLoading
                       ? null
                       : () => _showForgotPasswordDialog(authService),
-                  child: const Text('Forgot password?'),
+                  child: Text(settings.t('Forgot password?')),
                 ),
               ),
             const SizedBox(height: 16),
             PrimaryButton(
               label: _isLoading
-                  ? (_isCreateAccountMode
+                  ? settings.t(_isCreateAccountMode
                       ? 'Creating account...'
                       : 'Signing in...')
-                  : (_isCreateAccountMode ? 'Create account' : 'Email Sign in'),
+                  : settings.t(_isCreateAccountMode
+                      ? 'Create account'
+                      : 'Email Sign in'),
               icon: Icons.email,
               onPressed: _isLoading
                   ? null
@@ -277,7 +288,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       if (validation != null) {
                         ScaffoldMessenger.of(
                           context,
-                        ).showSnackBar(SnackBar(content: Text(validation)));
+                        ).showSnackBar(
+                          SnackBar(content: Text(settings.t(validation))),
+                        );
                         return;
                       }
                       if (_isCreateAccountMode) {
@@ -299,7 +312,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             if (!_isCreateAccountMode) ...[
               const SizedBox(height: 16),
               PrimaryButton(
-                label: 'Google Sign in',
+                label: settings.t('Google Sign in'),
                 icon: Icons.login,
                 onPressed: _isLoading
                     ? null
@@ -312,7 +325,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             const SizedBox(height: 16),
             TextButton(
               onPressed: () => context.go(RouteNames.home),
-              child: const Text('Back'),
+              child: Text(settings.t('Back')),
             )
           ],
         ),

@@ -11,6 +11,7 @@ import '../../core/widgets/loading_state.dart';
 import '../../core/widgets/safe_back_button.dart';
 import '../../models/chat_models.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 
 class ChatThreadScreen extends ConsumerStatefulWidget {
@@ -88,12 +89,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       });
     } catch (error) {
       if (!mounted) return;
+      final settings = ref.read(appSettingsControllerProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             _editingMessage == null
-                ? 'Could not send message. Please try again.'
-                : 'Could not update message: $error',
+                ? settings.t('Could not send message. Please try again.')
+                : '${settings.t('Could not update message')}: $error',
           ),
         ),
       );
@@ -149,6 +151,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null || _selectedMessageIds.isEmpty) return;
     final ids = _selectedMessageIds.toList(growable: false);
+    final settings = ref.read(appSettingsControllerProvider);
     try {
       await ref.read(chatServiceProvider).deleteMessagesForUser(
             threadId: widget.threadId,
@@ -158,12 +161,18 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       if (!mounted) return;
       _clearSelection();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${ids.length} message(s) deleted for you.')),
+        SnackBar(
+          content: Text(
+            '${ids.length} ${settings.t('message(s) deleted for you.')}',
+          ),
+        ),
       );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not delete messages: $error')),
+        SnackBar(
+          content: Text('${settings.t('Could not delete messages')}: $error'),
+        ),
       );
     }
   }
@@ -171,15 +180,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   Future<void> _deleteMessage(ChatMessage message) async {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
+    final settings = ref.read(appSettingsControllerProvider);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete message'),
-        content: const Text('Are you sure you want to delete this message?'),
+        title: Text(settings.t('Delete message')),
+        content:
+            Text(settings.t('Are you sure you want to delete this message?')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(settings.t('Cancel')),
           ),
           FilledButton(
             onPressed: () async {
@@ -193,16 +204,20 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 if (!mounted) return;
                 if (_editingMessageId == message.id) _cancelEdit();
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Message deleted.')),
+                  SnackBar(content: Text(settings.t('Message deleted.'))),
                 );
               } catch (error) {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Could not delete message: $error')),
+                  SnackBar(
+                    content: Text(
+                      '${settings.t('Could not delete message')}: $error',
+                    ),
+                  ),
                 );
               }
             },
-            child: const Text('Delete'),
+            child: Text(settings.t('Delete')),
           ),
         ],
       ),
@@ -212,17 +227,20 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   Future<void> _clearAllMessages() async {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
+    final settings = ref.read(appSettingsControllerProvider);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Clear all messages'),
-        content: const Text(
-          'Are you sure you want to clear all messages in this conversation? This cannot be undone.',
+        title: Text(settings.t('Clear all messages')),
+        content: Text(
+          settings.t(
+            'Are you sure you want to clear all messages in this conversation? This cannot be undone.',
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(settings.t('Cancel')),
           ),
           FilledButton(
             onPressed: () async {
@@ -235,16 +253,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 if (!mounted) return;
                 _cancelEdit();
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Messages cleared.')),
+                  SnackBar(content: Text(settings.t('Messages cleared.'))),
                 );
               } catch (error) {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Could not clear messages: $error')),
+                  SnackBar(
+                    content: Text(
+                        '${settings.t('Could not clear messages')}: $error'),
+                  ),
                 );
               }
             },
-            child: const Text('Clear'),
+            child: Text(settings.t('Clear')),
           ),
         ],
       ),
@@ -278,25 +299,26 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     required String title,
     required String label,
   }) async {
+    final settings = ref.read(appSettingsControllerProvider);
     final controller = TextEditingController();
     final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(title),
+        title: Text(settings.t(title)),
         content: TextField(
           controller: controller,
           minLines: 3,
           maxLines: 5,
-          decoration: InputDecoration(labelText: label),
+          decoration: InputDecoration(labelText: settings.t(label)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(settings.t('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Submit'),
+            child: Text(settings.t('Submit')),
           ),
         ],
       ),
@@ -306,6 +328,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   Future<void> _reportConversation() async {
+    final settings = ref.read(appSettingsControllerProvider);
     final reason = await _promptReason(
       title: 'Report chat',
       label: 'What should the developer review?',
@@ -320,22 +343,26 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Report sent to developer dashboard.')),
+        SnackBar(
+          content: Text(settings.t('Report sent to developer dashboard.')),
+        ),
       );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not send report: $error')),
+        SnackBar(
+            content: Text('${settings.t('Could not send report')}: $error')),
       );
     }
   }
 
   Future<void> _blockConversation() async {
+    final settings = ref.read(appSettingsControllerProvider);
     final otherUserId = await _resolveOtherUserId();
     if (otherUserId.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not find the other user.')),
+        SnackBar(content: Text(settings.t('Could not find the other user.'))),
       );
       return;
     }
@@ -352,12 +379,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Chat blocked and reported.')),
+        SnackBar(content: Text(settings.t('Chat blocked and reported.'))),
       );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not block chat: $error')),
+        SnackBar(
+            content: Text('${settings.t('Could not block chat')}: $error')),
       );
     }
   }
@@ -387,8 +415,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     );
     if (!await launchUrl(uri)) {
       if (!mounted) return;
+      final settings = ref.read(appSettingsControllerProvider);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open SMS app.')),
+        SnackBar(content: Text(settings.t('Could not open SMS app.'))),
       );
     }
   }
@@ -396,15 +425,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   Future<void> _copyMessage(ChatMessage message) async {
     await Clipboard.setData(ClipboardData(text: message.content));
     if (!mounted) return;
+    final settings = ref.read(appSettingsControllerProvider);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Message copied.')),
+      SnackBar(content: Text(settings.t('Message copied.'))),
     );
   }
 
   void _showShareOptions(List<ChatMessage> messages) {
+    final settings = ref.read(appSettingsControllerProvider);
     if (messages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No messages to share yet.')),
+        SnackBar(content: Text(settings.t('No messages to share yet.'))),
       );
       return;
     }
@@ -417,7 +448,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.ios_share),
-              title: const Text('Share to phone app'),
+              title: Text(settings.t('Share to phone app')),
               onTap: () {
                 Navigator.pop(context);
                 _shareMessages(messages);
@@ -425,7 +456,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.sms_outlined),
-              title: const Text('Send as SMS'),
+              title: Text(settings.t('Send as SMS')),
               onTap: () {
                 Navigator.pop(context);
                 _shareBySms(messages);
@@ -433,7 +464,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.chat_bubble_outline),
-              title: const Text('Forward to another chat'),
+              title: Text(settings.t('Forward to another chat')),
               onTap: () {
                 Navigator.pop(context);
                 _chooseForwardThread(messages);
@@ -448,11 +479,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   void _chooseForwardThread(List<ChatMessage> messages) {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
+    final settings = ref.read(appSettingsControllerProvider);
 
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Forward to chat'),
+        title: Text(settings.t('Forward to chat')),
         content: SizedBox(
           width: double.maxFinite,
           child: StreamBuilder<List<ChatThread>>(
@@ -468,7 +500,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   .where((thread) => thread.id != widget.threadId)
                   .toList(growable: false);
               if (threads.isEmpty) {
-                return const Text('No other chats available.');
+                return Text(settings.t('No other chats available.'));
               }
               return ListView.builder(
                 shrinkWrap: true,
@@ -480,7 +512,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     title: Text(_threadTitle(thread, user.id)),
                     subtitle: Text(
                       thread.lastMessage.isEmpty
-                          ? 'No messages yet'
+                          ? settings.t('No messages yet')
                           : thread.lastMessage,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -498,7 +530,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(settings.t('Cancel')),
           ),
         ],
       ),
@@ -511,6 +543,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   ) async {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null || messages.isEmpty) return;
+    final settings = ref.read(appSettingsControllerProvider);
 
     try {
       await ref.read(chatServiceProvider).sendMessage(
@@ -519,18 +552,21 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               threadId: targetThreadId,
               senderId: user.id,
               type: MessageType.text,
-              content: 'Forwarded from chat:\n${_messagesShareText(messages)}',
+              content:
+                  '${settings.t('Forwarded from chat')}:\n${_messagesShareText(messages)}',
               createdAt: DateTime.now(),
             ),
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Forwarded to chat.')),
+        SnackBar(content: Text(settings.t('Forwarded to chat.'))),
       );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not forward message: $error')),
+        SnackBar(
+          content: Text('${settings.t('Could not forward message')}: $error'),
+        ),
       );
     }
   }
@@ -551,6 +587,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       } catch (_) {}
     }
     if (!mounted) return;
+    final settings = ref.read(appSettingsControllerProvider);
     final name = (profile?['username'] ?? profile?['full_name'] ?? 'User')
         .toString()
         .trim();
@@ -562,8 +599,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title:
-            Text(role == 'artisan' ? 'Professional profile' : 'User profile'),
+        title: Text(
+          settings
+              .t(role == 'artisan' ? 'Professional profile' : 'User profile'),
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -582,7 +621,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 children: [
                   Flexible(
                     child: Text(
-                      name.isEmpty ? 'User' : name,
+                      name.isEmpty ? settings.t('User') : name,
                       style: Theme.of(context).textTheme.titleMedium,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -608,11 +647,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 Navigator.pop(context);
                 context.push('${RouteNames.artisanProfile}/$userId');
               },
-              child: const Text('View full profile'),
+              child: Text(settings.t('View full profile')),
             ),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text(settings.t('Close')),
           ),
         ],
       ),
@@ -623,6 +662,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   Widget build(BuildContext context) {
     final chatService = ref.watch(chatServiceProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
+    final settings = ref.watch(appSettingsControllerProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -634,19 +674,21 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               )
             : const SafeBackButton(),
         title: Text(
-          _selectingMessages ? '${_selectedMessageIds.length}' : 'Chat',
+          _selectingMessages
+              ? '${_selectedMessageIds.length}'
+              : settings.t('Chat'),
         ),
         actions: _selectingMessages
             ? [
                 IconButton(
                   onPressed: _selectAllMessages,
                   icon: const Icon(Icons.select_all),
-                  tooltip: 'Select all',
+                  tooltip: settings.t('Select all'),
                 ),
                 IconButton(
                   onPressed: _deleteSelectedMessages,
                   icon: const Icon(Icons.delete),
-                  tooltip: 'Delete selected',
+                  tooltip: settings.t('Delete selected'),
                 ),
               ]
             : [
@@ -662,14 +704,14 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       _blockConversation();
                     }
                   },
-                  itemBuilder: (context) => const [
+                  itemBuilder: (context) => [
                     PopupMenuItem(
                       value: 'share',
                       child: Row(
                         children: [
-                          Icon(Icons.ios_share),
-                          SizedBox(width: 8),
-                          Text('Share conversation'),
+                          const Icon(Icons.ios_share),
+                          const SizedBox(width: 8),
+                          Text(settings.t('Share conversation')),
                         ],
                       ),
                     ),
@@ -677,20 +719,20 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       value: 'clear_all',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_sweep),
-                          SizedBox(width: 8),
-                          Text('Clear all messages'),
+                          const Icon(Icons.delete_sweep),
+                          const SizedBox(width: 8),
+                          Text(settings.t('Clear all messages')),
                         ],
                       ),
                     ),
-                    PopupMenuDivider(),
+                    const PopupMenuDivider(),
                     PopupMenuItem(
                       value: 'report',
                       child: Row(
                         children: [
-                          Icon(Icons.report_gmailerrorred_outlined),
-                          SizedBox(width: 8),
-                          Text('Report'),
+                          const Icon(Icons.report_gmailerrorred_outlined),
+                          const SizedBox(width: 8),
+                          Text(settings.t('Report')),
                         ],
                       ),
                     ),
@@ -698,9 +740,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       value: 'block',
                       child: Row(
                         children: [
-                          Icon(Icons.block),
-                          SizedBox(width: 8),
-                          Text('Block'),
+                          const Icon(Icons.block),
+                          const SizedBox(width: 8),
+                          Text(settings.t('Block')),
                         ],
                       ),
                     ),
@@ -712,15 +754,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         children: [
           Material(
             color: colorScheme.surfaceContainerHighest,
-            child: const Padding(
-              padding: EdgeInsets.all(12),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, size: 18),
-                  SizedBox(width: 8),
+                  const Icon(Icons.info_outline, size: 18),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Confirm artisan verification status before sharing payments or personal details.',
+                      settings.t(
+                        'Confirm artisan verification status before sharing payments or personal details.',
+                      ),
                     ),
                   ),
                 ],
@@ -748,7 +792,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'Could not load messages.\nError: ${snapshot.error}',
+                            '${settings.t('Could not load messages.')}\n${settings.t('Error')}: ${snapshot.error}',
                             textAlign: TextAlign.center,
                           ),
                         ],
@@ -757,7 +801,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   );
                 }
                 if (!snapshot.hasData) {
-                  return const LoadingState(label: 'Loading messages...');
+                  return LoadingState(label: settings.t('Loading messages...'));
                 }
 
                 final messages = _sortMessages(snapshot.data!);
@@ -775,7 +819,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   });
                 }
                 if (messages.isEmpty) {
-                  return const Center(child: Text('Start the conversation.'));
+                  return Center(
+                      child: Text(settings.t('Start the conversation.')));
                 }
                 return ListView.builder(
                   controller: _scrollController,
@@ -851,10 +896,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  if (message.content
-                                      .startsWith('Forwarded from chat:')) ...[
+                                  if (message.content.startsWith(
+                                      '${settings.t('Forwarded from chat')}:')) ...[
                                     Text(
-                                      'Forwarded',
+                                      settings.t('Forwarded'),
                                       style: Theme.of(context)
                                           .textTheme
                                           .labelSmall
@@ -870,7 +915,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                                   ],
                                   Text(
                                     message.content.replaceFirst(
-                                      'Forwarded from chat:\n',
+                                      '${settings.t('Forwarded from chat')}:\n',
                                       '',
                                     ),
                                     style: TextStyle(
@@ -917,9 +962,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   children: [
                     const Icon(Icons.edit, size: 20),
                     const SizedBox(width: 8),
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        'Editing message',
+                        settings.t('Editing message'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -942,33 +987,37 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   IconButton(
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
+                        SnackBar(
                           content: Text(
-                            'Location sharing will be added after map permissions are configured.',
+                            settings.t(
+                              'Location sharing will be added after map permissions are configured.',
+                            ),
                           ),
                         ),
                       );
                     },
                     icon: const Icon(Icons.location_on),
-                    tooltip: 'Share location',
+                    tooltip: settings.t('Share location'),
                   ),
                   IconButton(
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
+                        SnackBar(
                           content: Text(
-                            'Open the listing and request invoice from there.',
+                            settings.t(
+                              'Open the listing and request invoice from there.',
+                            ),
                           ),
                         ),
                       );
                     },
                     icon: const Icon(Icons.receipt_long),
-                    tooltip: 'Invoice',
+                    tooltip: settings.t('Invoice'),
                   ),
                   IconButton(
                     onPressed: () => _showShareOptions(_latestMessages),
                     icon: const Icon(Icons.ios_share),
-                    tooltip: 'Share chat',
+                    tooltip: settings.t('Share chat'),
                   ),
                   Expanded(
                     child: TextField(
@@ -977,8 +1026,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       maxLines: 4,
                       decoration: InputDecoration(
                         hintText: _editingMessageId == null
-                            ? 'Message'
-                            : 'Edit message',
+                            ? settings.t('Message')
+                            : settings.t('Edit message'),
                       ),
                       onSubmitted: (_) => _sendMessage(),
                     ),
@@ -995,7 +1044,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                                 ? Icons.send
                                 : Icons.check,
                           ),
-                    tooltip: _editingMessageId == null ? 'Send' : 'Save edit',
+                    tooltip: settings.t(
+                      _editingMessageId == null ? 'Send' : 'Save edit',
+                    ),
                   ),
                 ],
               ),
@@ -1007,6 +1058,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   void _showMessageOptions(BuildContext context, ChatMessage message) {
+    final settings = ref.read(appSettingsControllerProvider);
     showModalBottomSheet<void>(
       context: context,
       builder: (context) => SafeArea(
@@ -1015,7 +1067,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.edit),
-              title: const Text('Edit message'),
+              title: Text(settings.t('Edit message')),
               onTap: () {
                 Navigator.pop(context);
                 _startEditMessage(message);
@@ -1023,7 +1075,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.ios_share),
-              title: const Text('Share message'),
+              title: Text(settings.t('Share message')),
               onTap: () {
                 Navigator.pop(context);
                 _showShareOptions([message]);
@@ -1031,7 +1083,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.copy),
-              title: const Text('Copy message'),
+              title: Text(settings.t('Copy message')),
               onTap: () {
                 Navigator.pop(context);
                 _copyMessage(message);
@@ -1039,7 +1091,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.delete),
-              title: const Text('Delete message'),
+              title: Text(settings.t('Delete message')),
               onTap: () {
                 Navigator.pop(context);
                 _deleteMessage(message);

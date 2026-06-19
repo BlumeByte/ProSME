@@ -21,6 +21,7 @@ class _DeveloperDashboardScreenState
 
   @override
   Widget build(BuildContext context) {
+    final settings = ref.watch(appSettingsControllerProvider);
     final sections = [
       const _DeveloperOverview(),
       const _ReportsPanel(),
@@ -29,7 +30,7 @@ class _DeveloperDashboardScreenState
       const _ModulesPanel(),
     ];
     return Scaffold(
-      appBar: AppBar(title: const Text('Support Dashboard')),
+      appBar: AppBar(title: Text(settings.t('Support Dashboard'))),
       body: Row(
         children: [
           NavigationRail(
@@ -38,26 +39,26 @@ class _DeveloperDashboardScreenState
               setState(() => _selectedIndex = index);
             },
             labelType: NavigationRailLabelType.all,
-            destinations: const [
+            destinations: [
               NavigationRailDestination(
-                icon: Icon(Icons.monitor_heart_outlined),
-                label: Text('Overview'),
+                icon: const Icon(Icons.monitor_heart_outlined),
+                label: Text(settings.t('Overview')),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.report_gmailerrorred_outlined),
-                label: Text('Reports'),
+                icon: const Icon(Icons.report_gmailerrorred_outlined),
+                label: Text(settings.t('Reports')),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.people_alt_outlined),
-                label: Text('Accounts'),
+                icon: const Icon(Icons.people_alt_outlined),
+                label: Text(settings.t('Accounts')),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.business_outlined),
-                label: Text('Tenants'),
+                icon: const Icon(Icons.business_outlined),
+                label: Text(settings.t('Tenants')),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.extension_outlined),
-                label: Text('Modules'),
+                icon: const Icon(Icons.extension_outlined),
+                label: Text(settings.t('Modules')),
               ),
             ],
           ),
@@ -74,12 +75,15 @@ class _DeveloperOverview extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     return FutureBuilder<PlatformModuleCounts>(
       future: ref.watch(adminServiceProvider).fetchModuleCounts(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _ErrorPanel(
-              message: 'Could not load platform modules: ${snapshot.error}');
+            message:
+                '${settings.t('Could not load platform modules')}: ${snapshot.error}',
+          );
         }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -89,29 +93,37 @@ class _DeveloperOverview extends ConsumerWidget {
           padding: const EdgeInsets.all(16),
           children: [
             Text(
-              'Platform control',
+              settings.t('Platform control'),
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Use this area to inspect account roles, tenants, marketplace modules, jobs, bids, chats, and support notifications.',
+            Text(
+              settings.t(
+                'Use this area to inspect account roles, tenants, marketplace modules, jobs, bids, chats, and support notifications.',
+              ),
             ),
             const SizedBox(height: 16),
             Wrap(
               spacing: 10,
               runSpacing: 10,
               children: [
-                _MetricCard(label: 'Accounts', value: counts.accounts),
-                _MetricCard(label: 'Tenants', value: counts.tenants),
-                _MetricCard(label: 'Listings', value: counts.listings),
-                _MetricCard(label: 'Jobs', value: counts.jobs),
-                _MetricCard(label: 'Bids', value: counts.bids),
-                _MetricCard(label: 'Chats', value: counts.threads),
-                _MetricCard(label: 'Messages', value: counts.messages),
-                _MetricCard(label: 'Reports', value: counts.reports),
-                _MetricCard(label: 'Alerts', value: counts.notifications),
+                _MetricCard(
+                    label: settings.t('Accounts'), value: counts.accounts),
+                _MetricCard(
+                    label: settings.t('Tenants'), value: counts.tenants),
+                _MetricCard(
+                    label: settings.t('Listings'), value: counts.listings),
+                _MetricCard(label: settings.t('Jobs'), value: counts.jobs),
+                _MetricCard(label: settings.t('Bids'), value: counts.bids),
+                _MetricCard(label: settings.t('Chats'), value: counts.threads),
+                _MetricCard(
+                    label: settings.t('Messages'), value: counts.messages),
+                _MetricCard(
+                    label: settings.t('Reports'), value: counts.reports),
+                _MetricCard(
+                    label: settings.t('Alerts'), value: counts.notifications),
               ],
             ),
             const SizedBox(height: 16),
@@ -171,6 +183,7 @@ class _RecentReportsPreview extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     return StreamBuilder<List<PlatformReport>>(
       stream: ref.watch(adminServiceProvider).watchReports(),
       builder: (context, snapshot) {
@@ -179,18 +192,20 @@ class _RecentReportsPreview extends ConsumerWidget {
             .take(3)
             .toList(growable: false);
         if (reports.isEmpty) {
-          return const Card(
+          return Card(
             child: ListTile(
-              leading: Icon(Icons.check_circle_outline),
-              title: Text('No open reports'),
-              subtitle: Text('Chat and support reports will appear here.'),
+              leading: const Icon(Icons.check_circle_outline),
+              title: Text(settings.t('No open reports')),
+              subtitle: Text(
+                settings.t('Chat and support reports will appear here.'),
+              ),
             ),
           );
         }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Needs review',
+            Text(settings.t('Needs review'),
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             ...reports.map((report) => _ReportTile(report: report)),
@@ -206,19 +221,22 @@ class _ReportsPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     return StreamBuilder<List<PlatformReport>>(
       stream: ref.watch(adminServiceProvider).watchReports(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _ErrorPanel(
-              message: 'Could not load reports: ${snapshot.error}');
+            message:
+                '${settings.t('Could not load reports')}: ${snapshot.error}',
+          );
         }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
         final reports = snapshot.data!;
         if (reports.isEmpty) {
-          return const Center(child: Text('No reports yet.'));
+          return Center(child: Text(settings.t('No reports yet.')));
         }
         return ListView.separated(
           padding: const EdgeInsets.all(16),
@@ -238,6 +256,7 @@ class _ReportTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     final statusColor = switch (report.status) {
       'open' => Colors.orange,
       'resolved' => Colors.green,
@@ -260,11 +279,15 @@ class _ReportTile extends ConsumerWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
-                Chip(label: Text(report.status)),
+                Chip(label: Text(settings.t(report.status))),
               ],
             ),
             const SizedBox(height: 8),
-            Text(report.body.isEmpty ? 'No details provided.' : report.body),
+            Text(
+              report.body.isEmpty
+                  ? settings.t('No details provided.')
+                  : report.body,
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -278,7 +301,11 @@ class _ReportTile extends ConsumerWidget {
                       label:
                           Text('${report.relatedTable}: ${report.relatedId}')),
                 if (report.reportedUserId.isNotEmpty)
-                  Chip(label: Text('reported: ${report.reportedUserId}')),
+                  Chip(
+                    label: Text(
+                      '${settings.t('reported')}: ${report.reportedUserId}',
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 8),
@@ -292,7 +319,7 @@ class _ReportTile extends ConsumerWidget {
                             status: 'dismissed',
                           ),
                   icon: const Icon(Icons.close),
-                  label: const Text('Dismiss'),
+                  label: Text(settings.t('Dismiss')),
                 ),
                 const SizedBox(width: 8),
                 FilledButton.icon(
@@ -303,7 +330,7 @@ class _ReportTile extends ConsumerWidget {
                             status: 'resolved',
                           ),
                   icon: const Icon(Icons.check),
-                  label: const Text('Resolve'),
+                  label: Text(settings.t('Resolve')),
                 ),
               ],
             ),
@@ -319,19 +346,22 @@ class _AccountsPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     return StreamBuilder<List<PlatformAccount>>(
       stream: ref.watch(adminServiceProvider).watchAccounts(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _ErrorPanel(
-              message: 'Could not load accounts: ${snapshot.error}');
+            message:
+                '${settings.t('Could not load accounts')}: ${snapshot.error}',
+          );
         }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
         final accounts = snapshot.data!;
         if (accounts.isEmpty) {
-          return const Center(child: Text('No accounts found.'));
+          return Center(child: Text(settings.t('No accounts found.')));
         }
         return ListView.separated(
           padding: const EdgeInsets.all(16),
@@ -353,6 +383,7 @@ class _AccountTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -381,10 +412,12 @@ class _AccountTile extends ConsumerWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                Chip(label: Text('tenant: ${account.tenantId}')),
+                Chip(
+                    label:
+                        Text('${settings.t('tenant')}: ${account.tenantId}')),
                 Chip(
                     label: Text(
-                        'verification: ${account.verificationStatus.name}')),
+                        '${settings.t('verification')}: ${account.verificationStatus.name}')),
                 if (account.phone.isNotEmpty) Chip(label: Text(account.phone)),
               ],
             ),
@@ -408,8 +441,8 @@ class _AccountTile extends ConsumerWidget {
                                   );
                             },
                       child: Text(selected
-                          ? '${role.name} active'
-                          : 'Set ${role.name}'),
+                          ? '${role.name} ${settings.t('active')}'
+                          : '${settings.t('Set')} ${role.name}'),
                     ),
                   );
                 }).toList(growable: false),
@@ -432,12 +465,15 @@ class _TenantsPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     return StreamBuilder<List<PlatformAccount>>(
       stream: ref.watch(adminServiceProvider).watchAccounts(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _ErrorPanel(
-              message: 'Could not load tenants: ${snapshot.error}');
+            message:
+                '${settings.t('Could not load tenants')}: ${snapshot.error}',
+          );
         }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -462,7 +498,8 @@ class _TenantsPanel extends ConsumerWidget {
                 leading: const Icon(Icons.business_outlined),
                 title: Text(entry.key),
                 subtitle: Text(
-                    '${entry.value.length} accounts • $users users • $artisans artisans'),
+                  '${entry.value.length} ${settings.t('accounts')} - $users ${settings.t('users')} - $artisans ${settings.t('artisans')}',
+                ),
               ),
             );
           }).toList(growable: false),
@@ -477,12 +514,15 @@ class _ModulesPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     return FutureBuilder<PlatformModuleCounts>(
       future: ref.watch(adminServiceProvider).fetchModuleCounts(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _ErrorPanel(
-              message: 'Could not load modules: ${snapshot.error}');
+            message:
+                '${settings.t('Could not load modules')}: ${snapshot.error}',
+          );
         }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -507,8 +547,8 @@ class _ModulesPanel extends ConsumerWidget {
             return Card(
               child: ListTile(
                 leading: const Icon(Icons.extension_outlined),
-                title: Text(module.$1),
-                subtitle: Text(module.$3),
+                title: Text(settings.t(module.$1)),
+                subtitle: Text(settings.t(module.$3)),
                 trailing: Text(module.$2.toString()),
               ),
             );

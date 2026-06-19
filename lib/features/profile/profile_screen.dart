@@ -134,8 +134,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               : settings.t('Upload'),
           onTap: user.verificationStatus == VerificationStatus.verified
               ? () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Your account is already verified.'),
+                    SnackBar(
+                      content:
+                          Text(settings.t('Your account is already verified.')),
                     ),
                   )
               : () => context.go(RouteNames.artisanVerification),
@@ -214,13 +215,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         contentType: 'image/jpeg',
       );
       if (!mounted) return;
+      final settings = ref.read(appSettingsControllerProvider);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile image updated.')),
+        SnackBar(content: Text(settings.t('Profile image updated.'))),
       );
     } catch (error) {
       if (!mounted) return;
+      final settings = ref.read(appSettingsControllerProvider);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update image: $error')),
+        SnackBar(
+            content: Text('${settings.t('Could not update image')}: $error')),
       );
     } finally {
       if (mounted) setState(() => _uploadingPhoto = false);
@@ -233,6 +237,8 @@ Future<void> _showChangeUsernameDialog(
   AuthService authService,
   String currentUsername,
 ) async {
+  final settings =
+      ProviderScope.containerOf(context).read(appSettingsControllerProvider);
   final nextUsername = await _showUsernameDialog(
     context: context,
     currentUsername: currentUsername,
@@ -244,13 +250,15 @@ Future<void> _showChangeUsernameDialog(
     await authService.updateUsername(nextUsername);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Username updated.')),
+        SnackBar(content: Text(settings.t('Username updated.'))),
       );
     }
   } catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update username: $error')),
+        SnackBar(
+          content: Text('${settings.t('Could not update username')}: $error'),
+        ),
       );
     }
   }
@@ -260,24 +268,26 @@ Future<String?> _showUsernameDialog({
   required BuildContext context,
   required String currentUsername,
 }) async {
+  final settings =
+      ProviderScope.containerOf(context).read(appSettingsControllerProvider);
   final usernameController = TextEditingController(text: currentUsername);
   final result = await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Change username'),
+      title: Text(settings.t('Change username')),
       content: TextField(
         controller: usernameController,
-        decoration: const InputDecoration(labelText: 'New username'),
+        decoration: InputDecoration(labelText: settings.t('New username')),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(settings.t('Cancel')),
         ),
         FilledButton(
           onPressed: () =>
               Navigator.of(context).pop(usernameController.text.trim()),
-          child: const Text('Save'),
+          child: Text(settings.t('Save')),
         ),
       ],
     ),
@@ -291,24 +301,26 @@ Future<void> _showFullNameDialog(
   AuthService authService,
   String currentFullName,
 ) async {
+  final settings =
+      ProviderScope.containerOf(context).read(appSettingsControllerProvider);
   final controller = TextEditingController(text: currentFullName);
   final result = await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Change full name'),
+      title: Text(settings.t('Change full name')),
       content: TextField(
         controller: controller,
         textCapitalization: TextCapitalization.words,
-        decoration: const InputDecoration(labelText: 'Full name'),
+        decoration: InputDecoration(labelText: settings.t('Full name')),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(settings.t('Cancel')),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-          child: const Text('Save'),
+          child: Text(settings.t('Save')),
         ),
       ],
     ),
@@ -320,13 +332,15 @@ Future<void> _showFullNameDialog(
     await authService.updateFullName(result);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Full name updated.')),
+        SnackBar(content: Text(settings.t('Full name updated.'))),
       );
     }
   } catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update full name: $error')),
+        SnackBar(
+          content: Text('${settings.t('Could not update full name')}: $error'),
+        ),
       );
     }
   }
@@ -337,6 +351,8 @@ Future<void> _showSecuritySheet(
   AuthService authService,
   AppUser user,
 ) async {
+  final settings =
+      ProviderScope.containerOf(context).read(appSettingsControllerProvider);
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -350,7 +366,7 @@ Future<void> _showSecuritySheet(
               children: [
                 Expanded(
                   child: Text(
-                    'Security',
+                    settings.t('Security'),
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
@@ -362,8 +378,8 @@ Future<void> _showSecuritySheet(
             ),
             ListTile(
               leading: const Icon(Icons.password_outlined),
-              title: const Text('Change password'),
-              subtitle: const Text('Updates your password directly.'),
+              title: Text(settings.t('Change password')),
+              subtitle: Text(settings.t('Updates your password directly.')),
               onTap: () {
                 Navigator.of(context).pop();
                 _showChangePasswordDialog(context, authService);
@@ -375,13 +391,14 @@ Future<void> _showSecuritySheet(
                     ? Icons.mark_email_read_outlined
                     : Icons.mark_email_unread_outlined,
               ),
-              title: const Text('Email verification'),
+              title: Text(settings.t('Email verification')),
               subtitle: Text(
                 user.emailVerified
-                    ? 'Your email is verified.'
-                    : 'Send a 6-digit code to ${user.email}.',
+                    ? settings.t('Your email is verified.')
+                    : '${settings.t('Send a 6-digit code to')} ${user.email}.',
               ),
-              trailing: user.emailVerified ? const Text('Verified') : null,
+              trailing:
+                  user.emailVerified ? Text(settings.t('Verified')) : null,
               onTap: user.emailVerified
                   ? null
                   : () {
@@ -396,10 +413,10 @@ Future<void> _showSecuritySheet(
             ),
             ListTile(
               leading: const Icon(Icons.phone_android_outlined),
-              title: const Text('Phone number'),
+              title: Text(settings.t('Phone number')),
               subtitle: Text(
                 user.phone.isEmpty
-                    ? 'Add a phone number in account settings.'
+                    ? settings.t('Add a phone number in account settings.')
                     : user.phone,
               ),
               onTap: null,
@@ -417,18 +434,20 @@ Future<void> _showVerificationCodeDialog(
   required Future<void> Function() requestCode,
   required Future<void> Function(String code) verifyCode,
 }) async {
+  final settings =
+      ProviderScope.containerOf(context).read(appSettingsControllerProvider);
   final messenger = ScaffoldMessenger.maybeOf(context);
   try {
     await requestCode();
     if (context.mounted && messenger != null) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Verification code sent.')),
+        SnackBar(content: Text(settings.t('Verification code sent.'))),
       );
     }
   } catch (error) {
     if (context.mounted && messenger != null) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not send code: $error')),
+        SnackBar(content: Text('${settings.t('Could not send code')}: $error')),
       );
     }
     return;
@@ -438,21 +457,21 @@ Future<void> _showVerificationCodeDialog(
   final code = await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
-      title: Text(title),
+      title: Text(settings.t(title)),
       content: TextField(
         controller: controller,
         keyboardType: TextInputType.number,
         maxLength: 6,
-        decoration: const InputDecoration(labelText: '6-digit code'),
+        decoration: InputDecoration(labelText: settings.t('6-digit code')),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(settings.t('Cancel')),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-          child: const Text('Verify'),
+          child: Text(settings.t('Verify')),
         ),
       ],
     ),
@@ -463,13 +482,14 @@ Future<void> _showVerificationCodeDialog(
     await verifyCode(code);
     if (context.mounted && messenger != null) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Verification complete.')),
+        SnackBar(content: Text(settings.t('Verification complete.'))),
       );
     }
   } catch (error) {
     if (context.mounted && messenger != null) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not verify code: $error')),
+        SnackBar(
+            content: Text('${settings.t('Could not verify code')}: $error')),
       );
     }
   }
@@ -479,32 +499,35 @@ Future<void> _showChangePasswordDialog(
   BuildContext context,
   AuthService authService,
 ) async {
+  final settings =
+      ProviderScope.containerOf(context).read(appSettingsControllerProvider);
   final passwordController = TextEditingController();
   final confirmController = TextEditingController();
   final result = await showDialog<(String, String)>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Change password'),
+      title: Text(settings.t('Change password')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
             controller: passwordController,
             obscureText: true,
-            decoration: const InputDecoration(labelText: 'New password'),
+            decoration: InputDecoration(labelText: settings.t('New password')),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: confirmController,
             obscureText: true,
-            decoration: const InputDecoration(labelText: 'Confirm password'),
+            decoration:
+                InputDecoration(labelText: settings.t('Confirm password')),
           ),
         ],
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(settings.t('Cancel')),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(
@@ -513,7 +536,7 @@ Future<void> _showChangePasswordDialog(
               confirmController.text,
             ),
           ),
-          child: const Text('Update password'),
+          child: Text(settings.t('Update password')),
         ),
       ],
     ),
@@ -525,7 +548,7 @@ Future<void> _showChangePasswordDialog(
   if (password != confirm) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwords do not match.')),
+        SnackBar(content: Text(settings.t('Passwords do not match.'))),
       );
     }
     return;
@@ -534,13 +557,15 @@ Future<void> _showChangePasswordDialog(
     await authService.updatePassword(password, '');
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password updated.')),
+        SnackBar(content: Text(settings.t('Password updated.'))),
       );
     }
   } catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update password: $error')),
+        SnackBar(
+          content: Text('${settings.t('Could not update password')}: $error'),
+        ),
       );
     }
   }
@@ -552,6 +577,8 @@ Future<void> _showChangePhoneDialog(
   String currentPhone,
   String currentCountry,
 ) async {
+  final settings =
+      ProviderScope.containerOf(context).read(appSettingsControllerProvider);
   final messenger = ScaffoldMessenger.maybeOf(context);
   final countries = await loadWorldCountries();
   if (!context.mounted) return;
@@ -565,7 +592,7 @@ Future<void> _showChangePhoneDialog(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
-        title: const Text('Change phone number'),
+        title: Text(settings.t('Change phone number')),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -573,7 +600,7 @@ Future<void> _showChangePhoneDialog(
               DropdownButtonFormField<CountryOption>(
                 initialValue: selectedCountry,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Country'),
+                decoration: InputDecoration(labelText: settings.t('Country')),
                 items: countries
                     .map(
                       (country) => DropdownMenuItem(
@@ -595,7 +622,7 @@ Future<void> _showChangePhoneDialog(
                 controller: controller,
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
-                  labelText: 'Phone number',
+                  labelText: settings.t('Phone number'),
                   prefixText: '${selectedCountry.dialCode} ',
                 ),
               ),
@@ -605,11 +632,11 @@ Future<void> _showChangePhoneDialog(
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            child: Text(settings.t('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('Save'),
+            child: Text(settings.t('Save')),
           ),
         ],
       ),
@@ -622,7 +649,9 @@ Future<void> _showChangePhoneDialog(
     if (context.mounted && messenger != null) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Enter a valid ${selectedCountry.name} phone number.'),
+          content: Text(
+            '${settings.t('Enter a valid')} ${selectedCountry.name} ${settings.t('phone number.')}',
+          ),
         ),
       );
     }
@@ -637,15 +666,18 @@ Future<void> _showChangePhoneDialog(
     );
     if (context.mounted && messenger != null) {
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Phone number saved.'),
+        SnackBar(
+          content: Text(settings.t('Phone number saved.')),
         ),
       );
     }
   } catch (error) {
     if (context.mounted && messenger != null) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not update phone number: $error')),
+        SnackBar(
+          content:
+              Text('${settings.t('Could not update phone number')}: $error'),
+        ),
       );
     }
   }
@@ -656,6 +688,8 @@ Future<void> _showCountryDialog(
   AuthService authService,
   String currentCountry,
 ) async {
+  final settings =
+      ProviderScope.containerOf(context).read(appSettingsControllerProvider);
   final countries = await loadWorldCountries();
   if (!context.mounted) return;
   final selected = await showModalBottomSheet<CountryOption>(
@@ -683,13 +717,15 @@ Future<void> _showCountryDialog(
     await authService.updateCountry(selected.name, selected.dialCode);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Country updated.')),
+        SnackBar(content: Text(settings.t('Country updated.'))),
       );
     }
   } catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update country: $error')),
+        SnackBar(
+          content: Text('${settings.t('Could not update country')}: $error'),
+        ),
       );
     }
   }
@@ -700,6 +736,8 @@ Future<void> _showDescriptionDialog(
   AuthService authService,
   String currentDescription,
 ) async {
+  final settings =
+      ProviderScope.containerOf(context).read(appSettingsControllerProvider);
   final description = await _showEditDialog(
     context: context,
     title: 'Profile description',
@@ -712,13 +750,16 @@ Future<void> _showDescriptionDialog(
     await authService.updateDescription(description);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile description updated.')),
+        SnackBar(content: Text(settings.t('Profile description updated.'))),
       );
     }
   } catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update description: $error')),
+        SnackBar(
+          content:
+              Text('${settings.t('Could not update description')}: $error'),
+        ),
       );
     }
   }
@@ -729,6 +770,8 @@ Future<void> _showChangeEmailDialog(
   AuthService authService,
   String currentEmail,
 ) async {
+  final settings =
+      ProviderScope.containerOf(context).read(appSettingsControllerProvider);
   final nextEmail = await _showEditDialog(
     context: context,
     title: 'Change email',
@@ -743,9 +786,11 @@ Future<void> _showChangeEmailDialog(
     await authService.updateEmail(nextEmail);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Email update submitted. Check your inbox if verification is required.',
+            settings.t(
+              'Email update submitted. Check your inbox if verification is required.',
+            ),
           ),
         ),
       );
@@ -753,7 +798,8 @@ Future<void> _showChangeEmailDialog(
   } catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update email: $error')),
+        SnackBar(
+            content: Text('${settings.t('Could not update email')}: $error')),
       );
     }
   }
@@ -767,25 +813,27 @@ Future<String?> _showEditDialog({
   TextInputType? keyboardType,
   int? maxLength,
 }) async {
+  final settings =
+      ProviderScope.containerOf(context).read(appSettingsControllerProvider);
   final controller = TextEditingController(text: initialValue);
   final result = await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
-      title: Text(title),
+      title: Text(settings.t(title)),
       content: TextField(
         controller: controller,
         keyboardType: keyboardType,
         maxLength: maxLength,
-        decoration: InputDecoration(hintText: hintText),
+        decoration: InputDecoration(hintText: settings.t(hintText)),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(settings.t('Cancel')),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-          child: const Text('Save'),
+          child: Text(settings.t('Save')),
         ),
       ],
     ),
@@ -1192,24 +1240,26 @@ Future<void> _confirmDeleteAccount(
   BuildContext context,
   AuthService authService,
 ) async {
+  final settings =
+      ProviderScope.containerOf(context).read(appSettingsControllerProvider);
   final reasonController = TextEditingController();
   final reason = await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Delete account'),
+      title: Text(settings.t('Delete account')),
       content: TextField(
         controller: reasonController,
         minLines: 3,
         maxLines: 4,
-        decoration: const InputDecoration(
-          labelText: 'Why are you deleting your account?',
-          hintText: 'Your feedback helps us improve ProSME.',
+        decoration: InputDecoration(
+          labelText: settings.t('Why are you deleting your account?'),
+          hintText: settings.t('Your feedback helps us improve ProSME.'),
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(settings.t('Cancel')),
         ),
         FilledButton(
           onPressed: () {
@@ -1217,7 +1267,7 @@ Future<void> _confirmDeleteAccount(
             if (value.isEmpty) return;
             Navigator.of(context).pop(value);
           },
-          child: const Text('Continue'),
+          child: Text(settings.t('Continue')),
         ),
       ],
     ),
@@ -1230,18 +1280,20 @@ Future<void> _confirmDeleteAccount(
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Are you sure?'),
-      content: const Text(
-        'This will permanently remove your account. This action cannot be undone.',
+      title: Text(settings.t('Are you sure?')),
+      content: Text(
+        settings.t(
+          'This will permanently remove your account. This action cannot be undone.',
+        ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+          child: Text(settings.t('Cancel')),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Delete account'),
+          child: Text(settings.t('Delete account')),
         ),
       ],
     ),
@@ -1254,13 +1306,15 @@ Future<void> _confirmDeleteAccount(
     if (context.mounted) {
       context.go(RouteNames.home);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account deleted.')),
+        SnackBar(content: Text(settings.t('Account deleted.'))),
       );
     }
   } catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not delete account: $error')),
+        SnackBar(
+          content: Text('${settings.t('Could not delete account')}: $error'),
+        ),
       );
     }
   }
@@ -1311,7 +1365,7 @@ class _ProfilePhotoHeader extends ConsumerWidget {
               IconButton.filled(
                 onPressed: uploading ? null : onChangePhoto,
                 icon: const Icon(Icons.photo_camera_outlined, size: 18),
-                tooltip: 'Change profile image',
+                tooltip: settings.t('Change profile image'),
               ),
             ],
           ),
