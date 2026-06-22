@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/widgets/safe_back_button.dart';
+import '../../services/app_settings_controller.dart';
 
 enum LegalPageKind { privacy, terms, security }
 
-class LegalScreen extends StatelessWidget {
+class LegalScreen extends ConsumerWidget {
   const LegalScreen({super.key, required this.kind});
 
   final LegalPageKind kind;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     final content = _contentFor(kind);
     return Scaffold(
       appBar: AppBar(
         leading: const SafeBackButton(),
-        title: Text(content.title),
+        title: Text(settings.t(content.title)),
       ),
       body: ListView.separated(
         padding: const EdgeInsets.all(20),
@@ -27,13 +30,13 @@ class LegalScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                section.title,
+                settings.t(section.title),
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
               ),
               const SizedBox(height: 6),
-              Text(section.body),
+              Text(settings.t(section.body)),
             ],
           );
         },

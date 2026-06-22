@@ -139,7 +139,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           Text(settings.t('Your account is already verified.')),
                     ),
                   )
-              : () => context.go(RouteNames.artisanVerification),
+              : () => context.push(RouteNames.artisanVerification),
         ),
         const Divider(),
         _SettingsTile(
@@ -564,7 +564,7 @@ Future<void> _showChangePasswordDialog(
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${settings.t('Could not update password')}: $error'),
+          content: Text('${settings.t('Could not update full name')}: $error'),
         ),
       );
     }
@@ -587,7 +587,13 @@ Future<void> _showChangePhoneDialog(
     orElse: () =>
         countries.isNotEmpty ? countries.first : countryByName(currentCountry),
   );
-  final controller = TextEditingController(text: currentPhone);
+  final currentDigits = currentPhone.replaceAll(RegExp(r'\D'), '');
+  final countryCodeDigits =
+      selectedCountry.dialCode.replaceAll(RegExp(r'\D'), '');
+  final localPhone = currentDigits.startsWith(countryCodeDigits)
+      ? currentDigits.substring(countryCodeDigits.length)
+      : currentPhone;
+  final controller = TextEditingController(text: localPhone);
   final nextPhone = await showDialog<String>(
     context: context,
     builder: (context) => StatefulBuilder(
@@ -1026,197 +1032,212 @@ Future<void> _showAccountSettingsSheet(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
-    builder: (context) => SafeArea(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
+    builder: (context) => Consumer(
+      builder: (context, sheetRef, _) {
+        final currentUser =
+            sheetRef.watch(authStateProvider).valueOrNull ?? user;
+        return SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: Text(
-                      settings.t('Account settings'),
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          settings.t('Account settings'),
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                        tooltip: settings.t('Close'),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                    tooltip: settings.t('Close'),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.person_outline),
+                    title: Text(currentUser.name),
+                    subtitle: Text(settings.t('Username')),
+                    trailing: Text(settings.t('Edit')),
+                    onTap: () {
+                      _showChangeUsernameDialog(
+                        context,
+                        authService,
+                        currentUser.name,
+                      );
+                    },
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.badge_outlined),
+                    title: Text(
+                      currentUser.fullName.trim().isEmpty
+                          ? settings.t('Add full name')
+                          : currentUser.fullName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      currentUser.role == UserRole.artisan
+                          ? settings.t('Full name or business contact name')
+                          : settings.t('Full name'),
+                    ),
+                    trailing: Text(settings.t('Edit')),
+                    onTap: () {
+                      _showFullNameDialog(
+                        context,
+                        authService,
+                        currentUser.fullName.trim().isEmpty
+                            ? currentUser.name
+                            : currentUser.fullName,
+                      );
+                    },
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.phone_outlined),
+                    title: Text(currentUser.phone.isEmpty
+                        ? settings.t('Add phone')
+                        : currentUser.phone),
+                    subtitle: Text(settings.t('Phone number and country code')),
+                    trailing: Text(settings.t('Edit')),
+                    onTap: () {
+                      _showChangePhoneDialog(
+                        context,
+                        authService,
+                        currentUser.phone,
+                        currentUser.country,
+                      );
+                    },
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.public_outlined),
+                    title: Text(currentUser.country),
+                    subtitle: Text(
+                      '${settings.t('Country code')} ${currentUser.countryCode}',
+                    ),
+                    trailing: Text(settings.t('Edit')),
+                    onTap: () {
+                      _showCountryDialog(
+                        context,
+                        authService,
+                        currentUser.country,
+                      );
+                    },
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.badge_outlined),
+                    title: Text(
+                      currentUser.description.isEmpty
+                          ? settings.t('Add profile description')
+                          : currentUser.description,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      currentUser.role == UserRole.artisan
+                          ? settings.t('Company or artisan profile description')
+                          : settings.t('Customer profile description'),
+                    ),
+                    trailing: Text(settings.t('Edit')),
+                    onTap: () {
+                      _showDescriptionDialog(
+                        context,
+                        authService,
+                        currentUser.description,
+                      );
+                    },
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.alternate_email_outlined),
+                    title: Text(currentUser.email),
+                    trailing: Text(settings.t('Edit')),
+                    onTap: () {
+                      _showChangeEmailDialog(
+                        context,
+                        authService,
+                        currentUser.email,
+                      );
+                    },
+                  ),
+                  const Divider(),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.security_outlined),
+                    title: Text(settings.t('Account security')),
+                    subtitle: Text(
+                      settings.t(
+                        'Email codes, password recovery, and Google verification are handled by Supabase.',
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _showSecuritySheet(
+                        parentContext,
+                        authService,
+                        currentUser,
+                      );
+                    },
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.privacy_tip_outlined),
+                    title: Text(settings.t('Privacy')),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      parentContext.push(RouteNames.privacy);
+                    },
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.support_agent_outlined),
+                    title: Text(settings.t('Support')),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      parentContext.push(RouteNames.aiSupport);
+                    },
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.description_outlined),
+                    title: Text(settings.t('Terms of Service')),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      parentContext.push(RouteNames.terms);
+                    },
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.info_outline),
+                    title: Text(settings.t('About')),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _showInfoSheet(
+                        parentContext,
+                        settings.t('About Pro SME'),
+                        settings.t(
+                          'Pro SME helps customers connect with verified SMEs and artisans.',
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.person_outline),
-                title: Text(user.name),
-                subtitle: Text(settings.t('Username')),
-                trailing: Text(settings.t('Edit')),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _showChangeUsernameDialog(
-                    parentContext,
-                    authService,
-                    user.name,
-                  );
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.badge_outlined),
-                title: Text(
-                  user.fullName.trim().isEmpty
-                      ? settings.t('Add full name')
-                      : user.fullName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  user.role == UserRole.artisan
-                      ? settings.t('Full name or business contact name')
-                      : settings.t('Full name'),
-                ),
-                trailing: Text(settings.t('Edit')),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _showFullNameDialog(
-                    parentContext,
-                    authService,
-                    user.fullName.trim().isEmpty ? user.name : user.fullName,
-                  );
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.phone_outlined),
-                title: Text(
-                    user.phone.isEmpty ? settings.t('Add phone') : user.phone),
-                subtitle: Text(settings.t('Phone number and country code')),
-                trailing: Text(settings.t('Edit')),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _showChangePhoneDialog(
-                    parentContext,
-                    authService,
-                    user.phone,
-                    user.country,
-                  );
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.public_outlined),
-                title: Text(user.country),
-                subtitle:
-                    Text('${settings.t('Country code')} ${user.countryCode}'),
-                trailing: Text(settings.t('Edit')),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _showCountryDialog(parentContext, authService, user.country);
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.badge_outlined),
-                title: Text(
-                  user.description.isEmpty
-                      ? settings.t('Add profile description')
-                      : user.description,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  user.role == UserRole.artisan
-                      ? settings.t('Company or artisan profile description')
-                      : settings.t('Customer profile description'),
-                ),
-                trailing: Text(settings.t('Edit')),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _showDescriptionDialog(
-                    parentContext,
-                    authService,
-                    user.description,
-                  );
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.alternate_email_outlined),
-                title: Text(user.email),
-                trailing: Text(settings.t('Edit')),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _showChangeEmailDialog(
-                      parentContext, authService, user.email);
-                },
-              ),
-              const Divider(),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.security_outlined),
-                title: Text(settings.t('Account security')),
-                subtitle: Text(
-                  settings.t(
-                    'Email codes, password recovery, and Google verification are handled by Supabase.',
-                  ),
-                ),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _showSecuritySheet(parentContext, authService, user);
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.privacy_tip_outlined),
-                title: Text(settings.t('Privacy')),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  parentContext.push(RouteNames.privacy);
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.support_agent_outlined),
-                title: Text(settings.t('Support')),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  parentContext.push(RouteNames.aiSupport);
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.description_outlined),
-                title: Text(settings.t('Terms of Service')),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  parentContext.push(RouteNames.terms);
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.info_outline),
-                title: Text(settings.t('About')),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _showInfoSheet(
-                    parentContext,
-                    settings.t('About Pro SME'),
-                    settings.t(
-                      'Pro SME helps customers connect with verified SMEs and artisans.',
-                    ),
-                  );
-                },
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     ),
   );
 }

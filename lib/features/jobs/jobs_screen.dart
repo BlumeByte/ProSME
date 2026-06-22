@@ -526,8 +526,9 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: budgetController,
-                  decoration:
-                      InputDecoration(labelText: 'Budget ($currencyCode)'),
+                  decoration: InputDecoration(
+                    labelText: '${settings.t('Budget')} ($currencyCode)',
+                  ),
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   validator: (value) {

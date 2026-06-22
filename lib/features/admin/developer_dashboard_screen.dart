@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../config/constants.dart';
 import '../../core/utils/currency.dart';
+import '../../models/wallet_transaction.dart';
+import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/admin_service.dart';
 import '../../services/service_providers.dart';
+import '../../services/wallet_service.dart';
 
 class DeveloperDashboardScreen extends ConsumerStatefulWidget {
   const DeveloperDashboardScreen({super.key});
@@ -143,20 +147,22 @@ class _WalletFlowPreview extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(appSettingsControllerProvider);
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: shouldUseSupabase()
-          ? ref
-              .watch(supabaseClientProvider)
-              .from('wallet_transactions')
-              .select()
-              .order('created_at', ascending: false)
-              .limit(5)
-          : Future.value(const <Map<String, dynamic>>[]),
+    final user = ref.watch(authStateProvider).valueOrNull;
+    return FutureBuilder<List<WalletTransaction>>(
+      future: user == null
+          ? Future.value(const <WalletTransaction>[])
+          : shouldUseSupabase()
+              ? WalletService(ref.watch(supabaseClientProvider))
+                  .loadTransactions(
+                  userId: user.id,
+                  role: user.role,
+                )
+              : Future.value(const <WalletTransaction>[]),
       builder: (context, snapshot) {
-        final rows = snapshot.data ?? const <Map<String, dynamic>>[];
+        final rows = snapshot.data ?? const <WalletTransaction>[];
         final total = rows.fold<double>(
           0,
-          (sum, row) => sum + ((row['amount'] as num?)?.toDouble() ?? 0),
+          (sum, row) => sum + row.amount,
         );
         return Card(
           child: ListTile(
@@ -171,6 +177,7 @@ class _WalletFlowPreview extends ConsumerWidget {
               formatMoney(total, settings.currencyCode),
               style: Theme.of(context).textTheme.titleMedium,
             ),
+            onTap: () => context.push(RouteNames.wallet),
           ),
         );
       },

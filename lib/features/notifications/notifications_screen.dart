@@ -20,6 +20,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   String _typeFilter = 'all';
   DateTimeRange? _dateRange;
   late Future<List<_NotificationItem>> _future;
+  final Set<String> _deletingIds = <String>{};
 
   @override
   void initState() {
@@ -67,19 +68,41 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     setState(() => _future = _loadNotifications());
   }
 
-  Future<void> _deleteNotification(_NotificationItem item) async {
-    if (!shouldUseSupabase()) return;
+  Future<bool> _deleteNotification(_NotificationItem item) async {
+    if (_deletingIds.contains(item.id)) return false;
     final settings = ref.read(appSettingsControllerProvider);
-    await ref
-        .read(supabaseClientProvider)
-        .from('admin_notifications')
-        .delete()
-        .eq('id', item.id);
-    setState(() => _future = _loadNotifications());
-    if (mounted) {
+    setState(() => _deletingIds.add(item.id));
+    try {
+      if (shouldUseSupabase()) {
+        final deleted = await ref
+            .read(supabaseClientProvider)
+            .from('admin_notifications')
+            .delete()
+            .eq('id', item.id)
+            .select('id');
+        if (deleted.isEmpty) {
+          throw StateError(settings.t('Notification could not be deleted.'));
+        }
+      }
+      if (!mounted) return true;
+      setState(() => _future = _loadNotifications());
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(settings.t('Notification deleted.'))),
       );
+      return true;
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${settings.t('Could not delete notification')}: $error',
+            ),
+          ),
+        );
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _deletingIds.remove(item.id));
     }
   }
 
@@ -200,12 +223,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   (item) => Dismissible(
                     key: ValueKey(item.id),
                     direction: DismissDirection.horizontal,
-                    background: const _DeleteBackground(alignment: Alignment.centerLeft),
-                    secondaryBackground:
-                        const _DeleteBackground(alignment: Alignment.centerRight),
+                    background: const _DeleteBackground(
+                        alignment: Alignment.centerLeft),
+                    secondaryBackground: const _DeleteBackground(
+                        alignment: Alignment.centerRight),
                     confirmDismiss: (_) async {
                       await _deleteNotification(item);
-                      return true;
+                      // The refreshed Future owns list removal. Returning true
+                      // would make Dismissible remove the same row a second time.
+                      return false;
                     },
                     child: Card(
                       child: ListTile(
@@ -218,7 +244,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         subtitle: Text(
                           [
                             if (item.body.isNotEmpty) settings.t(item.body),
-                            DateFormat('MMM d, y h:mm a').format(item.createdAt),
+                            DateFormat('MMM d, y h:mm a')
+                                .format(item.createdAt),
                             settings.t(item.type.replaceAll('_', ' ')),
                           ].join('\n'),
                         ),
@@ -233,8 +260,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                                 tooltip: settings.t('Mark read'),
                               ),
                             IconButton(
-                              onPressed: () => _deleteNotification(item),
-                              icon: const Icon(Icons.delete_outline),
+                              onPressed: _deletingIds.contains(item.id)
+                                  ? null
+                                  : () => _deleteNotification(item),
+                              icon: _deletingIds.contains(item.id)
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.delete_outline),
                               tooltip: settings.t('Delete'),
                             ),
                           ],

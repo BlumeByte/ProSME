@@ -22,6 +22,7 @@ import '../features/support/ai_support_screen.dart';
 import '../features/wallet/wallet_screen.dart';
 import '../models/app_user.dart';
 import '../models/listing.dart';
+import '../models/wallet_transaction.dart';
 import '../routes/route_names.dart';
 import '../services/app_launch_service.dart';
 import '../services/service_providers.dart';
@@ -117,9 +118,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.invoice,
         builder: (context, state) {
-          final listing =
-              state.extra is Listing ? state.extra as Listing : null;
-          return InvoiceScreen(listing: listing);
+          final extra = state.extra;
+          return InvoiceScreen(
+            listing: extra is Listing ? extra : null,
+            transaction: extra is WalletTransaction ? extra : null,
+          );
         },
       ),
       GoRoute(

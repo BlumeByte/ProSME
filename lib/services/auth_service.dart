@@ -409,9 +409,11 @@ class SupabaseAuthService implements AuthService {
   Future<void> _upsertProfile(User user) async {
     final metadata = user.userMetadata ?? const <String, dynamic>{};
     final existingProfile = await _fetchProfile(user.id);
-    final fullName =
-        (metadata['full_name'] ?? metadata['name'] ?? _defaultDisplayName)
-            .toString();
+    final fullName = (existingProfile?['full_name'] ??
+            metadata['full_name'] ??
+            metadata['name'] ??
+            _defaultDisplayName)
+        .toString();
     final username = metadata['username']?.toString().trim();
     final metadataAvatarUrl = (metadata['avatar_url'] ?? '').toString();
     final existingAvatarUrl = (existingProfile?['avatar_url'] ?? '').toString();
@@ -425,7 +427,10 @@ class SupabaseAuthService implements AuthService {
       'id': user.id,
       'full_name': fullName,
       'email': user.email ?? '',
-      'phone': user.phone ?? '',
+      // Settings phone numbers live in profiles. Auth phone can be empty when
+      // the account uses email or Google sign-in, so never overwrite the
+      // saved profile value during an auth refresh.
+      'phone': existingProfile?['phone'] ?? user.phone ?? '',
       'avatar_url': avatarUrl,
       'country': existingProfile?['country'] ?? 'Ghana',
       'country_code': existingProfile?['country_code'] ?? '+233',
@@ -456,7 +461,17 @@ class SupabaseAuthService implements AuthService {
     Map<String, dynamic> payload,
   ) async {
     try {
-      await _supabase.from('profiles').update(payload).eq('id', userId);
+      final updated = await _supabase
+          .from('profiles')
+          .update(payload)
+          .eq('id', userId)
+          .select('id')
+          .maybeSingle();
+      if (updated == null) {
+        throw StateError(
+          'Profile update was not saved. Please sign in again and retry.',
+        );
+      }
     } catch (error) {
       if (_isMissingProfilesTable(error)) return;
       rethrow;

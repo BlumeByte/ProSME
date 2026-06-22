@@ -24,6 +24,8 @@ dependencies:
   supabase_flutter: ^2.12.4
   uuid: ^4.4.0
   share_plus: ^10.0.2
+  pdf: ^3.11.1
+  printing: ^5.13.4
   shared_preferences: ^2.3.2
   file_picker: ^8.1.7
   image_picker: ^1.1.2

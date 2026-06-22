@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/constants.dart';
 import '../../routes/route_names.dart';
+import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 
 class SafeBackButton extends ConsumerWidget {
@@ -16,9 +17,10 @@ class SafeBackButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
     return IconButton(
       icon: const Icon(Icons.arrow_back),
-      tooltip: 'Back',
+      tooltip: settings.t('Back'),
       onPressed: () {
         if (Navigator.of(context).canPop()) {
           Navigator.of(context).pop();

@@ -366,8 +366,9 @@ class _EditJobCard extends ConsumerWidget {
                   controller: budgetController,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
-                  decoration:
-                      InputDecoration(labelText: 'Budget ($currencyCode)'),
+                  decoration: InputDecoration(
+                    labelText: '${settings.t('Budget')} ($currencyCode)',
+                  ),
                   validator: (value) {
                     final parsed = double.tryParse((value ?? '').trim());
                     if (parsed == null || parsed <= 0) {

@@ -265,6 +265,17 @@ class _ArtisanVerificationScreenState
         .showSnackBar(SnackBar(content: Text(settings.t(message))));
   }
 
+  void _leaveVerification() {
+    if (Navigator.of(context).canPop()) {
+      context.pop();
+      return;
+    }
+    final user = ref.read(authStateProvider).valueOrNull;
+    context.go(
+      user?.role == UserRole.artisan ? RouteNames.artisanHome : RouteNames.home,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
@@ -274,113 +285,114 @@ class _ArtisanVerificationScreenState
         retryAfter != null && retryAfter.isAfter(DateTime.now());
     final remainingDays =
         isRetryLocked ? retryAfter.difference(DateTime.now()).inDays + 1 : 0;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(settings.t(user?.role == UserRole.artisan
-            ? 'Artisan verification'
-            : 'Account verification')),
-        leading: BackButton(
-          onPressed: () => context.go(
-            user?.role == UserRole.artisan
-                ? RouteNames.artisanHome
-                : RouteNames.home,
-          ),
+    final canPop = Navigator.of(context).canPop();
+    return PopScope(
+      canPop: canPop,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _leaveVerification();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(settings.t(user?.role == UserRole.artisan
+              ? 'Artisan verification'
+              : 'Account verification')),
+          leading: BackButton(onPressed: _leaveVerification),
         ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          if (_isLoadingStatus)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (user?.verificationStatus == VerificationStatus.verified)
-            _StatusPanel(
-              icon: Icons.verified,
-              title: settings.t('Verification approved'),
-              message: settings.t(user?.role == UserRole.artisan
-                  ? 'Your artisan profile now shows a verified checkmark.'
-                  : 'Your account now shows a verified checkmark.'),
-            )
-          else if (_hasSubmittedDocuments &&
-              user?.verificationStatus == VerificationStatus.pending)
-            _StatusPanel(
-              icon: Icons.pending_actions,
-              title: settings.t('Submitted and under review'),
-              message: settings.t(
-                'Your documents are with Support. You cannot submit again until review is complete.',
+        body: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            if (_isLoadingStatus)
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (user?.verificationStatus == VerificationStatus.verified)
+              _StatusPanel(
+                icon: Icons.verified,
+                title: settings.t('Verification approved'),
+                message: settings.t(user?.role == UserRole.artisan
+                    ? 'Your artisan profile now shows a verified checkmark.'
+                    : 'Your account now shows a verified checkmark.'),
+              )
+            else if (_hasSubmittedDocuments &&
+                user?.verificationStatus == VerificationStatus.pending)
+              _StatusPanel(
+                icon: Icons.pending_actions,
+                title: settings.t('Submitted and under review'),
+                message: settings.t(
+                  'Your documents are with Support. You cannot submit again until review is complete.',
+                ),
+              )
+            else if (isRetryLocked)
+              _StatusPanel(
+                icon: Icons.lock_clock,
+                title: settings.t('Verification paused'),
+                message:
+                    '${settings.t('Your documents were not accepted. You can upload again in')} $remainingDays ${settings.t('day(s). Use clear front/back National ID images and valid business certificates where available.')}',
+              )
+            else ...[
+              Text(
+                settings.t('Upload verification documents'),
+                style: Theme.of(context).textTheme.titleLarge,
+                textAlign: TextAlign.center,
               ),
-            )
-          else if (isRetryLocked)
-            _StatusPanel(
-              icon: Icons.lock_clock,
-              title: settings.t('Verification paused'),
-              message:
-                  '${settings.t('Your documents were not accepted. You can upload again in')} $remainingDays ${settings.t('day(s). Use clear front/back National ID images and valid business certificates where available.')}',
-            )
-          else ...[
-            Text(
-              settings.t('Upload verification documents'),
-              style: Theme.of(context).textTheme.titleLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              settings.t(
-                'PDF up to 1 MB, or JPG/PNG up to 5 MB. Images are resized before review.',
+              const SizedBox(height: 8),
+              Text(
+                settings.t(
+                  'PDF up to 1 MB, or JPG/PNG up to 5 MB. Images are resized before review.',
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                labelText: settings.t('Telephone number *'),
-                prefixIcon: const Icon(Icons.phone_outlined),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _FileTile(
-              title: settings.t('National ID front'),
-              required: true,
-              file: _frontId,
-              onTap: () => _pickRequired(front: true),
-            ),
-            const SizedBox(height: 10),
-            _FileTile(
-              title: settings.t('National ID back'),
-              required: true,
-              file: _backId,
-              onTap: () => _pickRequired(front: false),
-            ),
-            const SizedBox(height: 10),
-            ..._certificates.map(
-              (file) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _FileTile(
-                  title: settings.t('Business certificate'),
-                  file: file,
-                  onTap: () {},
+              const SizedBox(height: 24),
+              TextField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  labelText: settings.t('Telephone number *'),
+                  prefixIcon: const Icon(Icons.phone_outlined),
                 ),
               ),
-            ),
-            OutlinedButton.icon(
-              onPressed: _pickCertificate,
-              icon: const Icon(Icons.add),
-              label: Text(settings.t('Add business certificate')),
-            ),
-            const SizedBox(height: 16),
-            PrimaryButton(
-              label: settings.t(
-                _isSubmitting ? 'Submitting...' : 'Submit for review',
+              const SizedBox(height: 16),
+              _FileTile(
+                title: settings.t('National ID front'),
+                required: true,
+                file: _frontId,
+                onTap: () => _pickRequired(front: true),
               ),
-              icon: Icons.upload_file,
-              onPressed: _isSubmitting ? null : _submit,
-            ),
+              const SizedBox(height: 10),
+              _FileTile(
+                title: settings.t('National ID back'),
+                required: true,
+                file: _backId,
+                onTap: () => _pickRequired(front: false),
+              ),
+              const SizedBox(height: 10),
+              ..._certificates.map(
+                (file) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _FileTile(
+                    title: settings.t('Business certificate'),
+                    file: file,
+                    onTap: () {},
+                  ),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: _pickCertificate,
+                icon: const Icon(Icons.add),
+                label: Text(settings.t('Add business certificate')),
+              ),
+              const SizedBox(height: 16),
+              PrimaryButton(
+                label: settings.t(
+                  _isSubmitting ? 'Submitting...' : 'Submit for review',
+                ),
+                icon: Icons.upload_file,
+                onPressed: _isSubmitting ? null : _submit,
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
