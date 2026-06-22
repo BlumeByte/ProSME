@@ -1,5 +1,6 @@
 {
     "cSpell.words": [
+        "geolocator",
         "supabase"
     ],
     "java.configuration.updateBuildConfiguration": "interactive"

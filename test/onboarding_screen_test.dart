@@ -8,7 +8,7 @@ void main() {
       const MaterialApp(home: OnboardingScreen()),
     );
 
-    expect(find.text('Get Started'), findsOneWidget);
+    expect(find.text("Let's Begin"), findsOneWidget);
     expect(find.byType(Image), findsOneWidget);
   });
 }
