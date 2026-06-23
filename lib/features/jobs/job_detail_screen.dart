@@ -381,7 +381,7 @@ class _JobTrackingPanel extends ConsumerWidget {
   }) async {
     final settings = ref.read(appSettingsControllerProvider);
     DateTime? eta = job.etaAt;
-    final noteController = TextEditingController();
+    var note = '';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -389,34 +389,38 @@ class _JobTrackingPanel extends ConsumerWidget {
           title: Text(
             settings.t(etaOnly ? 'Update ETA' : _statusLabel(status)),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (status != 'completed')
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.event_outlined),
-                  title: Text(
-                    eta == null
-                        ? settings.t('Choose estimated completion')
-                        : _dateTimeLabel(context, eta!),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (status != 'completed')
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.event_outlined),
+                    title: Text(
+                      eta == null
+                          ? settings.t('Choose estimated completion')
+                          : _dateTimeLabel(context, eta!),
+                    ),
+                    onTap: () async {
+                      final selected = await _pickEta(context, eta);
+                      if (selected != null && context.mounted) {
+                        setDialogState(() => eta = selected);
+                      }
+                    },
                   ),
-                  onTap: () async {
-                    final selected = await _pickEta(context, eta);
-                    if (selected != null) {
-                      setDialogState(() => eta = selected);
-                    }
-                  },
+                TextFormField(
+                  initialValue: note,
+                  minLines: 2,
+                  maxLines: 3,
+                  textCapitalization: TextCapitalization.sentences,
+                  onChanged: (value) => note = value,
+                  decoration: InputDecoration(
+                    labelText: settings.t('Progress note (optional)'),
+                  ),
                 ),
-              TextField(
-                controller: noteController,
-                minLines: 2,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: settings.t('Progress note (optional)'),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -431,18 +435,13 @@ class _JobTrackingPanel extends ConsumerWidget {
         ),
       ),
     );
-    if (confirmed != true) {
-      noteController.dispose();
-      return;
-    }
-    final note = noteController.text.trim();
-    noteController.dispose();
+    if (confirmed != true || !context.mounted) return;
     try {
       await ref.read(jobsRepositoryProvider).updateProgress(
             jobId: job.id,
             status: status,
             etaAt: eta,
-            note: note,
+            note: note.trim(),
           );
       ref.invalidate(jobProgressProvider(job.id));
       ref.invalidate(jobsStreamProvider);
