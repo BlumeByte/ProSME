@@ -20,9 +20,10 @@ class WalletService {
       if (role != UserRole.admin && role != UserRole.developer) {
         query = query.or('user_id.eq.$userId,artisan_id.eq.$userId');
       }
-      final rows = await query.order('created_at', ascending: false);
-      final items = rows
-          .map((row) => WalletTransaction.fromJson(
+      final List<dynamic> rows =
+          await query.order('created_at', ascending: false) as List<dynamic>;
+      final List<WalletTransaction> items = rows
+          .map<WalletTransaction>((row) => WalletTransaction.fromJson(
                 Map<String, dynamic>.from(row as Map),
               ))
           .toList(growable: false);
@@ -75,7 +76,8 @@ class WalletService {
       if (jobs.isEmpty) return const [];
       bidsQuery = bidsQuery.inFilter('job_id', jobs.keys.toList());
     }
-    final bidRows = await bidsQuery.order('updated_at', ascending: false);
+    final List<dynamic> bidRows =
+        await bidsQuery.order('updated_at', ascending: false) as List<dynamic>;
 
     if (role == UserRole.artisan && bidRows.isNotEmpty) {
       final jobIds = bidRows
@@ -93,7 +95,7 @@ class WalletService {
       }
     }
 
-    final items = bidRows.map((row) {
+    final List<WalletTransaction> items = bidRows.map<WalletTransaction>((row) {
       final value = Map<String, dynamic>.from(row as Map);
       final bidId = (value['id'] ?? '').toString();
       final jobId = (value['job_id'] ?? '').toString();

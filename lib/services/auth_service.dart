@@ -17,6 +17,15 @@ bool _isValidEmailAddress(String email) =>
     _emailRegex.hasMatch(email) && !email.contains('..');
 bool isStrongPassword(String password) =>
     _strongPasswordRegex.hasMatch(password);
+String _readableError(Object? error) {
+  if (error == null) return 'unknown error';
+  if (error is AuthException) return error.message;
+  return error.toString().replaceFirst(
+        RegExp(r'^(StateError|FunctionException):\s*'),
+        '',
+      );
+}
+
 String limitProfileDescription(String description) {
   final normalized = description.trim();
   if (normalized.length <= 50) return normalized;
@@ -707,10 +716,34 @@ class SupabaseAuthService implements AuthService {
     final redirectTo = kIsWeb
         ? Uri.base.resolve(RouteNames.resetPassword).toString()
         : kPasswordRecoveryRedirectUrl;
-    await _supabase.auth.resetPasswordForEmail(
-      normalized,
-      redirectTo: redirectTo,
-    );
+    Object? functionError;
+    try {
+      final response = await _supabase.functions.invoke(
+        'password-recovery',
+        body: {'email': normalized, 'redirectTo': redirectTo},
+      );
+      final data = response.data;
+      if (data is Map && data['ok'] == true) return;
+      functionError = StateError(
+        data is Map
+            ? (data['error'] ?? 'Password recovery service failed.').toString()
+            : 'Password recovery service returned an invalid response.',
+      );
+    } catch (error) {
+      functionError = error;
+    }
+
+    try {
+      await _supabase.auth.resetPasswordForEmail(
+        normalized,
+        redirectTo: redirectTo,
+      );
+    } catch (authError) {
+      throw StateError(
+        'The reset email could not be sent. Recovery service: '
+        '${_readableError(functionError)}. Supabase Auth: ${_readableError(authError)}',
+      );
+    }
   }
 
   @override

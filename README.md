@@ -58,9 +58,16 @@ flutter pub get
 2. Enable Authentication providers you need (Email, Google, Phone/OTP if implemented).
 3. Apply migration SQL:
    - Run every file in `supabase/migrations/` in timestamp order.
+   - Password recovery specifically requires `20260623135621_password_recovery_rate_limit.sql`.
 4. For Google OAuth and password recovery on Android, add this redirect URL in Supabase Auth settings:
    - `<your.android.applicationId>://login-callback`
-5. Add runtime defines when running the app:
+5. Deploy the password recovery function and configure the existing Resend account:
+   ```powershell
+   npx supabase functions deploy password-recovery --project-ref <your-project-ref>
+   npx supabase secrets set RESEND_API_KEY="<your-resend-key>" RESEND_FROM_EMAIL="ProSME <noreply@your-verified-domain.com>" --project-ref <your-project-ref>
+   ```
+   The sender domain must be verified in Resend. The function accepts the Android redirect above and `https://prosme.vercel.app/reset-password`; add any additional exact URLs with the `PASSWORD_RESET_ALLOWED_REDIRECTS` secret, separated by commas.
+6. Add runtime defines when running the app:
    ```bash
    flutter run \
      --dart-define=SUPABASE_URL=https://<your-project>.supabase.co \
@@ -72,7 +79,7 @@ flutter pub get
    ```bash
    flutter run --dart-define-from-file=supabase.local.json
    ```
-6. Verify realtime feed:
+7. Verify realtime feed:
    - Open one signed-in client and keep listings/chat/jobs screens open.
    - Insert/update rows in `listings`, `messages`, or `jobs`.
    - Confirm the app stream updates without restart.

@@ -886,7 +886,7 @@ Future<void> _showAppSettingsSheet(
   WidgetRef ref,
   AppUser user,
 ) async {
-  var isDarkMode = ref.read(themeModeControllerProvider) == ThemeMode.dark;
+  var themeMode = ref.read(themeModeControllerProvider);
   var settings = ref.read(appSettingsControllerProvider);
   var emailNotifications = settings.emailNotifications;
   var phoneNotifications = settings.phoneNotifications;
@@ -925,17 +925,40 @@ Future<void> _showAppSettingsSheet(
                     ),
                   ],
                 ),
-                SwitchListTile(
+                ListTile(
                   contentPadding: EdgeInsets.zero,
-                  secondary: const Icon(Icons.dark_mode_outlined),
-                  title: Text(settings.t('Dark mode')),
-                  value: isDarkMode,
-                  onChanged: (value) {
-                    setSheetState(() => isDarkMode = value);
-                    ref
-                        .read(themeModeControllerProvider.notifier)
-                        .setDarkMode(value);
-                  },
+                  leading: const Icon(Icons.contrast_outlined),
+                  title: Text(settings.t('Theme')),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: SegmentedButton<ThemeMode>(
+                      segments: [
+                        ButtonSegment(
+                          value: ThemeMode.system,
+                          icon: const Icon(Icons.settings_suggest_outlined),
+                          label: Text(settings.t('System')),
+                        ),
+                        ButtonSegment(
+                          value: ThemeMode.light,
+                          icon: const Icon(Icons.light_mode_outlined),
+                          label: Text(settings.t('Light')),
+                        ),
+                        ButtonSegment(
+                          value: ThemeMode.dark,
+                          icon: const Icon(Icons.dark_mode_outlined),
+                          label: Text(settings.t('Dark')),
+                        ),
+                      ],
+                      selected: {themeMode},
+                      onSelectionChanged: (selection) {
+                        final selected = selection.first;
+                        setSheetState(() => themeMode = selected);
+                        ref
+                            .read(themeModeControllerProvider.notifier)
+                            .setThemeMode(selected);
+                      },
+                    ),
+                  ),
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,

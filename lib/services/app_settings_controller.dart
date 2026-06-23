@@ -61,6 +61,10 @@ class AppSettings {
 
 const _translations = <String, Map<String, String>>{
   'French': {
+    'Theme': 'Theme',
+    'System': 'Systeme',
+    'Light': 'Clair',
+    'Dark': 'Sombre',
     'ProSME   Find Professionals': 'ProSME   Trouver des professionnels',
     'ProSME': 'ProSME',
     'Home': 'Accueil',
@@ -685,6 +689,10 @@ const _translations = <String, Map<String, String>>{
         'Verifiez que la migration du portefeuille est deployee puis actualisez.',
   },
   'Spanish': {
+    'Theme': 'Tema',
+    'System': 'Sistema',
+    'Light': 'Claro',
+    'Dark': 'Oscuro',
     'ProSME   Find Professionals': 'ProSME   Buscar profesionales',
     'ProSME': 'ProSME',
     'Home': 'Inicio',
@@ -1089,6 +1097,10 @@ const _translations = <String, Map<String, String>>{
         'Asegurate de desplegar la migracion de billetera y actualiza.',
   },
   'Arabic': {
+    'Theme': 'المظهر',
+    'System': 'النظام',
+    'Light': 'فاتح',
+    'Dark': 'داكن',
     'ProSME   Find Professionals': 'ProSME   ابحث عن محترفين',
     'ProSME': 'ProSME',
     'Home': 'الرئيسية',
@@ -1426,6 +1438,10 @@ const _translations = <String, Map<String, String>>{
         'تعذر إرسال البريد. تحقق من إعدادات البريد في Supabase.',
   },
   'Twi': {
+    'Theme': 'App ahosiesie',
+    'System': 'Phone nhyehyee',
+    'Light': 'Hann',
+    'Dark': 'Sum',
     'ProSME   Find Professionals': 'ProSME   Hwehwɛ adwumayɛfo',
     'Home': 'Fie',
     'Upload': 'Fa so',
