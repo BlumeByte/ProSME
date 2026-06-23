@@ -152,7 +152,7 @@ class SupabaseJobsRepository implements JobsRepository {
         final rows = await _client
             .from('jobs')
             .select()
-            .neq('status', 'completed')
+            .eq('status', 'open')
             .order('created_at', ascending: false);
         lastGood = rows
             .map((row) => _mapJob(Map<String, dynamic>.from(row as Map)))
@@ -437,7 +437,12 @@ class SupabaseJobsRepository implements JobsRepository {
         )
         .select()
         .single();
-    await _client.from('jobs').update({'status': 'completed'}).eq('id', jobId);
+    await _client
+        .from('jobs')
+        .update({'status': 'completed'})
+        .eq('id', jobId)
+        .select('id')
+        .single();
     return _mapRating(row);
   }
 

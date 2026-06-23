@@ -169,6 +169,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         const Divider(),
         _SettingsTile(
+          icon: Icons.history_outlined,
+          title: settings.t('Work history'),
+          subtitle: settings.t('Accepted and rejected bids and requests.'),
+          trailingText: settings.t('Open'),
+          onTap: () => context.push(RouteNames.workHistory),
+        ),
+        const Divider(),
+        _SettingsTile(
           icon: Icons.account_balance_wallet_outlined,
           title: settings.t('Wallet'),
           subtitle: settings.t('Track accepted bids and money flow.'),

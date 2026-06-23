@@ -37,6 +37,7 @@ class PlatformModuleCounts {
     required this.messages,
     required this.notifications,
     required this.reports,
+    required this.walletTransactions,
   });
 
   final int accounts;
@@ -48,6 +49,7 @@ class PlatformModuleCounts {
   final int messages;
   final int notifications;
   final int reports;
+  final int walletTransactions;
 }
 
 class SupportNotice {
@@ -187,6 +189,7 @@ class AdminService {
         messages: 0,
         notifications: 0,
         reports: 0,
+        walletTransactions: 0,
       );
     }
 
@@ -199,6 +202,7 @@ class AdminService {
     final notificationRows =
         await _supabase.from('admin_notifications').select('id');
     final reportRows = await _supabase.from('reports').select('id');
+    final walletRows = await _supabase.from('wallet_transactions').select('id');
     return PlatformModuleCounts(
       accounts: accounts.length,
       tenants: accounts.map((account) => account.tenantId).toSet().length,
@@ -209,6 +213,7 @@ class AdminService {
       messages: (messageRows as List<dynamic>).length,
       notifications: (notificationRows as List<dynamic>).length,
       reports: (reportRows as List<dynamic>).length,
+      walletTransactions: (walletRows as List<dynamic>).length,
     );
   }
 

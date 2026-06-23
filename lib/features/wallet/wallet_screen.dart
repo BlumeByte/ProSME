@@ -25,16 +25,18 @@ class WalletScreen extends ConsumerStatefulWidget {
 class _WalletScreenState extends ConsumerState<WalletScreen> {
   static const _pdfService = InvoicePdfService();
   List<WalletTransaction> _items = const [];
-  String? _loadedUserId;
+  String? _attemptedLoadKey;
   Object? _error;
   bool _loading = false;
   bool _exporting = false;
 
   Future<void> _load(AppUser user) async {
     if (_loading) return;
+    final loadKey = '${user.id}:${user.role.name}';
     setState(() {
       _loading = true;
       _error = null;
+      _attemptedLoadKey = loadKey;
     });
     try {
       final items = shouldUseSupabase()
@@ -44,7 +46,6 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       if (!mounted) return;
       setState(() {
         _items = items;
-        _loadedUserId = user.id;
       });
     } catch (error) {
       if (!mounted) return;
@@ -86,7 +87,8 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
         body: Center(child: Text(settings.t('Sign in to continue'))),
       );
     }
-    if (_loadedUserId != user.id && !_loading) {
+    final loadKey = '${user.id}:${user.role.name}';
+    if (_attemptedLoadKey != loadKey && !_loading) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _load(user));
     }
 
@@ -334,6 +336,7 @@ class _WalletTransactionCard extends StatelessWidget {
             Text(item.invoiceNumber),
             if (item.jobLocation.isNotEmpty) Text(item.jobLocation),
             if (parties.replaceAll(' - ', '').trim().isNotEmpty) Text(parties),
+            Text(settings.t(item.workStatus)),
             Text(DateFormat('MMM d, y h:mm a').format(item.createdAt)),
             const SizedBox(height: 10),
             Row(

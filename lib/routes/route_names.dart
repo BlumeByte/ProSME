@@ -15,6 +15,7 @@ class RouteNames {
   static const notifications = '/notifications';
   static const saved = '/saved';
   static const wallet = '/wallet';
+  static const workHistory = '/work-history';
   static const privacy = '/privacy';
   static const terms = '/terms';
   static const security = '/security';

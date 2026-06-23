@@ -30,6 +30,7 @@ class _DeveloperDashboardScreenState
       const _DeveloperOverview(),
       const _ReportsPanel(),
       const _AccountsPanel(),
+      const _DeveloperWalletPanel(),
       const _TenantsPanel(),
       const _ModulesPanel(),
     ];
@@ -55,6 +56,10 @@ class _DeveloperDashboardScreenState
               NavigationRailDestination(
                 icon: const Icon(Icons.people_alt_outlined),
                 label: Text(settings.t('Accounts')),
+              ),
+              NavigationRailDestination(
+                icon: const Icon(Icons.account_balance_wallet_outlined),
+                label: Text(settings.t('Wallet')),
               ),
               NavigationRailDestination(
                 icon: const Icon(Icons.business_outlined),
@@ -128,6 +133,10 @@ class _DeveloperOverview extends ConsumerWidget {
                     label: settings.t('Reports'), value: counts.reports),
                 _MetricCard(
                     label: settings.t('Alerts'), value: counts.notifications),
+                _MetricCard(
+                  label: settings.t('Wallet transactions'),
+                  value: counts.walletTransactions,
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -169,18 +178,211 @@ class _WalletFlowPreview extends ConsumerWidget {
             leading: const Icon(Icons.account_balance_wallet_outlined),
             title: Text(settings.t('Wallet flow')),
             subtitle: Text(
-              rows.isEmpty
-                  ? settings.t('No wallet activity yet')
-                  : settings.t('Latest accepted bid money flow.'),
+              snapshot.hasError
+                  ? settings.t('Could not load wallet.')
+                  : !snapshot.hasData
+                      ? settings.t('Loading wallet...')
+                      : rows.isEmpty
+                          ? settings.t('No wallet activity yet')
+                          : settings.t('Latest accepted bid money flow.'),
             ),
-            trailing: Text(
-              formatMoney(total, settings.currencyCode),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            trailing: snapshot.hasData
+                ? Text(
+                    formatMoney(total, settings.currencyCode),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  )
+                : const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
             onTap: () => context.push(RouteNames.wallet),
           ),
         );
       },
+    );
+  }
+}
+
+class _DeveloperWalletPanel extends ConsumerStatefulWidget {
+  const _DeveloperWalletPanel();
+
+  @override
+  ConsumerState<_DeveloperWalletPanel> createState() =>
+      _DeveloperWalletPanelState();
+}
+
+class _DeveloperWalletPanelState extends ConsumerState<_DeveloperWalletPanel> {
+  Future<List<WalletTransaction>>? _future;
+  String? _loadKey;
+
+  void _refresh(String userId, UserRole role) {
+    setState(() {
+      _future = WalletService(ref.read(supabaseClientProvider))
+          .loadTransactions(userId: userId, role: role);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = ref.watch(appSettingsControllerProvider);
+    final user = ref.watch(authStateProvider).valueOrNull;
+    if (user == null) {
+      return Center(child: Text(settings.t('Sign in to continue')));
+    }
+    final key = '${user.id}:${user.role.name}';
+    if (_loadKey != key) {
+      _loadKey = key;
+      _future = WalletService(ref.read(supabaseClientProvider))
+          .loadTransactions(userId: user.id, role: user.role);
+    }
+
+    return FutureBuilder<List<WalletTransaction>>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _ErrorPanel(
+            message:
+                '${settings.t('Could not load wallet.')}: ${snapshot.error}',
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final rows = snapshot.data!;
+        final total = rows.fold<double>(0, (sum, row) => sum + row.amount);
+        final completed =
+            rows.where((row) => row.workStatus == 'completed').length;
+        final customers = rows
+            .map((row) => row.customerId)
+            .where((id) => id.isNotEmpty)
+            .toSet()
+            .length;
+        final artisans = rows
+            .map((row) => row.artisanId)
+            .where((id) => id.isNotEmpty)
+            .toSet()
+            .length;
+
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    settings.t('Wallet tracking'),
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => _refresh(user.id, user.role),
+                  icon: const Icon(Icons.refresh),
+                  tooltip: settings.t('Refresh'),
+                ),
+                FilledButton.icon(
+                  onPressed: () => context.push(RouteNames.wallet),
+                  icon: const Icon(Icons.receipt_long_outlined),
+                  label: Text(settings.t('Reports and invoices')),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _WalletMetric(
+                  label: settings.t('Tracked amount'),
+                  value: formatMoney(total, settings.currencyCode),
+                ),
+                _WalletMetric(
+                  label: settings.t('Transactions'),
+                  value: rows.length.toString(),
+                ),
+                _WalletMetric(
+                  label: settings.t('Completed work'),
+                  value: completed.toString(),
+                ),
+                _WalletMetric(
+                  label: settings.t('Customers'),
+                  value: customers.toString(),
+                ),
+                _WalletMetric(
+                  label: settings.t('Artisans'),
+                  value: artisans.toString(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (rows.isEmpty)
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.receipt_long_outlined),
+                  title: Text(settings.t('No wallet activity yet')),
+                ),
+              )
+            else
+              ...rows.map(
+                (row) => Card(
+                  child: ListTile(
+                    leading: Icon(
+                      row.workStatus == 'completed'
+                          ? Icons.task_alt
+                          : Icons.handshake_outlined,
+                    ),
+                    title: Text(
+                      row.jobTitle.isEmpty
+                          ? settings.t('Accepted work')
+                          : row.jobTitle,
+                    ),
+                    subtitle: Text(
+                      '${row.customerName} - ${row.artisanName}\n${row.invoiceNumber} - ${settings.t(row.workStatus)}',
+                    ),
+                    isThreeLine: true,
+                    trailing: Text(
+                      formatMoney(row.amount, settings.currencyCode),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    onTap: () => context.push(
+                      RouteNames.invoice,
+                      extra: row,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _WalletMetric extends StatelessWidget {
+  const _WalletMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 170,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 4),
+              Text(label),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -544,6 +746,11 @@ class _ModulesPanel extends ConsumerWidget {
           ('Messages', counts.messages, 'Chat messages and offers'),
           ('Reports', counts.reports, 'Chat, support, and safety reports'),
           ('Notifications', counts.notifications, 'Support tasks'),
+          (
+            'Wallet transactions',
+            counts.walletTransactions,
+            'Accepted and completed bid money flow'
+          ),
         ];
         return ListView.separated(
           padding: const EdgeInsets.all(16),

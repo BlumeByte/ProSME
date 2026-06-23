@@ -16,6 +16,8 @@ class WalletTransaction {
     required this.artisanName,
     required this.artisanEmail,
     required this.paymentStatus,
+    required this.workStatus,
+    required this.completedAt,
     required this.createdAt,
   });
 
@@ -35,6 +37,8 @@ class WalletTransaction {
   final String artisanName;
   final String artisanEmail;
   final String paymentStatus;
+  final String workStatus;
+  final DateTime? completedAt;
   final DateTime createdAt;
 
   factory WalletTransaction.fromJson(Map<String, dynamic> json) {
@@ -59,6 +63,8 @@ class WalletTransaction {
       artisanName: (json['artisan_name'] ?? '').toString(),
       artisanEmail: (json['artisan_email'] ?? '').toString(),
       paymentStatus: (json['payment_status'] ?? 'agreed').toString(),
+      workStatus: (json['work_status'] ?? 'accepted').toString(),
+      completedAt: DateTime.tryParse((json['completed_at'] ?? '').toString()),
       createdAt: DateTime.tryParse((json['created_at'] ?? '').toString()) ??
           DateTime.now(),
     );
@@ -89,6 +95,8 @@ class WalletTransaction {
       artisanName: artisanName ?? this.artisanName,
       artisanEmail: artisanEmail ?? this.artisanEmail,
       paymentStatus: paymentStatus,
+      workStatus: workStatus,
+      completedAt: completedAt,
       createdAt: createdAt,
     );
   }

@@ -10,6 +10,7 @@ import '../features/auth/role_selection_screen.dart';
 import '../features/chat/chat_thread_screen.dart';
 import '../features/home/artisan_home_screen.dart';
 import '../features/home/user_home_screen.dart';
+import '../features/history/work_history_screen.dart';
 import '../features/invoice/invoice_screen.dart';
 import '../features/jobs/job_detail_screen.dart';
 import '../features/legal/legal_screen.dart';
@@ -147,6 +148,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const WalletScreen(),
       ),
       GoRoute(
+        path: RouteNames.workHistory,
+        builder: (context, state) => const WorkHistoryScreen(),
+      ),
+      GoRoute(
         path: RouteNames.privacy,
         builder: (context, state) =>
             const LegalScreen(kind: LegalPageKind.privacy),
@@ -176,6 +181,7 @@ bool _requiresAuth(String fullPath) {
     RouteNames.notifications,
     RouteNames.saved,
     RouteNames.wallet,
+    RouteNames.workHistory,
   };
   if (protectedExactPaths.contains(fullPath)) return true;
   if (fullPath.startsWith('${RouteNames.listingDetail}/')) return true;
