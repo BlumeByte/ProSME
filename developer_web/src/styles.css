@@ -410,6 +410,10 @@ td small {
   padding: 9px 12px;
 }
 
+.bid-stat-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .file-action {
   position: relative;
   display: inline-flex;
@@ -452,6 +456,55 @@ th {
 
 td {
   color: #111827;
+}
+
+.money-positive {
+  color: #047857;
+  font-weight: 800;
+}
+
+.bid-ledger {
+  min-width: 1180px;
+}
+
+.conversation-detail summary {
+  cursor: pointer;
+  color: #3754b5;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.conversation-log {
+  width: min(420px, 72vw);
+  max-height: 360px;
+  overflow-y: auto;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #dbe2ea;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.message-line {
+  padding: 8px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.message-line:last-child {
+  border-bottom: 0;
+}
+
+.message-line span {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.message-line p {
+  margin: 5px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .badge {

@@ -11,6 +11,9 @@ const emptyData = () => ({
   listings: [],
   jobs: [],
   bids: [],
+  walletTransactions: [],
+  threads: [],
+  messages: [],
   ratings: [],
   notifications: [],
   reports: [],
@@ -49,6 +52,7 @@ const tabs = [
   ['users', 'Users'],
   ['verifications', 'Verifications'],
   ['reports', 'Reports'],
+  ['bidTracking', 'Bids Tracking'],
   ['jobs', 'Jobs'],
   ['listings', 'Listings'],
   ['settings', 'Settings'],
@@ -117,6 +121,7 @@ const statusBadge = (status) => {
     rejected: 'badge badge-red',
     active: 'badge badge-green',
     completed: 'badge badge-blue',
+    in_progress: 'badge badge-blue',
     cancelled: 'badge badge-red',
     accepted: 'badge badge-green',
     resolved: 'badge badge-green',
@@ -239,7 +244,18 @@ async function loadDashboard() {
 async function refreshData() {
   state.tableErrors = {};
 
-  const [profiles, listings, jobs, bids, ratings, notifications, reports] = await Promise.all([
+  const [
+    profiles,
+    listings,
+    jobs,
+    bids,
+    walletTransactions,
+    threads,
+    messages,
+    ratings,
+    notifications,
+    reports,
+  ] = await Promise.all([
     safeSelect(
       'profiles',
       supabase
@@ -275,6 +291,32 @@ async function refreshData() {
         .limit(500)
     ),
     safeSelect(
+      'wallet_transactions',
+      supabase
+        .from('wallet_transactions')
+        .select(
+          'id,job_id,bid_id,user_id,artisan_id,amount,currency,event_type,invoice_number,job_title,job_location,customer_name,customer_email,artisan_name,artisan_email,payment_status,work_status,completed_at,created_at'
+        )
+        .order('created_at', { ascending: false })
+        .limit(1000)
+    ),
+    safeSelect(
+      'threads',
+      supabase
+        .from('threads')
+        .select('id,user_id,artisan_id,last_message,updated_at,created_at')
+        .order('updated_at', { ascending: false })
+        .limit(500)
+    ),
+    safeSelect(
+      'messages',
+      supabase
+        .from('messages')
+        .select('id,thread_id,sender_id,type,content,read_at,created_at')
+        .order('created_at', { ascending: false })
+        .limit(2000)
+    ),
+    safeSelect(
       'job_ratings',
       supabase
         .from('job_ratings')
@@ -300,7 +342,18 @@ async function refreshData() {
     ),
   ]);
 
-  state.data = { profiles, listings, jobs, bids, ratings, notifications, reports };
+  state.data = {
+    profiles,
+    listings,
+    jobs,
+    bids,
+    walletTransactions,
+    threads,
+    messages,
+    ratings,
+    notifications,
+    reports,
+  };
 }
 
 async function developerAction(action, payload = {}) {
@@ -902,7 +955,7 @@ function controls({ roleFilter = true, statusFilter = true } = {}) {
       ${
         statusFilter
           ? `<select data-filter="status">
-              ${['all', 'pending', 'verified', 'rejected', 'active', 'open', 'reviewing', 'resolved', 'completed', 'cancelled']
+              ${['all', 'pending', 'accepted', 'rejected', 'verified', 'active', 'in_progress', 'open', 'reviewing', 'resolved', 'completed', 'cancelled']
                 .map(
                   (status) => `<option value="${status}" ${state.filters.status === status ? 'selected' : ''}>${status}</option>`
                 )
@@ -1173,6 +1226,272 @@ function renderReportRows(reports) {
   `;
 }
 
+function profileFor(id) {
+  return state.data.profiles.find((profile) => profile.id === id) || null;
+}
+
+function profileLabel(id, fallback = 'Unknown account') {
+  const profile = profileFor(id);
+  return normalize(profile?.full_name) || normalize(profile?.email) || fallback;
+}
+
+function jobFor(id) {
+  return state.data.jobs.find((job) => job.id === id) || null;
+}
+
+function walletForBid(id) {
+  return state.data.walletTransactions.find(
+    (transaction) => transaction.bid_id === id && transaction.event_type === 'bid_accepted'
+  ) || null;
+}
+
+function threadForParticipants(customerId, artisanId) {
+  return state.data.threads.find(
+    (thread) => thread.user_id === customerId && thread.artisan_id === artisanId
+  ) || null;
+}
+
+function messagePreview(message) {
+  if (message?.type !== 'invoice') return normalize(message?.content) || 'Empty message';
+  try {
+    const invoice = JSON.parse(message.content || '{}');
+    return `Invoice ${invoice.invoice_number || ''}`.trim();
+  } catch (_) {
+    return 'Invoice';
+  }
+}
+
+function conversationDetails(thread) {
+  if (!thread) return '<span class="muted">No conversation</span>';
+  const messages = state.data.messages
+    .filter((message) => message.thread_id === thread.id)
+    .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+  const visible = messages.slice(-20);
+  return `
+    <details class="conversation-detail">
+      <summary>${messages.length} message${messages.length === 1 ? '' : 's'}</summary>
+      <div class="conversation-log">
+        ${
+          visible.length
+            ? visible
+                .map(
+                  (message) => `
+                    <div class="message-line">
+                      <strong>${esc(profileLabel(message.sender_id, 'Account'))}</strong>
+                      <span>${esc(dateText(message.created_at))} · ${esc(message.type || 'text')}</span>
+                      <p>${esc(messagePreview(message))}</p>
+                    </div>`
+                )
+                .join('')
+            : '<p class="muted">Conversation has no messages.</p>'
+        }
+      </div>
+    </details>`;
+}
+
+function trackedBidRows() {
+  const q = lower(state.filters.q);
+  const rows = state.data.bids.map((bid) => {
+    const job = jobFor(bid.job_id);
+    const customerId = job?.created_by || '';
+    const wallet = walletForBid(bid.id);
+    const thread = threadForParticipants(customerId, bid.artisan_id);
+    return {
+      ...bid,
+      job,
+      wallet,
+      thread,
+      customerId,
+      customerName: profileLabel(customerId, wallet?.customer_name || 'Customer'),
+      artisanName: profileLabel(bid.artisan_id, wallet?.artisan_name || 'Artisan'),
+    };
+  });
+  const filtered = rows.filter((row) => {
+    if (state.filters.status !== 'all' && row.status !== state.filters.status) return false;
+    if (!q) return true;
+    return [
+      row.job?.title,
+      row.job?.location,
+      row.customerName,
+      row.artisanName,
+      row.status,
+      row.wallet?.invoice_number,
+      row.message,
+    ].some((value) => lower(value).includes(q));
+  });
+  filtered.sort((a, b) => {
+    if (state.filters.sort === 'oldest') {
+      return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+    }
+    if (state.filters.sort === 'name') {
+      return normalize(a.job?.title).localeCompare(normalize(b.job?.title));
+    }
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  });
+  return filtered;
+}
+
+function userMoneyFlow() {
+  const flow = new Map();
+  const ensure = (id) => {
+    if (!flow.has(id)) {
+      const profile = profileFor(id);
+      flow.set(id, {
+        id,
+        name: profileLabel(id),
+        email: profile?.email || '',
+        role: profile?.role || 'unknown',
+        spent: 0,
+        received: 0,
+        jobs: new Set(),
+      });
+    }
+    return flow.get(id);
+  };
+  state.data.walletTransactions
+    .filter((transaction) => transaction.event_type === 'bid_accepted')
+    .forEach((transaction) => {
+      const amount = Number(transaction.amount || 0);
+      if (transaction.user_id) {
+        const customer = ensure(transaction.user_id);
+        customer.spent += amount;
+        if (transaction.job_id) customer.jobs.add(transaction.job_id);
+      }
+      if (transaction.artisan_id) {
+        const artisan = ensure(transaction.artisan_id);
+        artisan.received += amount;
+        if (transaction.job_id) artisan.jobs.add(transaction.job_id);
+      }
+    });
+  return [...flow.values()].sort((a, b) => b.spent + b.received - (a.spent + a.received));
+}
+
+function renderBidTracking() {
+  const rows = trackedBidRows();
+  const accepted = state.data.bids.filter((bid) => bid.status === 'accepted');
+  const pending = state.data.bids.filter((bid) => bid.status === 'pending');
+  const acceptedAmount = accepted.reduce(
+    (sum, bid) => sum + Number(walletForBid(bid.id)?.amount ?? bid.amount ?? 0),
+    0
+  );
+  const flowRows = userMoneyFlow();
+  const linkedThreads = new Set(rows.map((row) => row.thread?.id).filter(Boolean));
+  return `
+    <section class="stat-grid bid-stat-grid">
+      <article class="stat-card">
+        <span>Total bids</span>
+        <strong>${state.data.bids.length}</strong>
+        <small>${pending.length} awaiting decisions</small>
+      </article>
+      <article class="stat-card">
+        <span>Accepted value</span>
+        <strong>${money(acceptedAmount)}</strong>
+        <small>${accepted.length} accepted bids</small>
+      </article>
+      <article class="stat-card">
+        <span>Wallet records</span>
+        <strong>${state.data.walletTransactions.length}</strong>
+        <small>Accepted spending and earnings</small>
+      </article>
+      <article class="stat-card">
+        <span>Bid conversations</span>
+        <strong>${linkedThreads.size}</strong>
+        <small>${state.data.messages.length} messages loaded</small>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>User spending and artisan earnings</h2>
+        <span class="badge">${flowRows.length} accounts</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th>Role</th>
+              <th>Customer spending</th>
+              <th>Artisan earnings</th>
+              <th>Accepted jobs</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              flowRows
+                .map(
+                  (item) => `
+                    <tr>
+                      <td><strong>${esc(item.name)}</strong><small>${esc(item.email)}</small></td>
+                      <td>${roleBadge(item.role)}</td>
+                      <td>${money(item.spent)}</td>
+                      <td class="money-positive">${money(item.received)}</td>
+                      <td>${item.jobs.size}</td>
+                    </tr>`
+                )
+                .join('') || tableEmpty(5)
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Bid ledger and conversations</h2>
+        <span class="badge">${rows.length} shown</span>
+      </div>
+      ${controls({ roleFilter: false })}
+      <div class="table-wrap">
+        <table class="bid-ledger">
+          <thead>
+            <tr>
+              <th>Job</th>
+              <th>Customer</th>
+              <th>Artisan</th>
+              <th>Bid</th>
+              <th>Wallet / invoice</th>
+              <th>Conversation</th>
+              <th>Submitted</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              rows
+                .map(
+                  (row) => `
+                    <tr>
+                      <td>
+                        <strong>${esc(row.job?.title || 'Deleted job')}</strong>
+                        <small>${esc(row.job?.location || '')}</small>
+                      </td>
+                      <td><strong>${esc(row.customerName)}</strong><small>${esc(profileFor(row.customerId)?.email || '')}</small></td>
+                      <td><strong>${esc(row.artisanName)}</strong><small>${esc(profileFor(row.artisan_id)?.email || '')}</small></td>
+                      <td>
+                        <strong>${money(row.amount)}</strong>
+                        ${statusBadge(row.status)}
+                        <small>${esc(row.message || '')}</small>
+                      </td>
+                      <td>
+                        ${
+                          row.wallet
+                            ? `<strong>${money(row.wallet.amount)}</strong><small>${esc(row.wallet.invoice_number || '')}</small>${statusBadge(row.wallet.work_status || row.wallet.payment_status || 'accepted')}`
+                            : '<span class="badge badge-orange">No wallet record</span>'
+                        }
+                      </td>
+                      <td>${conversationDetails(row.thread)}</td>
+                      <td>${dateText(row.created_at)}</td>
+                    </tr>`
+                )
+                .join('') || tableEmpty(7)
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
 function renderJobs() {
   const rows = filterRows(state.data.jobs, ['title', 'description', 'location', 'status', 'tenant_id']);
   return `
@@ -1381,6 +1700,8 @@ function renderContent() {
       return renderShell(renderVerifications());
     case 'reports':
       return renderShell(renderReports());
+    case 'bidTracking':
+      return renderShell(renderBidTracking());
     case 'jobs':
       return renderShell(renderJobs());
     case 'listings':
