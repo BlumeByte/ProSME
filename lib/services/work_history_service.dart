@@ -12,7 +12,7 @@ class WorkHistoryService {
     required String userId,
     required UserRole role,
   }) async {
-    final isPlatformRole = role == UserRole.admin || role == UserRole.developer;
+    final isPlatformRole = role == UserRole.admin;
     final bidRows = await _loadBidRows(
       userId: userId,
       role: role,

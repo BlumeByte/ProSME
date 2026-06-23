@@ -15,7 +15,7 @@ abstract class SavedService {
 }
 
 // ---------------------------------------------------------------------------
-// Mock implementation (used in DEV_MODE or when Supabase is unavailable)
+// Mock implementation (used in MOCK_MODE or when Supabase is unavailable)
 // ---------------------------------------------------------------------------
 
 class MockSavedService implements SavedService {

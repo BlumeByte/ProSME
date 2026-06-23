@@ -160,7 +160,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       case UserRole.artisan:
         return RouteNames.artisanHome;
       case UserRole.admin:
-      case UserRole.developer:
         return RouteNames.adminHome;
       case UserRole.customer:
         return RouteNames.home;

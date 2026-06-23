@@ -475,7 +475,7 @@ class AdminService {
         .from('admin_notifications')
         .select('id,title,body,created_at')
         .eq('related_user_id', userId)
-        .eq('type', 'developer_response')
+        .eq('type', 'admin_response')
         .order('created_at', ascending: false)
         .limit(10);
     return (rows as List<dynamic>)

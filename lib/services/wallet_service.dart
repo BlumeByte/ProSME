@@ -17,7 +17,7 @@ class WalletService {
 
     try {
       dynamic query = _client.from('wallet_transactions').select();
-      if (role != UserRole.admin && role != UserRole.developer) {
+      if (role != UserRole.admin) {
         query = query.or('user_id.eq.$userId,artisan_id.eq.$userId');
       }
       final List<dynamic> rows =
@@ -52,7 +52,7 @@ class WalletService {
     required String userId,
     required UserRole role,
   }) async {
-    final platformRole = role == UserRole.admin || role == UserRole.developer;
+    final platformRole = role == UserRole.admin;
     final jobs = <String, Map<String, dynamic>>{};
 
     if (role == UserRole.customer || platformRole) {

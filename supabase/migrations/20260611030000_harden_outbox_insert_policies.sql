@@ -15,7 +15,7 @@ with check (
     select 1
     from public.profiles p
     where p.id = (select auth.uid())
-      and p.role in ('admin', 'developer')
+      and p.role in ('admin', 'admin')
   )
 );
 
@@ -29,12 +29,12 @@ with check (
     select 1
     from public.profiles p
     where p.id = (select auth.uid())
-      and p.role in ('admin', 'developer')
+      and p.role in ('admin', 'admin')
   )
 );
 
-drop policy if exists "Developers can update profiles" on public.profiles;
-create policy "Developers can update profiles"
+drop policy if exists "Admins can update profiles" on public.profiles;
+create policy "Admins can update profiles"
 on public.profiles for update
 to authenticated
 using (
@@ -42,7 +42,7 @@ using (
     select 1
     from public.profiles p
     where p.id = (select auth.uid())
-      and p.role in ('admin', 'developer')
+      and p.role in ('admin', 'admin')
   )
 )
 with check (
@@ -50,6 +50,6 @@ with check (
     select 1
     from public.profiles p
     where p.id = (select auth.uid())
-      and p.role in ('admin', 'developer')
+      and p.role in ('admin', 'admin')
   )
 );

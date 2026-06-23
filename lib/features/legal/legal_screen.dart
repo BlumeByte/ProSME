@@ -99,15 +99,15 @@ _LegalContent _contentFor(LegalPageKind kind) {
           ),
           _LegalSection(
             'Chats, reports, and blocking',
-            'Chats are provided to help users discuss service requests. Users may report or block conversations that appear unsafe, abusive, fraudulent, or inappropriate. Reports may be reviewed by ProSME developers or support staff and may include message context, account IDs, timestamps, and related request records.',
+            'Chats are provided to help users discuss service requests. Users may report or block conversations that appear unsafe, abusive, fraudulent, or inappropriate. Reports may be reviewed by ProSME admins or support staff and may include message context, account IDs, timestamps, and related request records.',
           ),
           _LegalSection(
             'Account actions',
             'ProSME may remove content, hide requests, limit features, reject verification, suspend accounts, or delete accounts when activity appears unsafe, fraudulent, unlawful, or harmful to the marketplace.',
           ),
           _LegalSection(
-            'Developer and support review',
-            'Developer dashboard tools may be used to review reports, account roles, verification status, listings, jobs, bids, notifications, and marketplace activity for support, safety, debugging, and abuse prevention.',
+            'Admin and support review',
+            'Admin Dashboard tools may be used to review reports, account roles, verification status, listings, jobs, bids, notifications, and marketplace activity for support, safety, debugging, and abuse prevention.',
           ),
           _LegalSection(
             'Platform availability',
@@ -137,7 +137,7 @@ _LegalContent _contentFor(LegalPageKind kind) {
           ),
           _LegalSection(
             'Access controls',
-            'Supabase row-level security policies restrict private data and limit verification, report, and developer review tools to authorized accounts.',
+            'Supabase row-level security policies restrict private data and limit verification, report, and admin review tools to authorized accounts.',
           ),
           _LegalSection(
             'Verification documents',

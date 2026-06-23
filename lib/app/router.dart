@@ -219,7 +219,6 @@ String _homeForRole(AppUser? user) {
     case UserRole.artisan:
       return RouteNames.artisanHome;
     case UserRole.admin:
-    case UserRole.developer:
       return RouteNames.adminHome;
     case UserRole.customer:
     default:

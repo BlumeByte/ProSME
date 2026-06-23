@@ -14,6 +14,24 @@ import 'services/theme_mode_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FlutterError.onError = FlutterError.presentError;
+  ErrorWidget.builder = (details) => const Material(
+        color: Color(0xFFF8FAFC),
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Something went wrong. Please restart ProSME.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF0F172A),
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      );
   try {
     await initSupabase();
   } catch (_) {}

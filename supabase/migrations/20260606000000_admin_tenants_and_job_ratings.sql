@@ -14,7 +14,7 @@ drop constraint if exists profiles_role_check;
 
 alter table public.profiles
 add constraint profiles_role_check
-check (role in ('customer', 'artisan', 'admin', 'developer'));
+check (role in ('customer', 'artisan', 'admin', 'admin'));
 
 create table if not exists public.job_ratings (
   id uuid primary key default gen_random_uuid(),
@@ -66,37 +66,37 @@ to authenticated
 using (user_id = (select auth.uid()))
 with check (user_id = (select auth.uid()));
 
-drop policy if exists "Developers can update profiles" on public.profiles;
-create policy "Developers can update profiles"
+drop policy if exists "Admins can update profiles" on public.profiles;
+create policy "Admins can update profiles"
 on public.profiles for update
 to authenticated
 using (
   exists (
     select 1 from public.profiles p
-    where p.id = (select auth.uid()) and p.role in ('admin', 'developer')
+    where p.id = (select auth.uid()) and p.role in ('admin', 'admin')
   )
 )
 with check (true);
 
-drop policy if exists "Developers can read admin notifications" on public.admin_notifications;
-create policy "Developers can read admin notifications"
+drop policy if exists "Admins can read admin notifications" on public.admin_notifications;
+create policy "Admins can read admin notifications"
 on public.admin_notifications for select
 to authenticated
 using (
   exists (
     select 1 from public.profiles p
-    where p.id = (select auth.uid()) and p.role in ('admin', 'developer')
+    where p.id = (select auth.uid()) and p.role in ('admin', 'admin')
   )
 );
 
-drop policy if exists "Developers can read email outbox" on public.email_outbox;
-create policy "Developers can read email outbox"
+drop policy if exists "Admins can read email outbox" on public.email_outbox;
+create policy "Admins can read email outbox"
 on public.email_outbox for select
 to authenticated
 using (
   exists (
     select 1 from public.profiles p
-    where p.id = (select auth.uid()) and p.role in ('admin', 'developer')
+    where p.id = (select auth.uid()) and p.role in ('admin', 'admin')
   )
 );
 
@@ -114,7 +114,7 @@ using (
   or exists (
     select 1
     from public.profiles p
-    where p.id = (select auth.uid()) and p.role in ('admin', 'developer')
+    where p.id = (select auth.uid()) and p.role in ('admin', 'admin')
   )
 );
 

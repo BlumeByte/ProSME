@@ -315,5 +315,5 @@ class SupabaseListingService implements ListingService {
 }
 
 ListingService buildListingService(SupabaseClient supabase) {
-  return kDevMode ? MockListingService() : SupabaseListingService(supabase);
+  return kMockMode ? MockListingService() : SupabaseListingService(supabase);
 }

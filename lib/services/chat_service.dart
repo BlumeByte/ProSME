@@ -719,5 +719,5 @@ class SupabaseChatService implements ChatService {
 }
 
 ChatService buildChatService(SupabaseClient supabase, LocalDbService localDb) {
-  return kDevMode ? MockChatService() : SupabaseChatService(supabase, localDb);
+  return kMockMode ? MockChatService() : SupabaseChatService(supabase, localDb);
 }

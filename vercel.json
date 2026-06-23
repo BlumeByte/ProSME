@@ -1,6 +1,6 @@
 {
-  "buildCommand": "npm --prefix developer_web install && npm --prefix developer_web run build",
-  "outputDirectory": "developer_web/dist",
+  "buildCommand": "npm --prefix admin_web install && npm --prefix admin_web run build",
+  "outputDirectory": "admin_web/dist",
   "framework": "vite",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }

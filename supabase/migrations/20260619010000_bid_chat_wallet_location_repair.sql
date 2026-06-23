@@ -69,7 +69,7 @@ using (
   or actor_id = (select auth.uid())
   or exists (
     select 1 from public.profiles p
-    where p.id = (select auth.uid()) and p.role in ('admin', 'developer')
+    where p.id = (select auth.uid()) and p.role in ('admin', 'admin')
   )
 );
 
@@ -82,7 +82,7 @@ using (
   or artisan_id = (select auth.uid())
   or exists (
     select 1 from public.profiles p
-    where p.id = (select auth.uid()) and p.role in ('admin', 'developer')
+    where p.id = (select auth.uid()) and p.role in ('admin', 'admin')
   )
 );
 

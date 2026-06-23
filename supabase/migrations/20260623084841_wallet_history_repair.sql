@@ -1,5 +1,5 @@
 -- Make wallet tracking idempotent, backfill historical wins, and keep bid
--- outcomes queryable for customer, artisan, and developer history screens.
+-- outcomes queryable for customer, artisan, and admin history screens.
 
 alter table public.jobs
 add column if not exists accepted_bid_id uuid
@@ -92,7 +92,7 @@ using (
     select 1
     from public.profiles p
     where p.id = (select auth.uid())
-      and p.role in ('admin', 'developer')
+      and p.role in ('admin', 'admin')
   )
 );
 

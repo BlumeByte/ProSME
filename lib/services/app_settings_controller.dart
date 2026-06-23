@@ -596,7 +596,7 @@ const _translations = <String, Map<String, String>>{
     'Submit': 'Envoyer',
     'Report chat': 'Signaler la discussion',
     'Block chat': 'Bloquer la discussion',
-    'Report sent to developer dashboard.':
+    'Report sent to Admin Dashboard.':
         'Rapport envoye au tableau developpeur.',
     'Share conversation': 'Partager la conversation',
     'Share to phone app': 'Partager vers une application',
@@ -1413,7 +1413,7 @@ const _translations = <String, Map<String, String>>{
     'Support update': 'تحديث الدعم',
     'New support ticket': 'تذكرة دعم جديدة',
     'job created': 'تم إنشاء العمل',
-    'developer response': 'رد المطور',
+    'admin response': 'رد المطور',
     'support ticket': 'تذكرة دعم',
     'Your support ticket has been reviewed.': 'تمت مراجعة تذكرة الدعم.',
     'Verified account': 'حساب موثق',
@@ -1771,7 +1771,7 @@ const _translations = <String, Map<String, String>>{
     'Support update': 'Support nsakrae',
     'New support ticket': 'Support ticket foforo',
     'job created': 'Wɔabɔ adwuma',
-    'developer response': 'Developer mmuae',
+    'admin response': 'admin mmuae',
     'support ticket': 'Support ticket',
     'Your support ticket has been reviewed.': 'Wɔahwɛ wo support ticket no mu.',
     'Verified account': 'Account a wɔagye atom',

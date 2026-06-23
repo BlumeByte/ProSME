@@ -105,7 +105,7 @@ flutter run
 ```
 
 ## Dev Mode
-`kDevMode` is controlled with `--dart-define=DEV_MODE=true`. Without it, the app attempts Supabase initialization and falls back to mocks if Supabase is unavailable.
+`kMockMode` is controlled with `--dart-define=MOCK_MODE=true`. Without it, the app attempts Supabase initialization and falls back to mocks if Supabase is unavailable.
 
 ## Testing
 ```bash

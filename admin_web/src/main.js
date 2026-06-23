@@ -104,9 +104,9 @@ const dateText = (value) => {
 };
 
 const roleBadge = (role) => {
-  const displayRole = role === 'admin' ? 'developer' : role;
+  const displayRole = role === 'admin' ? 'admin' : role;
   const map = {
-    developer: 'badge badge-purple',
+    admin: 'badge badge-purple',
     admin: 'badge badge-purple',
     artisan: 'badge badge-teal',
     customer: 'badge',
@@ -215,7 +215,7 @@ async function loadDashboard() {
     state.session = null;
     state.profile = null;
     state.data = emptyData();
-    state.error = `Could not verify developer access: ${profileError.message}`;
+    state.error = `Could not verify admin access: ${profileError.message}`;
     state.loading = false;
     state.checkingAccess = false;
     render();
@@ -224,11 +224,11 @@ async function loadDashboard() {
 
   state.profile = profile;
 
-  if (profile?.role !== 'developer') {
+  if (profile?.role !== 'admin') {
     await supabase.auth.signOut({ scope: 'local' });
     state.session = null;
     state.profile = null;
-    state.error = 'Only developer accounts can open this dashboard.';
+    state.error = 'Only admin accounts can open this dashboard.';
     state.loading = false;
     state.checkingAccess = false;
     render();
@@ -356,8 +356,8 @@ async function refreshData() {
   };
 }
 
-async function developerAction(action, payload = {}) {
-  const { data, error } = await supabase.functions.invoke('developer-admin', {
+async function adminAction(action, payload = {}) {
+  const { data, error } = await supabase.functions.invoke('admin-dashboard', {
     body: {
       action,
       redirectTo: `${window.location.origin}/reset-password`,
@@ -366,7 +366,7 @@ async function developerAction(action, payload = {}) {
   });
   if (error) {
     throw new Error(
-      `${error.message}. Confirm the developer-admin Edge Function is deployed and its SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY secrets are set for the same Supabase project as Vercel.`
+      `${error.message}. Confirm the admin-dashboard Edge Function is deployed and its SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY secrets are set for the same Supabase project as Vercel.`
     );
   }
   if (data?.error) throw new Error(data.error);
@@ -378,13 +378,13 @@ const isEdgeFunctionRequestError = (error) =>
 
 async function updateManagedRow(table, id, patch, edgeAction) {
   try {
-    await developerAction(edgeAction, { id, patch });
+    await adminAction(edgeAction, { id, patch });
   } catch (error) {
     if (!isEdgeFunctionRequestError(error)) throw error;
     const { error: tableError } = await supabase.from(table).update(patch).eq('id', id);
     if (tableError) {
       throw new Error(
-        `${tableError.message}. The Edge Function is unavailable and direct ${table} updates are blocked. Apply the developer RLS migration or deploy developer-admin.`
+        `${tableError.message}. The Edge Function is unavailable and direct ${table} updates are blocked. Apply the admin RLS migration or deploy admin-dashboard.`
       );
     }
   }
@@ -392,13 +392,13 @@ async function updateManagedRow(table, id, patch, edgeAction) {
 
 async function deleteManagedRow(table, id, edgeAction) {
   try {
-    await developerAction(edgeAction, { id });
+    await adminAction(edgeAction, { id });
   } catch (error) {
     if (!isEdgeFunctionRequestError(error)) throw error;
     const { error: tableError } = await supabase.from(table).delete().eq('id', id);
     if (tableError) {
       throw new Error(
-        `${tableError.message}. The Edge Function is unavailable and direct ${table} deletes are blocked. Apply the developer RLS migration or deploy developer-admin.`
+        `${tableError.message}. The Edge Function is unavailable and direct ${table} deletes are blocked. Apply the admin RLS migration or deploy admin-dashboard.`
       );
     }
   }
@@ -406,13 +406,13 @@ async function deleteManagedRow(table, id, edgeAction) {
 
 async function insertManagedRow(table, patch, edgeAction) {
   try {
-    await developerAction(edgeAction, { patch });
+    await adminAction(edgeAction, { patch });
   } catch (error) {
     if (!isEdgeFunctionRequestError(error)) throw error;
     const { error: tableError } = await supabase.from(table).insert(patch);
     if (tableError) {
       throw new Error(
-        `${tableError.message}. The Edge Function is unavailable and direct ${table} inserts are blocked. Apply the developer RLS migration or deploy developer-admin.`
+        `${tableError.message}. The Edge Function is unavailable and direct ${table} inserts are blocked. Apply the admin RLS migration or deploy admin-dashboard.`
       );
     }
   }
@@ -482,7 +482,7 @@ async function updateRole(userId, role) {
 
 async function deleteAccount(userId, email) {
   if (state.session?.user?.id === userId) {
-    state.error = 'You cannot delete the developer account you are currently using.';
+    state.error = 'You cannot delete the Admin Account you are currently using.';
     render();
     return;
   }
@@ -490,7 +490,7 @@ async function deleteAccount(userId, email) {
   if (!window.confirm(`Permanently delete ${label} from the app and database? This cannot be undone.`)) return;
 
   await runAction(async () => {
-    const result = await developerAction('deleteUser', { userId });
+    const result = await adminAction('deleteUser', { userId });
     if (result?.ok === false) throw new Error(result.error || 'Could not delete account.');
     setNotice('Account deleted from Auth and database.');
     await refreshData();
@@ -565,13 +565,13 @@ async function createAccount(role) {
   const randomPassword = generateStrongPassword();
 
   await runAction(async () => {
-    await developerAction('createUser', {
+    await adminAction('createUser', {
       email,
       password: randomPassword,
       role,
       full_name: fullName,
     });
-    await developerAction('sendPasswordReset', { email });
+    await adminAction('sendPasswordReset', { email });
     setNotice(`${role} created. Password setup link sent to ${email}.`);
     await refreshData();
   });
@@ -607,7 +607,7 @@ async function importAccounts(file) {
     if (badEmails.length) {
       throw new Error(`Fix invalid email addresses before importing: ${badEmails.map((account) => account.email).slice(0, 5).join(', ')}`);
     }
-    const result = await developerAction('bulkCreateUsers', { accounts });
+    const result = await adminAction('bulkCreateUsers', { accounts });
     const created = result.created?.length || 0;
     const failed = result.failed?.length || 0;
     setNotice(`Imported ${created} account${created === 1 ? '' : 's'}${failed ? `, ${failed} failed` : ''}.`);
@@ -717,7 +717,7 @@ async function chooseProfileId(role, promptText) {
 async function sendPasswordReset(email) {
   if (!email) return;
   await runAction(async () => {
-    await developerAction('sendPasswordReset', { email });
+    await adminAction('sendPasswordReset', { email });
     setNotice(`Password reset sent to ${email}.`);
   });
 }
@@ -754,8 +754,8 @@ async function randomizePassword(userId, email) {
   if (!window.confirm(`Create a new random password for ${email}?`)) return;
   const password = generateStrongPassword();
   await runAction(async () => {
-    await developerAction('setPassword', { userId, password });
-    await developerAction('sendPasswordReset', { email });
+    await adminAction('setPassword', { userId, password });
+    await adminAction('sendPasswordReset', { email });
     setNotice(`New secure password created. Password setup link sent to ${email}.`);
   });
 }
@@ -793,7 +793,7 @@ async function sendReportResponse(id) {
   if (!response) return;
   await runAction(async () => {
     const { error } = await supabase.from('admin_notifications').insert({
-      type: 'developer_response',
+      type: 'admin_response',
       title: 'Support update',
       body: response,
       actor_id: state.session?.user?.id,
@@ -826,7 +826,7 @@ function dashboardStats() {
     ['Artisans', artisans.length, `${pending.length} pending verification`],
     ['Listings', state.data.listings.length, 'Editable service listings'],
     ['Open jobs', openJobs.length, `${state.data.bids.length} bids`],
-    ['Reports', reports.length, `${unread.length} unread developer notices`],
+    ['Reports', reports.length, `${unread.length} unread admin notices`],
     ['Rejected verification', rejected.length, 'Retry lock handled in app'],
   ];
 }
@@ -840,7 +840,7 @@ function renderShell(content) {
           <img src="/prosme_logo.png" alt="ProSME" />
           <div>
             <strong>ProSME</strong>
-            <span>Developer Portal</span>
+            <span>Admin Portal</span>
           </div>
         </div>
         <nav>
@@ -860,7 +860,7 @@ function renderShell(content) {
       <main class="main">
         <header class="topbar">
           <div>
-            <p>Developer only</p>
+            <p>Admin only</p>
             <h1>${esc(tabs.find(([id]) => id === state.tab)?.[1] || 'Overview')}</h1>
           </div>
           <div class="actions">
@@ -927,7 +927,7 @@ function renderOverview() {
           <h2>Recent Activity</h2>
           <button class="link" data-tab="reports">Reports</button>
         </div>
-        ${recentNotifications.length ? renderActivityList(recentNotifications) : '<p class="empty">No developer activity yet.</p>'}
+        ${recentNotifications.length ? renderActivityList(recentNotifications) : '<p class="empty">No admin activity yet.</p>'}
       </article>
     </section>
   `;
@@ -946,7 +946,7 @@ function controls({ roleFilter = true, statusFilter = true } = {}) {
       ${
         roleFilter
           ? `<select data-filter="role">
-              ${['all', 'customer', 'artisan', 'developer']
+              ${['all', 'customer', 'artisan', 'admin']
                 .map((role) => `<option value="${role}" ${state.filters.role === role ? 'selected' : ''}>${role}</option>`)
                 .join('')}
             </select>`
@@ -1063,7 +1063,7 @@ function renderProfiles(filterRole = null) {
         <div class="row-actions">
           <button class="primary compact-button" data-create-role="customer">Create user</button>
           <button class="primary compact-button" data-create-role="artisan">Create artisan</button>
-          <button class="primary compact-button" data-create-role="developer">Create developer</button>
+          <button class="primary compact-button" data-create-role="admin">Create admin</button>
           <label class="ghost small file-action">
             Import Excel
             <input type="file" accept=".xlsx,.csv" data-import-accounts />
@@ -1113,7 +1113,7 @@ function renderProfileRow(profile) {
         <button class="ghost small" data-random-password="${esc(profile.id)}" data-email="${esc(profile.email || '')}">Random password</button>
         <button class="reject small" data-delete-account="${esc(profile.id)}" data-email="${esc(profile.email || '')}">Delete</button>
         <select data-role-user="${esc(profile.id)}">
-          ${['customer', 'artisan', 'developer']
+          ${['customer', 'artisan', 'admin']
             .map((role) => `<option value="${role}" ${profile.role === role ? 'selected' : ''}>${role}</option>`)
             .join('')}
         </select>
@@ -1182,7 +1182,7 @@ function renderReports() {
   return `
     <section class="panel">
       <div class="panel-head">
-        <h2>Reports and Developer Notifications</h2>
+        <h2>Reports and admin Notifications</h2>
         <span class="badge">${reports.length || state.data.notifications.length} records</span>
       </div>
       ${controls({ roleFilter: false })}
@@ -1627,11 +1627,11 @@ function renderSettings() {
         <strong>${supabaseKey ? 'Configured' : 'Missing'}</strong>
       </div>
       <div class="callout">
-        Keep service role keys out of Vercel frontend variables. Account creation and password changes are handled by the <code>developer-admin</code> Edge Function.
+        Keep service role keys out of Vercel frontend variables. Account creation and password changes are handled by the <code>admin-dashboard</code> Edge Function.
       </div>
-      <h2>Developer Access</h2>
+      <h2>Admin access</h2>
       <p class="muted">
-        Only accounts with <code>role = 'developer'</code> in <code>public.profiles</code> can continue. Artisan and user accounts are signed out immediately.
+        Only accounts with <code>role = 'admin'</code> in <code>public.profiles</code> can continue. Artisan and user accounts are signed out immediately.
       </p>
     </section>
   `;
@@ -1646,8 +1646,8 @@ function renderLogin() {
     <div class="login-page">
       <form class="login-card" id="login-form">
         <img src="/prosme_logo.png" alt="ProSME" />
-        <h1>ProSME Developer Dashboard</h1>
-        <p>Developer accounts only.</p>
+        <h1>ProSME Admin Dashboard</h1>
+        <p>Admin accounts only.</p>
         ${state.error ? `<div class="error">${esc(state.error)}</div>` : ''}
         ${state.notice ? `<div class="notice">${esc(state.notice)}</div>` : ''}
         <label>
@@ -1716,7 +1716,7 @@ function renderContent() {
 function render() {
   if (state.recoveringPassword) {
     app.innerHTML = renderPasswordRecovery();
-  } else if (!hasConfig || !state.session || state.profile?.role !== 'developer') {
+  } else if (!hasConfig || !state.session || state.profile?.role !== 'admin') {
     app.innerHTML = renderLogin();
   } else {
     app.innerHTML = renderContent();

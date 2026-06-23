@@ -1,11 +1,11 @@
-# Deploy ProSME Developer Dashboard to Vercel
+# Deploy ProSME Admin Dashboard to Vercel
 
-This repository now contains a Vercel-ready web dashboard at `developer_web`.
+This repository now contains a Vercel-ready web dashboard at `admin_web`.
 
 ## Recommended Vercel Import Settings
 
 - **Framework Preset:** Vite
-- **Root Directory:** `developer_web`
+- **Root Directory:** `admin_web`
 - **Build Command:** `npm run build`
 - **Output Directory:** `dist`
 - **Install Command:** `npm install`
@@ -21,15 +21,15 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-or-anon-key
 
 Use the Supabase publishable key, or the legacy anon key if your project still uses legacy keys. Do not use the service role key in this web dashboard.
 
-## Developer Login
+## Admin Login
 
 Create `blumebyte@gmail.com` in Supabase Auth with your chosen password, then run this SQL in Supabase SQL Editor:
 
 ```sql
 update public.profiles
-set role = 'developer',
+set role = 'admin',
     verification_status = 'verified',
-    full_name = coalesce(full_name, 'BlumeByte Developer'),
+    full_name = coalesce(full_name, 'BlumeByte Admin'),
     email = 'blumebyte@gmail.com'
 where email = 'blumebyte@gmail.com';
 ```
@@ -38,11 +38,11 @@ If no row updates, create the profile row:
 
 ```sql
 insert into public.profiles (id, email, full_name, role, verification_status)
-select id, email, 'BlumeByte Developer', 'developer', 'verified'
+select id, email, 'BlumeByte Admin', 'admin', 'verified'
 from auth.users
 where email = 'blumebyte@gmail.com'
 on conflict (id) do update
-set role = 'developer',
+set role = 'admin',
     verification_status = 'verified',
     full_name = excluded.full_name,
     email = excluded.email;
@@ -51,7 +51,7 @@ set role = 'developer',
 ## Local Test
 
 ```powershell
-cd developer_web
+cd admin_web
 copy .env.example .env.local
 npm install
 npm run dev

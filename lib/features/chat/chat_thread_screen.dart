@@ -461,7 +461,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final settings = ref.read(appSettingsControllerProvider);
     final reason = await _promptReason(
       title: 'Report chat',
-      label: 'What should the developer review?',
+      label: 'What should the admin review?',
     );
     if (reason == null || reason.trim().isEmpty) return;
     final reportedUserId = await _resolveOtherUserId();
@@ -474,7 +474,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(settings.t('Report sent to developer dashboard.')),
+          content: Text(settings.t('Report sent to Admin Dashboard.')),
         ),
       );
     } catch (error) {

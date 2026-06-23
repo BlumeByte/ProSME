@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-const bool kDevMode = bool.fromEnvironment('DEV_MODE', defaultValue: false);
+const bool kMockMode = bool.fromEnvironment('MOCK_MODE', defaultValue: false);
 const String kAppName = 'ProSME';
 const String kCurrencySymbol = 'GHS';
 
@@ -40,7 +40,7 @@ const String kOAuthOidcDiscoveryEndpoint =
 const Color kPrimaryGreen = Color(0xFF1E7F3E);
 const List<String> kSupportedLanguages = ['English', 'Twi', 'Ewe'];
 
-enum UserRole { customer, artisan, admin, developer }
+enum UserRole { customer, artisan, admin }
 
 enum VerificationStatus { pending, verified, rejected }
 

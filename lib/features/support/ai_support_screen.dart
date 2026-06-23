@@ -97,7 +97,7 @@ class _AiSupportScreenState extends ConsumerState<AiSupportScreen> {
       category: 'Safety',
       question: 'How do I report or block a chat?',
       answer:
-          'Open the chat menu and choose Report or Block. Include a clear reason so the developer support team can review the conversation.',
+          'Open the chat menu and choose Report or Block. Include a clear reason so the admin support team can review the conversation.',
       keywords: 'report block abuse safety conversation',
     ),
     _FaqItem(

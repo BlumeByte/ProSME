@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
     const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY');
     const authorization = req.headers.get('Authorization') || '';
 
-    if (!authorization.startsWith('Bearer ')) return fail('Missing developer session.');
+    if (!authorization.startsWith('Bearer ')) return fail('Missing admin session.');
 
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authorization } },
@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
       error: userError,
     } = await userClient.auth.getUser();
 
-    if (userError || !user) return fail('Invalid developer session.');
+    if (userError || !user) return fail('Invalid admin session.');
 
     const { data: caller, error: callerError } = await userClient
       .from('profiles')
@@ -171,8 +171,8 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (callerError) return fail(callerError.message);
-    if (caller?.role !== 'developer') {
-      return fail('Only developer accounts can use this action.');
+    if (caller?.role !== 'admin') {
+      return fail('Only admin accounts can use this action.');
     }
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
       const country = clean(body.country);
       const location = clean(body.location);
       const password = clean(body.password) || randomPassword();
-      const allowedRoles = new Set(['customer', 'artisan', 'developer']);
+      const allowedRoles = new Set(['customer', 'artisan', 'admin']);
 
       if (!validEmail(email)) return fail('Valid email is required.');
       if (!allowedRoles.has(role)) return fail('Invalid role.');
@@ -246,7 +246,7 @@ Deno.serve(async (req) => {
       const accounts = Array.isArray(body.accounts) ? body.accounts : [];
       const created: Array<Record<string, unknown>> = [];
       const failed: Array<Record<string, unknown>> = [];
-      const allowedRoles = new Set(['customer', 'artisan', 'developer']);
+      const allowedRoles = new Set(['customer', 'artisan', 'admin']);
 
       for (const rawAccount of accounts.slice(0, 200)) {
         const account = rawAccount && typeof rawAccount === 'object' ? rawAccount as Record<string, unknown> : {};
@@ -346,7 +346,7 @@ Deno.serve(async (req) => {
       const userId = clean(body.userId || body.id);
       if (!userId) return fail('User id is required.');
       if (userId === user.id) {
-        return fail('You cannot delete the developer account you are currently using.');
+        return fail('You cannot delete the Admin Account you are currently using.');
       }
 
       const { error } = await adminClient.auth.admin.deleteUser(userId);
@@ -448,7 +448,7 @@ Deno.serve(async (req) => {
       return ok({ temporaryPassword: password });
     }
 
-    return fail('Unknown developer action.');
+    return fail('Unknown admin action.');
   } catch (error) {
     return fail(error);
   }

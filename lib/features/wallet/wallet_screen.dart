@@ -93,8 +93,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) => _load(user));
     }
 
-    final isPlatformRole =
-        user.role == UserRole.admin || user.role == UserRole.developer;
+    final isPlatformRole = user.role == UserRole.admin;
     final total = _items.fold<double>(0, (sum, item) => sum + item.amount);
     final currencyCode = settings.currencyCode;
     final reportOwner = user.fullName.trim().isNotEmpty

@@ -11,26 +11,26 @@ import '../../services/admin_service.dart';
 import '../../services/service_providers.dart';
 import '../../services/wallet_service.dart';
 
-class DeveloperDashboardScreen extends ConsumerStatefulWidget {
-  const DeveloperDashboardScreen({super.key});
+class AdminPlatformDashboardScreen extends ConsumerStatefulWidget {
+  const AdminPlatformDashboardScreen({super.key});
 
   @override
-  ConsumerState<DeveloperDashboardScreen> createState() =>
-      _DeveloperDashboardScreenState();
+  ConsumerState<AdminPlatformDashboardScreen> createState() =>
+      _AdminPlatformDashboardScreenState();
 }
 
-class _DeveloperDashboardScreenState
-    extends ConsumerState<DeveloperDashboardScreen> {
+class _AdminPlatformDashboardScreenState
+    extends ConsumerState<AdminPlatformDashboardScreen> {
   int _selectedIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(appSettingsControllerProvider);
     final sections = [
-      const _DeveloperOverview(),
+      const _AdminOverview(),
       const _ReportsPanel(),
       const _AccountsPanel(),
-      const _DeveloperWalletPanel(),
+      const _AdminWalletPanel(),
       const _TenantsPanel(),
       const _ModulesPanel(),
     ];
@@ -79,8 +79,8 @@ class _DeveloperDashboardScreenState
   }
 }
 
-class _DeveloperOverview extends ConsumerWidget {
-  const _DeveloperOverview();
+class _AdminOverview extends ConsumerWidget {
+  const _AdminOverview();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -203,15 +203,14 @@ class _WalletFlowPreview extends ConsumerWidget {
   }
 }
 
-class _DeveloperWalletPanel extends ConsumerStatefulWidget {
-  const _DeveloperWalletPanel();
+class _AdminWalletPanel extends ConsumerStatefulWidget {
+  const _AdminWalletPanel();
 
   @override
-  ConsumerState<_DeveloperWalletPanel> createState() =>
-      _DeveloperWalletPanelState();
+  ConsumerState<_AdminWalletPanel> createState() => _AdminWalletPanelState();
 }
 
-class _DeveloperWalletPanelState extends ConsumerState<_DeveloperWalletPanel> {
+class _AdminWalletPanelState extends ConsumerState<_AdminWalletPanel> {
   Future<List<WalletTransaction>>? _future;
   String? _loadKey;
 

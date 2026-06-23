@@ -9,3 +9,18 @@ entrypoint = "./functions/password-recovery/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/password-recovery/*.html" ]
+
+[functions.send-email-outbox]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/send-email-outbox/index.ts"
+
+[functions.account-verification]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/account-verification/index.ts"
+
+[functions.admin-dashboard]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-dashboard/index.ts"

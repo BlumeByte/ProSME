@@ -53,7 +53,7 @@ using (
           select 1
           from public.profiles p
           where p.id = (select auth.uid())
-            and p.role in ('admin', 'developer')
+            and p.role in ('admin', 'admin')
         )
       )
   )
@@ -101,7 +101,7 @@ begin
 
   if actor <> current_job.created_by
      and actor is distinct from accepted_artisan
-     and coalesce(actor_role, '') not in ('admin', 'developer') then
+     and coalesce(actor_role, '') not in ('admin', 'admin') then
     raise exception 'Only job participants can update progress';
   end if;
   if accepted_artisan is null and next_status <> 'cancelled' then

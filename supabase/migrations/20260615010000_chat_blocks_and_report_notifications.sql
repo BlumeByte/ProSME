@@ -25,14 +25,14 @@ to authenticated
 using (
   blocker_id = (select auth.uid())
   or blocked_user_id = (select auth.uid())
-  or app_private.is_developer()
+  or app_private.is_admin()
 );
 
 drop policy if exists "Users can delete own chat blocks" on public.chat_blocks;
 create policy "Users can delete own chat blocks"
 on public.chat_blocks for delete
 to authenticated
-using (blocker_id = (select auth.uid()) or app_private.is_developer());
+using (blocker_id = (select auth.uid()) or app_private.is_admin());
 
 do $$
 begin

@@ -79,8 +79,8 @@ on public.email_outbox for insert
 to authenticated
 with check (true);
 
-drop policy if exists "Developers can read sms outbox" on public.sms_outbox;
-create policy "Developers can read sms outbox"
+drop policy if exists "Admins can read sms outbox" on public.sms_outbox;
+create policy "Admins can read sms outbox"
 on public.sms_outbox for select
 to authenticated
 using (
@@ -88,7 +88,7 @@ using (
     select 1
     from public.profiles p
     where p.id = (select auth.uid())
-      and p.role in ('admin', 'developer')
+      and p.role in ('admin', 'admin')
   )
 );
 

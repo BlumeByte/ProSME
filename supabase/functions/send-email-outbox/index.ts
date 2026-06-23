@@ -92,7 +92,7 @@ const authorize = async (
   if (profileError) throw new Error(profileError.message);
   return {
     userId: user.id,
-    canDispatchAll: ['admin', 'developer'].includes(clean(profile?.role)),
+    canDispatchAll: clean(profile?.role) === 'admin',
   };
 };
 

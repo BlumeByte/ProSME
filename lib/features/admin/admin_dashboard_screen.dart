@@ -5,7 +5,7 @@ import '../../config/constants.dart';
 import '../../models/artisan_profile.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
-import 'developer_dashboard_screen.dart';
+import 'admin_platform_dashboard_screen.dart';
 
 class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -22,8 +22,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   Widget build(BuildContext context) {
     final settings = ref.watch(appSettingsControllerProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
-    if (user?.role == UserRole.developer) {
-      return const DeveloperDashboardScreen();
+    if (user?.role == UserRole.admin) {
+      return const AdminPlatformDashboardScreen();
     }
 
     final sections = [

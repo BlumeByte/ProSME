@@ -1,11 +1,11 @@
--- Developer web dashboard management support.
--- Apply this in Supabase before deploying the updated developer dashboard.
+-- Admin web dashboard management support.
+-- Apply this in Supabase before deploying the updated admin dashboard.
 
 create extension if not exists "pgcrypto";
 
 create schema if not exists app_private;
 
-create or replace function app_private.is_developer()
+create or replace function app_private.is_admin()
 returns boolean
 language sql
 stable
@@ -16,18 +16,18 @@ as $$
     select 1
     from public.profiles p
     where p.id = (select auth.uid())
-      and p.role = 'developer'
+      and p.role = 'admin'
   );
 $$;
 
-revoke all on function app_private.is_developer() from public, anon, authenticated;
+revoke all on function app_private.is_admin() from public, anon, authenticated;
 grant usage on schema app_private to authenticated;
-grant execute on function app_private.is_developer() to authenticated;
+grant execute on function app_private.is_admin() to authenticated;
 
 update public.profiles
-set role = 'developer',
+set role = 'admin',
     verification_status = 'verified',
-    full_name = coalesce(nullif(full_name, ''), 'BlumeByte Developer'),
+    full_name = coalesce(nullif(full_name, ''), 'BlumeByte Admin'),
     email = coalesce(nullif(email, ''), 'blumebyte@gmail.com')
 where lower(email) = 'blumebyte@gmail.com';
 
@@ -95,93 +95,93 @@ to authenticated
 using (
   reporter_id = (select auth.uid())
   or reported_user_id = (select auth.uid())
-  or app_private.is_developer()
+  or app_private.is_admin()
 );
 
-drop policy if exists "Developers can update reports" on public.reports;
-create policy "Developers can update reports"
+drop policy if exists "Admins can update reports" on public.reports;
+create policy "Admins can update reports"
 on public.reports for update
 to authenticated
 using (
-  app_private.is_developer()
+  app_private.is_admin()
 )
 with check (
-  app_private.is_developer()
+  app_private.is_admin()
 );
 
-drop policy if exists "Developers can delete reports" on public.reports;
-create policy "Developers can delete reports"
+drop policy if exists "Admins can delete reports" on public.reports;
+create policy "Admins can delete reports"
 on public.reports for delete
 to authenticated
 using (
-  app_private.is_developer()
+  app_private.is_admin()
 );
 
-drop policy if exists "Developers can update profiles" on public.profiles;
-drop policy if exists "Developers can manage profiles" on public.profiles;
-create policy "Developers can manage profiles"
+drop policy if exists "Admins can update profiles" on public.profiles;
+drop policy if exists "Admins can manage profiles" on public.profiles;
+create policy "Admins can manage profiles"
 on public.profiles for all
 to authenticated
 using (
-  app_private.is_developer()
+  app_private.is_admin()
 )
 with check (
-  app_private.is_developer()
+  app_private.is_admin()
 );
 
-drop policy if exists "Developers can manage listings" on public.listings;
-create policy "Developers can manage listings"
+drop policy if exists "Admins can manage listings" on public.listings;
+create policy "Admins can manage listings"
 on public.listings for all
 to authenticated
 using (
-  app_private.is_developer()
+  app_private.is_admin()
 )
 with check (
-  app_private.is_developer()
+  app_private.is_admin()
 );
 
-drop policy if exists "Developers can manage jobs" on public.jobs;
-create policy "Developers can manage jobs"
+drop policy if exists "Admins can manage jobs" on public.jobs;
+create policy "Admins can manage jobs"
 on public.jobs for all
 to authenticated
 using (
-  app_private.is_developer()
+  app_private.is_admin()
 )
 with check (
-  app_private.is_developer()
+  app_private.is_admin()
 );
 
 do $$
 begin
   if to_regclass('public.admin_notifications') is not null then
     drop policy if exists "Admins can read notifications" on public.admin_notifications;
-    drop policy if exists "Developers can read admin notifications" on public.admin_notifications;
-    drop policy if exists "Developers can create admin notifications" on public.admin_notifications;
-    create policy "Developers can read admin notifications"
+    drop policy if exists "Admins can read admin notifications" on public.admin_notifications;
+    drop policy if exists "Admins can create admin notifications" on public.admin_notifications;
+    create policy "Admins can read admin notifications"
     on public.admin_notifications for select
     to authenticated
-    using (app_private.is_developer());
+    using (app_private.is_admin());
 
-    create policy "Developers can create admin notifications"
+    create policy "Admins can create admin notifications"
     on public.admin_notifications for insert
     to authenticated
     with check (
       actor_id = (select auth.uid())
-      and app_private.is_developer()
+      and app_private.is_admin()
     );
 
-    drop policy if exists "Developers can update admin notifications" on public.admin_notifications;
-    create policy "Developers can update admin notifications"
+    drop policy if exists "Admins can update admin notifications" on public.admin_notifications;
+    create policy "Admins can update admin notifications"
     on public.admin_notifications for update
     to authenticated
-    using (app_private.is_developer())
-    with check (app_private.is_developer());
+    using (app_private.is_admin())
+    with check (app_private.is_admin());
 
-    drop policy if exists "Developers can delete admin notifications" on public.admin_notifications;
-    create policy "Developers can delete admin notifications"
+    drop policy if exists "Admins can delete admin notifications" on public.admin_notifications;
+    create policy "Admins can delete admin notifications"
     on public.admin_notifications for delete
     to authenticated
-    using (app_private.is_developer());
+    using (app_private.is_admin());
   end if;
 end;
 $$;
@@ -190,11 +190,11 @@ do $$
 begin
   if to_regclass('public.email_outbox') is not null then
     drop policy if exists "Admins can read email tasks" on public.email_outbox;
-    drop policy if exists "Developers can read email outbox" on public.email_outbox;
-    create policy "Developers can read email outbox"
+    drop policy if exists "Admins can read email outbox" on public.email_outbox;
+    create policy "Admins can read email outbox"
     on public.email_outbox for select
     to authenticated
-    using (app_private.is_developer());
+    using (app_private.is_admin());
   end if;
 end;
 $$;

@@ -21,7 +21,7 @@ class RoleSelectionScreen extends ConsumerWidget {
     if (!context.mounted) return;
     if (role == UserRole.artisan) {
       context.go(RouteNames.artisanVerification);
-    } else if (role == UserRole.developer) {
+    } else if (role == UserRole.admin) {
       context.go(RouteNames.adminHome);
     } else {
       context.go(RouteNames.home);

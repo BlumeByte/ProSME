@@ -1,8 +1,8 @@
 {
   "scripts": {
-    "dev:web": "npm --prefix developer_web run dev",
-    "build:web": "npm --prefix developer_web run build",
-    "preview:web": "npm --prefix developer_web run preview"
+    "dev:web": "npm --prefix admin_web run dev",
+    "build:web": "npm --prefix admin_web run build",
+    "preview:web": "npm --prefix admin_web run preview"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
