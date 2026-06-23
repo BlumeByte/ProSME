@@ -121,7 +121,7 @@ class ChatSyncService {
         ? null
         : ChatMessage.fromJson(Map<String, dynamic>.from(rows.first as Map));
     await supabase.from('threads').update({
-      'last_message': lastMessage?.content ?? '',
+      'last_message': lastMessage?.threadPreview ?? '',
       'updated_at':
           (lastMessage?.createdAt ?? DateTime.now()).toIso8601String(),
     }).eq('id', threadId);

@@ -130,13 +130,13 @@ class MockChatService implements ChatService {
           id: message.threadId,
           userId: ownerId,
           artisanId: '',
-          lastMessage: message.content,
+          lastMessage: message.threadPreview,
           updatedAt: message.createdAt,
         );
         threads.insert(0, updatedThread);
       } else {
         final updatedThread = threads[index].copyWith(
-          lastMessage: message.content,
+          lastMessage: message.threadPreview,
           updatedAt: message.createdAt,
         );
         threads
@@ -213,7 +213,7 @@ class MockChatService implements ChatService {
       if (index == -1) continue;
       final current = threads[index];
       final updatedThread = current.copyWith(
-        lastMessage: lastMessage?.content ?? '',
+        lastMessage: lastMessage?.threadPreview ?? '',
         updatedAt: lastMessage?.createdAt ?? DateTime.now(),
       );
       threads
@@ -490,7 +490,7 @@ class SupabaseChatService implements ChatService {
       final payload = message.toJson()..remove('updated_at');
       await _supabase.from('messages').upsert(payload, onConflict: 'id');
       await _supabase.from('threads').update({
-        'last_message': message.content,
+        'last_message': message.threadPreview,
         'updated_at': message.createdAt.toIso8601String(),
       }).eq('id', message.threadId);
     } catch (_) {
@@ -661,7 +661,7 @@ class SupabaseChatService implements ChatService {
         ? null
         : ChatMessage.fromJson(Map<String, dynamic>.from(rows.first as Map));
     await _supabase.from('threads').update({
-      'last_message': lastMessage?.content ?? '',
+      'last_message': lastMessage?.threadPreview ?? '',
       'updated_at':
           (lastMessage?.createdAt ?? DateTime.now()).toIso8601String(),
     }).eq('id', threadId);

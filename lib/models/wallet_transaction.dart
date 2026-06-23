@@ -70,6 +70,30 @@ class WalletTransaction {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'job_id': jobId,
+      'bid_id': bidId,
+      'user_id': customerId,
+      'artisan_id': artisanId,
+      'amount': amount,
+      'currency': currency,
+      'event_type': eventType,
+      'invoice_number': invoiceNumber,
+      'job_title': jobTitle,
+      'job_location': jobLocation,
+      'customer_name': customerName,
+      'customer_email': customerEmail,
+      'artisan_name': artisanName,
+      'artisan_email': artisanEmail,
+      'payment_status': paymentStatus,
+      'work_status': workStatus,
+      'completed_at': completedAt?.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
+
   WalletTransaction copyWith({
     String? jobTitle,
     String? jobLocation,

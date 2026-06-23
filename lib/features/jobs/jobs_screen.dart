@@ -145,6 +145,10 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
         ? ref.watch(artisanBidsProvider(user.id)).valueOrNull ?? const []
         : const <JobBid>[];
     final bidJobIds = myBids.map((bid) => bid.jobId).toSet();
+    final acceptedJobIds = myBids
+        .where((bid) => bid.status == 'accepted')
+        .map((bid) => bid.jobId)
+        .toSet();
     return Scaffold(
       appBar: widget.showAppBar
           ? AppBar(
@@ -171,8 +175,13 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
           ),
         ),
         data: (jobs) {
+          final participantJobs = jobs.where((job) {
+            if (_hiddenJobIds.contains(job.id)) return false;
+            if (job.workStatus == 'open') return true;
+            return job.createdBy == user.id || acceptedJobIds.contains(job.id);
+          }).toList(growable: false);
           final visibleJobs = _filterJobs(
-            jobs.where((job) => !_hiddenJobIds.contains(job.id)).toList(),
+            participantJobs,
             bidJobIds: bidJobIds,
             isArtisan: isArtisan,
           );
@@ -217,22 +226,27 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                 }
                 final job = visibleJobs[index - (isArtisan ? 1 : 0)];
                 final hasBid = bidJobIds.contains(job.id);
+                final canTrack = job.workStatus != 'open' &&
+                    (job.createdBy == user.id ||
+                        acceptedJobIds.contains(job.id));
                 final card = Card(
                   child: ListTile(
                     title: Text(job.title),
                     subtitle: Text(
-                      '${job.location} - ${formatMoney(job.budget, currencyCode)}\n${_formatDateTime(job.createdAt)}',
+                      '${job.location} - ${formatMoney(job.budget, currencyCode)}\n${settings.t(_jobStatusText(job.workStatus))} - ${_formatDateTime(job.createdAt)}',
                     ),
                     isThreeLine: true,
                     trailing: FilledButton(
                       onPressed: () =>
                           context.push('${RouteNames.jobDetail}/${job.id}'),
                       child: Text(
-                        isArtisan
-                            ? settings.t(hasBid ? 'Edit bid' : 'Bid')
-                            : job.createdBy == user.id
-                                ? settings.t('View bids')
-                                : settings.t('View'),
+                        canTrack
+                            ? settings.t('Track')
+                            : isArtisan
+                                ? settings.t(hasBid ? 'Edit bid' : 'Bid')
+                                : job.createdBy == user.id
+                                    ? settings.t('View bids')
+                                    : settings.t('View'),
                       ),
                     ),
                     onTap: () =>
@@ -313,6 +327,21 @@ String _formatDateTime(DateTime value) {
   final minute = value.minute.toString().padLeft(2, '0');
   final suffix = value.hour >= 12 ? 'PM' : 'AM';
   return '${value.month}/${value.day}/${value.year} $hour:$minute $suffix';
+}
+
+String _jobStatusText(String status) {
+  switch (status) {
+    case 'accepted':
+      return 'Accepted';
+    case 'in_progress':
+      return 'In progress';
+    case 'completed':
+      return 'Completed';
+    case 'cancelled':
+      return 'Cancelled';
+    default:
+      return 'Open';
+  }
 }
 
 class _ArtisanJobFilters extends StatelessWidget {

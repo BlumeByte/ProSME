@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,10 +11,13 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/widgets/loading_state.dart';
 import '../../core/widgets/safe_back_button.dart';
+import '../../config/constants.dart';
 import '../../models/chat_models.dart';
+import '../../models/wallet_transaction.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
+import '../../services/wallet_service.dart';
 
 class ChatThreadScreen extends ConsumerStatefulWidget {
   const ChatThreadScreen({super.key, required this.threadId});
@@ -295,6 +300,131 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     return '';
   }
 
+  WalletTransaction? _invoiceFromMessage(ChatMessage message) {
+    if (message.type != MessageType.invoice) return null;
+    try {
+      final payload = jsonDecode(message.content);
+      if (payload is Map) {
+        return WalletTransaction.fromJson(
+          Map<String, dynamic>.from(payload),
+        );
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _openInvoiceCenter() async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null || _sending) return;
+    final settings = ref.read(appSettingsControllerProvider);
+    setState(() => _sending = true);
+    try {
+      List<WalletTransaction> invoices;
+      if (user.role == UserRole.artisan) {
+        final otherUserId = await _resolveOtherUserId();
+        final all = shouldUseSupabase()
+            ? await WalletService(ref.read(supabaseClientProvider))
+                .loadTransactions(userId: user.id, role: user.role)
+            : _latestMessages
+                .map(_invoiceFromMessage)
+                .whereType<WalletTransaction>()
+                .toList(growable: false);
+        invoices = all
+            .where(
+              (item) =>
+                  item.artisanId == user.id &&
+                  (otherUserId.isEmpty || item.customerId == otherUserId),
+            )
+            .toList(growable: false);
+      } else {
+        invoices = _latestMessages
+            .map(_invoiceFromMessage)
+            .whereType<WalletTransaction>()
+            .toList(growable: false);
+      }
+      if (!mounted) return;
+      if (invoices.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              settings.t(
+                user.role == UserRole.artisan
+                    ? 'No accepted-work invoice is available for this chat.'
+                    : 'No invoice has been sent in this chat yet.',
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+
+      final selected = await showModalBottomSheet<WalletTransaction>(
+        context: context,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+          child: ListView.separated(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+            itemCount: invoices.length,
+            separatorBuilder: (_, __) => const Divider(),
+            itemBuilder: (context, index) {
+              final invoice = invoices[index];
+              return ListTile(
+                leading: const Icon(Icons.receipt_long_outlined),
+                title: Text(invoice.jobTitle),
+                subtitle: Text(
+                  '${invoice.invoiceNumber}\n${invoice.currency} ${invoice.amount.toStringAsFixed(2)}',
+                ),
+                isThreeLine: true,
+                trailing: Icon(
+                  user.role == UserRole.artisan
+                      ? Icons.send_outlined
+                      : Icons.open_in_new,
+                ),
+                onTap: () => Navigator.pop(context, invoice),
+              );
+            },
+          ),
+        ),
+      );
+      if (selected == null || !mounted) return;
+      if (user.role == UserRole.artisan) {
+        await _sendInvoiceMessage(selected);
+      } else {
+        context.push(RouteNames.invoice, extra: selected);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${settings.t('Could not load invoice')}: $error'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _sendInvoiceMessage(WalletTransaction transaction) async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    await ref.read(chatServiceProvider).sendMessage(
+          ChatMessage(
+            id: _uuid.v4(),
+            threadId: widget.threadId,
+            senderId: user.id,
+            type: MessageType.invoice,
+            content: jsonEncode(transaction.toJson()),
+            createdAt: DateTime.now(),
+          ),
+        );
+    if (!mounted) return;
+    final settings = ref.read(appSettingsControllerProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(settings.t('Invoice sent to chat.'))),
+    );
+  }
+
   Future<String?> _promptReason({
     required String title,
     required String label,
@@ -394,7 +524,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     return messages
         .map(
           (message) =>
-              '${DateFormat('MMM d, h:mm a').format(message.createdAt)}: ${message.content}',
+              '${DateFormat('MMM d, h:mm a').format(message.createdAt)}: ${message.threadPreview}',
         )
         .join('\n');
   }
@@ -423,7 +553,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   Future<void> _copyMessage(ChatMessage message) async {
-    await Clipboard.setData(ClipboardData(text: message.content));
+    await Clipboard.setData(ClipboardData(text: message.threadPreview));
     if (!mounted) return;
     final settings = ref.read(appSettingsControllerProvider);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -829,6 +959,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final message = messages[index];
+                    final invoice = _invoiceFromMessage(message);
                     final previous = index == 0 ? null : messages[index - 1];
                     final showDateHeader = previous == null ||
                         !_isSameDay(previous.createdAt, message.createdAt);
@@ -864,10 +995,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                             onLongPress: () => _toggleMessageSelection(message),
                             onTap: _selectingMessages
                                 ? () => _toggleMessageSelection(message)
-                                : (!isMine
-                                    ? () => _viewProfile(message.senderId)
-                                    : () =>
-                                        _showMessageOptions(context, message)),
+                                : invoice != null
+                                    ? () => context.push(
+                                          RouteNames.invoice,
+                                          extra: invoice,
+                                        )
+                                    : (!isMine
+                                        ? () => _viewProfile(message.senderId)
+                                        : () => _showMessageOptions(
+                                            context, message)),
                             borderRadius: BorderRadius.circular(14),
                             child: Container(
                               constraints: BoxConstraints(
@@ -913,17 +1049,24 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                                     ),
                                     const SizedBox(height: 2),
                                   ],
-                                  Text(
-                                    message.content.replaceFirst(
-                                      '${settings.t('Forwarded from chat')}:\n',
-                                      '',
+                                  if (invoice != null)
+                                    _InvoiceChatBubble(
+                                      transaction: invoice,
+                                      isMine: isMine,
+                                      settings: settings,
+                                    )
+                                  else
+                                    Text(
+                                      message.content.replaceFirst(
+                                        '${settings.t('Forwarded from chat')}:\n',
+                                        '',
+                                      ),
+                                      style: TextStyle(
+                                        color: isMine
+                                            ? colorScheme.onPrimary
+                                            : colorScheme.onSurface,
+                                      ),
                                     ),
-                                    style: TextStyle(
-                                      color: isMine
-                                          ? colorScheme.onPrimary
-                                          : colorScheme.onSurface,
-                                    ),
-                                  ),
                                   const SizedBox(height: 4),
                                   Align(
                                     alignment: Alignment.centerRight,
@@ -1000,17 +1143,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     tooltip: settings.t('Share location'),
                   ),
                   IconButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            settings.t(
-                              'Open the listing and request invoice from there.',
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                    onPressed: _sending ? null : _openInvoiceCenter,
                     icon: const Icon(Icons.receipt_long),
                     tooltip: settings.t('Invoice'),
                   ),
@@ -1065,14 +1198,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: Text(settings.t('Edit message')),
-              onTap: () {
-                Navigator.pop(context);
-                _startEditMessage(message);
-              },
-            ),
+            if (message.type == MessageType.text)
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: Text(settings.t('Edit message')),
+                onTap: () {
+                  Navigator.pop(context);
+                  _startEditMessage(message);
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.ios_share),
               title: Text(settings.t('Share message')),
@@ -1136,5 +1270,61 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final edited =
         message.updatedAt.difference(message.createdAt).inSeconds > 2;
     return '${edited ? 'Edited ' : ''}${DateFormat('h:mm a').format(message.createdAt)}';
+  }
+}
+
+class _InvoiceChatBubble extends StatelessWidget {
+  const _InvoiceChatBubble({
+    required this.transaction,
+    required this.isMine,
+    required this.settings,
+  });
+
+  final WalletTransaction transaction;
+  final bool isMine;
+  final AppSettings settings;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final color = isMine ? colorScheme.onPrimary : colorScheme.onSurface;
+    return SizedBox(
+      width: 220,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.receipt_long_outlined, color: color, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  settings.t('Invoice'),
+                  style: TextStyle(color: color, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            transaction.jobTitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: color),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${transaction.currency} ${transaction.amount.toStringAsFixed(2)}',
+            style: TextStyle(color: color, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            settings.t('Tap to view, print, or share PDF'),
+            style:
+                TextStyle(color: color.withValues(alpha: 0.78), fontSize: 12),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -462,7 +462,7 @@ class LocalDbService {
       if (index == -1) continue;
       final current = entry.value[index];
       entry.value[index] = current.copyWith(
-        lastMessage: lastMessage?.content ?? '',
+        lastMessage: lastMessage?.threadPreview ?? '',
         updatedAt: lastMessage?.createdAt ?? DateTime.now(),
       );
       entry.value.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));

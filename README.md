@@ -8,9 +8,9 @@ ProSME is a lightweight Flutter marketplace for connecting customers with verifi
 - **Listing feed** with search and category chips
 - **Listing details** with image carousel, map preview, and quick actions
 - **Realtime chat** (mock + Supabase Realtime ready)
-- **Invoice workflow** with Paystack MoMo or cash option
-- **Job tracking** with timelines and ETA updates
-- **AI support** FAQ screen
+- **Invoice workflow** for accepted bids, with branded PDF print/share and artisan-to-customer chat delivery
+- **Job tracking** with participant updates, progress notes, durable timelines, ETA, and completion syncing to Wallet
+- **AI support** with categorized FAQ search, guided answers, support responses, and ticket escalation
 
 ## Tech Stack
 - Flutter (stable)

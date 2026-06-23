@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../core/widgets/safe_back_button.dart';
 import '../../services/admin_service.dart';
 import '../../services/app_settings_controller.dart';
@@ -13,58 +14,136 @@ class AiSupportScreen extends ConsumerStatefulWidget {
 }
 
 class _AiSupportScreenState extends ConsumerState<AiSupportScreen> {
-  final _controller = TextEditingController();
+  final _searchController = TextEditingController();
   final _ticketTitleController = TextEditingController();
   final _ticketMessageController = TextEditingController();
-  final List<_SupportMessage> _messages = const [
-    _SupportMessage(
-      question: 'How do I create a service request?',
-      answer:
-          'Open Upload, add the service title, description, location, and budget, then tap Upload.',
-    ),
-    _SupportMessage(
-      question: 'How do I find an artisan?',
-      answer:
-          'Use Home to search by service or location, open a listing, then start a chat or request an invoice.',
-    ),
-    _SupportMessage(
-      question: 'How do artisans create listings?',
-      answer:
-          'Create or sign in to an artisan account, open Listings, and tap Create.',
-    ),
-    _SupportMessage(
-      question: 'Why is Supabase not loading?',
-      answer:
-          'The app needs the correct Supabase URL, anon key, and migrated tables before live data can load.',
-    ),
-  ];
+  String _category = 'All';
+  String _query = '';
   String? _answer;
   bool _submittingTicket = false;
 
+  static const _faqs = <_FaqItem>[
+    _FaqItem(
+      category: 'Jobs and bids',
+      question: 'How do I create a service request?',
+      answer:
+          'Open Upload, enter the work title, description, budget, and location, then submit the request. Artisans can bid while the request is open.',
+      keywords: 'create job request upload budget location customer',
+    ),
+    _FaqItem(
+      category: 'Jobs and bids',
+      question: 'How does an artisan submit or edit a bid?',
+      answer:
+          'Open an available job, enter your amount and message, then send the bid. You can edit it until the customer accepts a bid.',
+      keywords: 'artisan bid offer edit amount price',
+    ),
+    _FaqItem(
+      category: 'Jobs and bids',
+      question: 'What happens after a bid is accepted?',
+      answer:
+          'Chat opens for both parties, the agreed amount appears in Wallet, and Job tracking becomes available for ETA, start, and completion updates.',
+      keywords: 'accepted won chat wallet tracking start completion',
+    ),
+    _FaqItem(
+      category: 'Tracking',
+      question: 'How do I update job progress or ETA?',
+      answer:
+          'Open the accepted job and use Job tracking. The customer or accepted artisan can set an ETA, start work, add progress notes, and mark the job completed.',
+      keywords: 'timeline eta progress started completed status schedule',
+    ),
+    _FaqItem(
+      category: 'Invoices and wallet',
+      question: 'Where is the invoice for accepted work?',
+      answer:
+          'Open Wallet and select the accepted job. The invoice contains the agreed bid amount, customer, artisan, work location, and invoice number.',
+      keywords: 'invoice receipt wallet accepted amount money',
+    ),
+    _FaqItem(
+      category: 'Invoices and wallet',
+      question: 'How does an artisan send an invoice?',
+      answer:
+          'Open the invoice from Wallet and tap Send invoice to chat, or tap the invoice icon inside the customer chat and choose accepted work.',
+      keywords: 'send share invoice artisan customer chat pdf',
+    ),
+    _FaqItem(
+      category: 'Invoices and wallet',
+      question: 'How do I print or share an invoice PDF?',
+      answer:
+          'Open an invoice from Wallet or chat, then use Print invoice or Share invoice. Share uses the phone sharing menu for email, messaging, storage, and other apps.',
+      keywords: 'print pdf download share outside email whatsapp',
+    ),
+    _FaqItem(
+      category: 'Chat',
+      question: 'Why can an artisan not chat before bid acceptance?',
+      answer:
+          'Job chats stay locked until the customer accepts that artisan’s bid. This keeps negotiations connected to a confirmed job and protects both parties.',
+      keywords: 'chat locked disabled before bid accepted',
+    ),
+    _FaqItem(
+      category: 'Account',
+      question: 'How do I reset a forgotten password?',
+      answer:
+          'On the sign-in screen tap Forgot password, enter your account email, and open the secure link sent to your inbox. Check spam if it is not visible.',
+      keywords: 'forgot password reset recovery email login',
+    ),
+    _FaqItem(
+      category: 'Account',
+      question: 'How do I change language or follow phone dark mode?',
+      answer:
+          'Open Profile, then App settings. Choose a language and select System under Theme to follow the phone’s light or dark appearance automatically.',
+      keywords: 'language translation dark mode theme system phone',
+    ),
+    _FaqItem(
+      category: 'Safety',
+      question: 'How do I report or block a chat?',
+      answer:
+          'Open the chat menu and choose Report or Block. Include a clear reason so the developer support team can review the conversation.',
+      keywords: 'report block abuse safety conversation',
+    ),
+    _FaqItem(
+      category: 'Safety',
+      question: 'What should I verify before paying or visiting a site?',
+      answer:
+          'Confirm the artisan verification badge, agreed bid, job location, and invoice details. Keep important agreements in chat and never share passwords or verification codes.',
+      keywords: 'verification payment safety site visit scam code',
+    ),
+  ];
+
   @override
   void dispose() {
-    _controller.dispose();
+    _searchController.dispose();
     _ticketTitleController.dispose();
     _ticketMessageController.dispose();
     super.dispose();
   }
 
+  List<_FaqItem> get _filteredFaqs {
+    final terms = _terms(_query);
+    return _faqs.where((faq) {
+      if (_category != 'All' && faq.category != _category) return false;
+      if (terms.isEmpty) return true;
+      final haystack = faq.searchText;
+      return terms.every(haystack.contains);
+    }).toList(growable: false);
+  }
+
   void _answerQuestion(String value) {
-    final query = value.trim().toLowerCase();
-    if (query.isEmpty) return;
-    _SupportMessage? match;
-    for (final message in _messages) {
-      final text = '${message.question} ${message.answer}'.toLowerCase();
-      if (query.split(RegExp(r'\s+')).any(text.contains)) {
-        match = message;
-        break;
+    final terms = _terms(value);
+    if (terms.isEmpty) return;
+    _FaqItem? best;
+    var bestScore = 0;
+    for (final faq in _faqs) {
+      final score = terms.where(faq.searchText.contains).length;
+      if (score > bestScore) {
+        best = faq;
+        bestScore = score;
       }
     }
     setState(() {
-      _answer = match?.answer ??
-          'I can help with sign in, artisan listings, service requests, bookings, chats, payments, profile settings, and Supabase setup.';
+      _answer = bestScore == 0
+          ? 'I could not find an exact answer. Search the FAQ categories or send a support ticket below.'
+          : best!.answer;
     });
-    _controller.clear();
   }
 
   Future<void> _submitSupportTicket() async {
@@ -89,6 +168,7 @@ class _AiSupportScreenState extends ConsumerState<AiSupportScreen> {
           ),
         ),
       );
+      setState(() {});
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -105,6 +185,11 @@ class _AiSupportScreenState extends ConsumerState<AiSupportScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(appSettingsControllerProvider);
+    final categories = <String>[
+      'All',
+      ..._faqs.map((faq) => faq.category).toSet()
+    ];
+    final filteredFaqs = _filteredFaqs;
     return Scaffold(
       appBar: AppBar(
         leading: const SafeBackButton(),
@@ -113,36 +198,92 @@ class _AiSupportScreenState extends ConsumerState<AiSupportScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          ..._messages.map(
-            (message) => ListTile(
-              leading: const Icon(Icons.support_agent_outlined),
-              title: Text(settings.t(message.question)),
-              subtitle: Text(settings.t(message.answer)),
-              onTap: () => setState(() => _answer = settings.t(message.answer)),
+          TextField(
+            controller: _searchController,
+            onChanged: (value) =>
+                setState(() => _query = value.trim().toLowerCase()),
+            onSubmitted: _answerQuestion,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search),
+              hintText: settings.t('Search help or ask a question'),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _query = '');
+                      },
+                      icon: const Icon(Icons.clear),
+                      tooltip: settings.t('Clear'),
+                    ),
             ),
           ),
-          const Divider(),
-          TextField(
-            controller: _controller,
-            decoration: InputDecoration(
-              hintText: settings.t('Ask about Pro SME'),
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.send),
-                onPressed: () => _answerQuestion(_controller.text),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: categories
+                  .map(
+                    (category) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(settings.t(category)),
+                        selected: _category == category,
+                        onSelected: (_) => setState(() => _category = category),
+                      ),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (filteredFaqs.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text(
+                settings.t(
+                    'No FAQ matched your search. Ask below or contact support.'),
+                textAlign: TextAlign.center,
+              ),
+            )
+          else
+            ...filteredFaqs.map(
+              (faq) => Card(
+                child: ExpansionTile(
+                  leading: Icon(_categoryIcon(faq.category)),
+                  title: Text(settings.t(faq.question)),
+                  subtitle: Text(settings.t(faq.category)),
+                  childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  expandedCrossAxisAlignment: CrossAxisAlignment.start,
+                  children: [Text(settings.t(faq.answer))],
+                ),
               ),
             ),
-            onSubmitted: _answerQuestion,
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: _query.isEmpty ? null : () => _answerQuestion(_query),
+            icon: const Icon(Icons.auto_awesome_outlined),
+            label: Text(settings.t('Answer my question')),
           ),
           if (_answer != null) ...[
-            const SizedBox(height: 16),
-            Card(
+            const SizedBox(height: 12),
+            Material(
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(8),
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text(settings.t(_answer!)),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.support_agent_outlined),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(settings.t(_answer!))),
+                  ],
+                ),
               ),
             ),
           ],
-          const SizedBox(height: 24),
+          const Divider(height: 36),
           Text(
             settings.t('Support responses'),
             style: Theme.of(context).textTheme.titleLarge,
@@ -210,12 +351,45 @@ class _AiSupportScreenState extends ConsumerState<AiSupportScreen> {
   }
 }
 
-class _SupportMessage {
-  const _SupportMessage({
+class _FaqItem {
+  const _FaqItem({
+    required this.category,
     required this.question,
     required this.answer,
+    required this.keywords,
   });
 
+  final String category;
   final String question;
   final String answer;
+  final String keywords;
+
+  String get searchText =>
+      '$category $question $answer $keywords'.toLowerCase();
+}
+
+List<String> _terms(String value) => value
+    .trim()
+    .toLowerCase()
+    .split(RegExp(r'\s+'))
+    .where((term) => term.length > 1)
+    .toList(growable: false);
+
+IconData _categoryIcon(String category) {
+  switch (category) {
+    case 'Jobs and bids':
+      return Icons.work_outline;
+    case 'Tracking':
+      return Icons.route_outlined;
+    case 'Invoices and wallet':
+      return Icons.receipt_long_outlined;
+    case 'Chat':
+      return Icons.chat_bubble_outline;
+    case 'Account':
+      return Icons.manage_accounts_outlined;
+    case 'Safety':
+      return Icons.shield_outlined;
+    default:
+      return Icons.help_outline;
+  }
 }

@@ -1,12 +1,18 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../core/widgets/safe_back_button.dart';
 import '../../config/constants.dart';
 import '../../models/listing.dart';
+import '../../models/chat_models.dart';
 import '../../models/wallet_transaction.dart';
+import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/invoice_pdf_service.dart';
 import '../../services/service_providers.dart';
@@ -84,6 +90,33 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
             content: Text(settings.t('Could not open Paystack checkout.'))),
       );
     }
+  }
+
+  Future<void> _sendInvoiceToChat(WalletTransaction transaction) async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null || user.id != transaction.artisanId) return;
+    final settings = ref.read(appSettingsControllerProvider);
+    await _export(() async {
+      final thread = await ref.read(chatServiceProvider).createOrOpenThread(
+            userId: transaction.customerId,
+            artisanId: transaction.artisanId,
+          );
+      await ref.read(chatServiceProvider).sendMessage(
+            ChatMessage(
+              id: const Uuid().v4(),
+              threadId: thread.id,
+              senderId: user.id,
+              type: MessageType.invoice,
+              content: jsonEncode(transaction.toJson()),
+              createdAt: DateTime.now(),
+            ),
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(settings.t('Invoice sent to chat.'))),
+      );
+      context.push('${RouteNames.chatThread}/${thread.id}');
+    });
   }
 
   @override
@@ -197,6 +230,8 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
     AppSettings settings,
     WalletTransaction transaction,
   ) {
+    final currentUser = ref.watch(authStateProvider).valueOrNull;
+    final canSendToChat = currentUser?.id == transaction.artisanId;
     return Scaffold(
       appBar: AppBar(
         leading: const SafeBackButton(),
@@ -323,6 +358,15 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
             icon: const Icon(Icons.share_outlined),
             label: Text(settings.t('Share invoice')),
           ),
+          if (canSendToChat) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed:
+                  _exporting ? null : () => _sendInvoiceToChat(transaction),
+              icon: const Icon(Icons.chat_bubble_outline),
+              label: Text(settings.t('Send invoice to chat')),
+            ),
+          ],
         ],
       ),
     );

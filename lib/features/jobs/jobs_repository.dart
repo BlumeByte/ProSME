@@ -20,6 +20,10 @@ class JobFeedItem {
     this.locationLat,
     this.locationLng,
     this.locationSource = 'typed',
+    this.workStatus = 'open',
+    this.etaAt,
+    this.startedAt,
+    this.completedAt,
   });
 
   final String id;
@@ -34,6 +38,30 @@ class JobFeedItem {
   final double? locationLat;
   final double? locationLng;
   final String locationSource;
+  final String workStatus;
+  final DateTime? etaAt;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+}
+
+class JobProgressEvent {
+  const JobProgressEvent({
+    required this.id,
+    required this.jobId,
+    required this.actorId,
+    required this.status,
+    required this.note,
+    required this.etaAt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String jobId;
+  final String actorId;
+  final String status;
+  final String note;
+  final DateTime? etaAt;
+  final DateTime createdAt;
 }
 
 class JobBid {
@@ -95,6 +123,8 @@ abstract class JobsRepository {
 
   Stream<List<JobRating>> watchRatingsByArtisan(String artisanId);
 
+  Stream<List<JobProgressEvent>> watchProgress(String jobId);
+
   Future<JobFeedItem> createJob({
     required String title,
     required String description,
@@ -130,6 +160,13 @@ abstract class JobsRepository {
 
   Future<void> acceptBid(String bidId);
 
+  Future<void> updateProgress({
+    required String jobId,
+    required String status,
+    DateTime? etaAt,
+    String note = '',
+  });
+
   Future<JobRating> rateJob({
     required String jobId,
     required String artisanId,
@@ -152,7 +189,7 @@ class SupabaseJobsRepository implements JobsRepository {
         final rows = await _client
             .from('jobs')
             .select()
-            .eq('status', 'active')
+            .neq('status', 'cancelled')
             .order('created_at', ascending: false);
         lastGood = rows
             .map((row) => _mapJob(Map<String, dynamic>.from(row as Map)))
@@ -164,6 +201,29 @@ class SupabaseJobsRepository implements JobsRepository {
         yield lastGood;
       }
       await Future<void>.delayed(const Duration(seconds: 12));
+    }
+  }
+
+  @override
+  Stream<List<JobProgressEvent>> watchProgress(String jobId) async* {
+    var lastGood = const <JobProgressEvent>[];
+    while (true) {
+      try {
+        final rows = await _client
+            .from('job_status_events')
+            .select()
+            .eq('job_id', jobId)
+            .order('created_at');
+        lastGood = rows
+            .map((row) => _mapProgress(Map<String, dynamic>.from(row as Map)))
+            .toList(growable: false);
+        yield lastGood;
+      } catch (error, stackTrace) {
+        debugPrint('Failed to refresh job progress: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        yield lastGood;
+      }
+      await Future<void>.delayed(const Duration(seconds: 10));
     }
   }
 
@@ -416,6 +476,21 @@ class SupabaseJobsRepository implements JobsRepository {
   }
 
   @override
+  Future<void> updateProgress({
+    required String jobId,
+    required String status,
+    DateTime? etaAt,
+    String note = '',
+  }) async {
+    await _client.rpc('update_job_progress', params: {
+      'p_job_id': jobId,
+      'p_status': status,
+      'p_eta_at': etaAt?.toUtc().toIso8601String(),
+      'p_note': note,
+    });
+  }
+
+  @override
   Future<JobRating> rateJob({
     required String jobId,
     required String artisanId,
@@ -437,12 +512,6 @@ class SupabaseJobsRepository implements JobsRepository {
         )
         .select()
         .single();
-    await _client
-        .from('jobs')
-        .update({'status': 'completed'})
-        .eq('id', jobId)
-        .select('id')
-        .single();
     return _mapRating(row);
   }
 
@@ -460,9 +529,29 @@ class SupabaseJobsRepository implements JobsRepository {
       locationLat: (row['location_lat'] as num?)?.toDouble(),
       locationLng: (row['location_lng'] as num?)?.toDouble(),
       locationSource: (row['location_source'] as String?) ?? 'typed',
+      workStatus: (row['work_status'] as String?) ??
+          ((row['accepted_bid_id'] ?? '').toString().isEmpty
+              ? 'open'
+              : (row['status'] == 'completed' ? 'completed' : 'accepted')),
+      etaAt: DateTime.tryParse((row['eta_at'] ?? '').toString()),
+      startedAt: DateTime.tryParse((row['started_at'] ?? '').toString()),
+      completedAt: DateTime.tryParse((row['completed_at'] ?? '').toString()),
       images: List<String>.from(
         (row['images'] ?? const <dynamic>[]) as List<dynamic>,
       ),
+    );
+  }
+
+  JobProgressEvent _mapProgress(Map<String, dynamic> row) {
+    return JobProgressEvent(
+      id: (row['id'] ?? '').toString(),
+      jobId: (row['job_id'] ?? '').toString(),
+      actorId: (row['actor_id'] ?? '').toString(),
+      status: (row['status'] ?? 'accepted').toString(),
+      note: (row['note'] ?? '').toString(),
+      etaAt: DateTime.tryParse((row['eta_at'] ?? '').toString()),
+      createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()) ??
+          DateTime.now(),
     );
   }
 
@@ -500,6 +589,9 @@ class MockJobsRepository implements JobsRepository {
   final List<JobFeedItem> _jobs = [];
   final Map<String, List<JobBid>> _bidsByJobId = {};
   final Map<String, List<JobRating>> _ratingsByJobId = {};
+  final Map<String, List<JobProgressEvent>> _progressByJobId = {};
+  final Map<String, StreamController<List<JobProgressEvent>>>
+      _progressControllers = {};
 
   @override
   Stream<List<JobFeedItem>> watchJobs() async* {
@@ -524,6 +616,18 @@ class MockJobsRepository implements JobsRepository {
         .where((rating) => rating.artisanId == artisanId)
         .toList(growable: false);
     yield List<JobRating>.unmodifiable(ratings);
+  }
+
+  @override
+  Stream<List<JobProgressEvent>> watchProgress(String jobId) async* {
+    final controller = _progressControllers.putIfAbsent(
+      jobId,
+      () => StreamController<List<JobProgressEvent>>.broadcast(),
+    );
+    yield List<JobProgressEvent>.unmodifiable(
+      _progressByJobId[jobId] ?? const [],
+    );
+    yield* controller.stream;
   }
 
   @override
@@ -570,6 +674,7 @@ class MockJobsRepository implements JobsRepository {
       locationLat: locationLat,
       locationLng: locationLng,
       locationSource: locationSource,
+      workStatus: 'open',
     );
     _jobs.insert(0, job);
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
@@ -616,6 +721,10 @@ class MockJobsRepository implements JobsRepository {
       locationLat: locationLat,
       locationLng: locationLng,
       locationSource: locationSource,
+      workStatus: current.workStatus,
+      etaAt: current.etaAt,
+      startedAt: current.startedAt,
+      completedAt: current.completedAt,
     );
     _jobs[index] = updated;
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
@@ -681,7 +790,23 @@ class MockJobsRepository implements JobsRepository {
         acceptedBidCount: bid.acceptedBidCount + 1,
       );
       _bidControllers[entry.key]?.add(List<JobBid>.unmodifiable(entry.value));
-      _jobs.removeWhere((job) => job.id == bid.jobId);
+      final jobIndex = _jobs.indexWhere((job) => job.id == bid.jobId);
+      if (jobIndex != -1) {
+        final job = _jobs[jobIndex];
+        _jobs[jobIndex] = _copyJobWithProgress(job, status: 'accepted');
+      }
+      final event = JobProgressEvent(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        jobId: bid.jobId,
+        actorId: '',
+        status: 'accepted',
+        note: 'Bid accepted',
+        etaAt: null,
+        createdAt: DateTime.now(),
+      );
+      _progressByJobId.putIfAbsent(bid.jobId, () => []).add(event);
+      _progressControllers[bid.jobId]
+          ?.add(List.unmodifiable(_progressByJobId[bid.jobId]!));
       _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
       return;
     }
@@ -719,6 +844,63 @@ class MockJobsRepository implements JobsRepository {
     _ratingControllers[jobId]?.add(List<JobRating>.unmodifiable(ratings));
     return rating;
   }
+
+  @override
+  Future<void> updateProgress({
+    required String jobId,
+    required String status,
+    DateTime? etaAt,
+    String note = '',
+  }) async {
+    final index = _jobs.indexWhere((job) => job.id == jobId);
+    if (index != -1) {
+      _jobs[index] = _copyJobWithProgress(
+        _jobs[index],
+        status: status,
+        etaAt: etaAt,
+      );
+      _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
+    }
+    final event = JobProgressEvent(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      jobId: jobId,
+      actorId: '',
+      status: status,
+      note: note,
+      etaAt: etaAt,
+      createdAt: DateTime.now(),
+    );
+    _progressByJobId.putIfAbsent(jobId, () => []).add(event);
+    _progressControllers[jobId]
+        ?.add(List.unmodifiable(_progressByJobId[jobId]!));
+  }
+}
+
+JobFeedItem _copyJobWithProgress(
+  JobFeedItem job, {
+  required String status,
+  DateTime? etaAt,
+}) {
+  final now = DateTime.now();
+  return JobFeedItem(
+    id: job.id,
+    title: job.title,
+    description: job.description,
+    location: job.location,
+    budget: job.budget,
+    createdBy: job.createdBy,
+    createdAt: job.createdAt,
+    images: job.images,
+    status: status == 'completed' ? 'completed' : job.status,
+    locationLat: job.locationLat,
+    locationLng: job.locationLng,
+    locationSource: job.locationSource,
+    workStatus: status,
+    etaAt: etaAt ?? job.etaAt,
+    startedAt: status == 'in_progress' ? job.startedAt ?? now : job.startedAt,
+    completedAt:
+        status == 'completed' ? job.completedAt ?? now : job.completedAt,
+  );
 }
 
 final jobsRepositoryProvider = Provider<JobsRepository>((ref) {
@@ -750,4 +932,9 @@ final jobRatingsProvider =
 final artisanRatingsProvider =
     StreamProvider.family<List<JobRating>, String>((ref, artisanId) {
   return ref.watch(jobsRepositoryProvider).watchRatingsByArtisan(artisanId);
+});
+
+final jobProgressProvider =
+    StreamProvider.family<List<JobProgressEvent>, String>((ref, jobId) {
+  return ref.watch(jobsRepositoryProvider).watchProgress(jobId);
 });

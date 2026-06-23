@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 enum MessageType { text, location, invoice, offer }
 
 class ChatThread {
@@ -109,6 +111,18 @@ class ChatMessage {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? readAt;
+
+  String get threadPreview {
+    if (type != MessageType.invoice) return content;
+    try {
+      final payload = jsonDecode(content);
+      if (payload is Map) {
+        final number = (payload['invoice_number'] ?? '').toString();
+        return number.isEmpty ? 'Invoice' : 'Invoice $number';
+      }
+    } catch (_) {}
+    return 'Invoice';
+  }
 
   ChatMessage copyWith({
     String? id,

@@ -60,12 +60,12 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
 
           final isOwner = user?.id == job.createdBy;
           final isArtisan = user?.role == UserRole.artisan;
+          final bids = ref.watch(jobBidsProvider(job.id)).valueOrNull ??
+              const <JobBid>[];
+          final acceptedBid =
+              bids.where((bid) => bid.status == 'accepted').firstOrNull;
           final existingBid = isArtisan && user != null
-              ? ref
-                  .watch(jobBidsProvider(job.id))
-                  .valueOrNull
-                  ?.where((bid) => bid.artisanId == user.id)
-                  .firstOrNull
+              ? bids.where((bid) => bid.artisanId == user.id).firstOrNull
               : null;
           if (existingBid != null &&
               _amountController.text.isEmpty &&
@@ -96,6 +96,12 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              if (acceptedBid != null &&
+                  user != null &&
+                  (isOwner || acceptedBid.artisanId == user.id)) ...[
+                _JobTrackingPanel(job: job),
+                const SizedBox(height: 16),
+              ],
               if (user == null)
                 FilledButton(
                   onPressed: () => context.go(RouteNames.auth),
@@ -105,7 +111,8 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                 _EditJobCard(job: job, currencyCode: currencyCode),
                 const SizedBox(height: 12),
                 _BidsForOwner(job: job, currencyCode: currencyCode),
-              ] else if (isArtisan)
+              ] else if (isArtisan &&
+                  (acceptedBid == null || acceptedBid.artisanId == user.id))
                 _BidForm(
                   formKey: _formKey,
                   amountController: _amountController,
@@ -115,6 +122,12 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                   currencyCode: currencyCode,
                   settings: settings,
                   onSubmit: () => _submitBid(job),
+                )
+              else if (isArtisan && acceptedBid != null)
+                _MessageState(
+                  message: settings.t(
+                    'This job has already been assigned to another artisan.',
+                  ),
                 )
               else
                 _MessageState(
@@ -240,6 +253,268 @@ class _JobSummary extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _JobTrackingPanel extends ConsumerWidget {
+  const _JobTrackingPanel({required this.job});
+
+  final JobFeedItem job;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
+    final eventsAsync = ref.watch(jobProgressProvider(job.id));
+    final status = job.workStatus;
+    final canStart = status == 'accepted';
+    final canComplete = status == 'accepted' || status == 'in_progress';
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.route_outlined),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    settings.t('Job tracking'),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                Chip(label: Text(settings.t(_statusLabel(status)))),
+              ],
+            ),
+            if (job.etaAt != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                '${settings.t('Estimated completion')}: ${_dateTimeLabel(context, job.etaAt!)}',
+              ),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (canStart)
+                  FilledButton.icon(
+                    onPressed: () => _updateProgress(
+                      context,
+                      ref,
+                      status: 'in_progress',
+                    ),
+                    icon: const Icon(Icons.play_arrow),
+                    label: Text(settings.t('Start work')),
+                  ),
+                if (canComplete)
+                  OutlinedButton.icon(
+                    onPressed: () => _updateProgress(
+                      context,
+                      ref,
+                      status: status,
+                      etaOnly: true,
+                    ),
+                    icon: const Icon(Icons.schedule),
+                    label: Text(settings.t('Update ETA')),
+                  ),
+                if (canComplete)
+                  FilledButton.tonalIcon(
+                    onPressed: () => _updateProgress(
+                      context,
+                      ref,
+                      status: 'completed',
+                    ),
+                    icon: const Icon(Icons.task_alt),
+                    label: Text(settings.t('Mark completed')),
+                  ),
+              ],
+            ),
+            const Divider(height: 28),
+            Text(
+              settings.t('Timeline'),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 6),
+            eventsAsync.when(
+              loading: () => const LinearProgressIndicator(),
+              error: (error, _) => Text(
+                '${settings.t('Could not load timeline')}: $error',
+              ),
+              data: (events) {
+                if (events.isEmpty) {
+                  return Text(settings.t('No progress updates yet.'));
+                }
+                return Column(
+                  children: events.reversed
+                      .map(
+                        (event) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(_statusIcon(event.status)),
+                          title: Text(settings.t(_statusLabel(event.status))),
+                          subtitle: Text(
+                            [
+                              _dateTimeLabel(context, event.createdAt),
+                              if (event.note.isNotEmpty) event.note,
+                              if (event.etaAt != null)
+                                '${settings.t('ETA')}: ${_dateTimeLabel(context, event.etaAt!)}',
+                            ].join('\n'),
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _updateProgress(
+    BuildContext context,
+    WidgetRef ref, {
+    required String status,
+    bool etaOnly = false,
+  }) async {
+    final settings = ref.read(appSettingsControllerProvider);
+    DateTime? eta = job.etaAt;
+    final noteController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(
+            settings.t(etaOnly ? 'Update ETA' : _statusLabel(status)),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (status != 'completed')
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.event_outlined),
+                  title: Text(
+                    eta == null
+                        ? settings.t('Choose estimated completion')
+                        : _dateTimeLabel(context, eta!),
+                  ),
+                  onTap: () async {
+                    final selected = await _pickEta(context, eta);
+                    if (selected != null) {
+                      setDialogState(() => eta = selected);
+                    }
+                  },
+                ),
+              TextField(
+                controller: noteController,
+                minLines: 2,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: settings.t('Progress note (optional)'),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(settings.t('Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(settings.t('Save')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) {
+      noteController.dispose();
+      return;
+    }
+    final note = noteController.text.trim();
+    noteController.dispose();
+    try {
+      await ref.read(jobsRepositoryProvider).updateProgress(
+            jobId: job.id,
+            status: status,
+            etaAt: eta,
+            note: note,
+          );
+      ref.invalidate(jobProgressProvider(job.id));
+      ref.invalidate(jobsStreamProvider);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(settings.t('Job progress updated.'))),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${settings.t('Could not update status')}: $error'),
+        ),
+      );
+    }
+  }
+}
+
+Future<DateTime?> _pickEta(BuildContext context, DateTime? initial) async {
+  final now = DateTime.now();
+  final date = await showDatePicker(
+    context: context,
+    initialDate: initial?.isAfter(now) == true ? initial! : now,
+    firstDate: now,
+    lastDate: now.add(const Duration(days: 365)),
+  );
+  if (date == null || !context.mounted) return null;
+  final time = await showTimePicker(
+    context: context,
+    initialTime:
+        initial == null ? TimeOfDay.now() : TimeOfDay.fromDateTime(initial),
+  );
+  if (time == null) return null;
+  return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+}
+
+String _dateTimeLabel(BuildContext context, DateTime value) {
+  final local = value.toLocal();
+  final date = MaterialLocalizations.of(context).formatMediumDate(local);
+  final time = MaterialLocalizations.of(context).formatTimeOfDay(
+    TimeOfDay.fromDateTime(local),
+  );
+  return '$date, $time';
+}
+
+String _statusLabel(String status) {
+  switch (status) {
+    case 'in_progress':
+      return 'In progress';
+    case 'completed':
+      return 'Completed';
+    case 'cancelled':
+      return 'Cancelled';
+    case 'accepted':
+      return 'Accepted';
+    default:
+      return 'Open';
+  }
+}
+
+IconData _statusIcon(String status) {
+  switch (status) {
+    case 'in_progress':
+      return Icons.handyman_outlined;
+    case 'completed':
+      return Icons.task_alt;
+    case 'cancelled':
+      return Icons.cancel_outlined;
+    case 'accepted':
+      return Icons.handshake_outlined;
+    default:
+      return Icons.radio_button_checked;
   }
 }
 
@@ -704,7 +979,9 @@ class _BidTile extends ConsumerWidget {
                 ),
               ],
             ),
-            if (bid.status == 'accepted' && user != null) ...[
+            if (bid.status == 'accepted' &&
+                user != null &&
+                job.workStatus == 'completed') ...[
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
