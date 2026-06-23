@@ -1,9 +1,58 @@
 -- Make wallet tracking idempotent, backfill historical wins, and keep bid
 -- outcomes queryable for customer, artisan, and developer history screens.
 
+alter table public.jobs
+add column if not exists accepted_bid_id uuid
+  references public.job_bids(id) on delete set null,
+add column if not exists accepted_amount numeric(12, 2);
+
+create table if not exists public.wallet_transactions (
+  id uuid primary key default gen_random_uuid(),
+  job_id uuid references public.jobs(id) on delete set null,
+  bid_id uuid references public.job_bids(id) on delete set null,
+  user_id uuid references public.profiles(id) on delete set null,
+  artisan_id uuid references public.profiles(id) on delete set null,
+  amount numeric(12, 2) not null check (amount > 0),
+  currency text not null default 'GHS',
+  event_type text not null default 'bid_accepted',
+  invoice_number text,
+  job_title text not null default '',
+  job_location text not null default '',
+  customer_name text not null default '',
+  customer_email text not null default '',
+  artisan_name text not null default '',
+  artisan_email text not null default '',
+  payment_status text not null default 'agreed',
+  created_at timestamptz not null default timezone('utc', now())
+);
+
 alter table public.wallet_transactions
+add column if not exists job_id uuid references public.jobs(id) on delete set null,
+add column if not exists bid_id uuid references public.job_bids(id) on delete set null,
+add column if not exists user_id uuid references public.profiles(id) on delete set null,
+add column if not exists artisan_id uuid references public.profiles(id) on delete set null,
+add column if not exists amount numeric(12, 2),
+add column if not exists currency text not null default 'GHS',
+add column if not exists event_type text not null default 'bid_accepted',
+add column if not exists invoice_number text,
+add column if not exists job_title text not null default '',
+add column if not exists job_location text not null default '',
+add column if not exists customer_name text not null default '',
+add column if not exists customer_email text not null default '',
+add column if not exists artisan_name text not null default '',
+add column if not exists artisan_email text not null default '',
+add column if not exists payment_status text not null default 'agreed',
+add column if not exists created_at timestamptz not null default timezone('utc', now()),
 add column if not exists work_status text not null default 'accepted',
 add column if not exists completed_at timestamptz;
+
+create unique index if not exists wallet_transactions_bid_event_uidx
+on public.wallet_transactions (bid_id, event_type)
+where bid_id is not null;
+
+create unique index if not exists wallet_transactions_invoice_number_uidx
+on public.wallet_transactions (invoice_number)
+where invoice_number is not null;
 
 alter table public.wallet_transactions
 drop constraint if exists wallet_transactions_work_status_check;
@@ -182,7 +231,7 @@ begin
     update public.jobs
     set accepted_bid_id = new.id,
         accepted_amount = new.amount,
-        status = case when status = 'completed' then status else 'accepted' end
+        status = 'completed'
     where id = new.job_id;
 
     perform public.sync_wallet_transaction_for_bid(
@@ -311,10 +360,7 @@ with accepted as (
 update public.jobs j
 set accepted_bid_id = accepted.id,
     accepted_amount = accepted.amount,
-    status = case
-      when j.status = 'completed' then 'completed'
-      else 'accepted'
-    end
+    status = 'completed'
 from accepted
 where accepted.job_id = j.id;
 

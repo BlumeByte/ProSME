@@ -42,6 +42,98 @@ const numberOrZero = (value: unknown) => {
 
 const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
 
+const passwordResetRedirectUrl = (requestedValue: string) => {
+  const value = clean(Deno.env.get('PASSWORD_RESET_REDIRECT_URL')) || clean(requestedValue);
+  if (!value) {
+    throw new Error('PASSWORD_RESET_REDIRECT_URL is not configured and no recovery URL was supplied.');
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('PASSWORD_RESET_REDIRECT_URL must be a valid URL.');
+  }
+  if (url.protocol !== 'https:' && url.hostname !== 'localhost') {
+    throw new Error('PASSWORD_RESET_REDIRECT_URL must use HTTPS.');
+  }
+  return value;
+};
+
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+const sendRecoveryWithResend = async (email: string, actionLink: string) => {
+  const apiKey = clean(Deno.env.get('RESEND_API_KEY'));
+  if (!apiKey) throw new Error('RESEND_API_KEY is not configured');
+  const from =
+    clean(Deno.env.get('RESEND_FROM_EMAIL')) ||
+    clean(Deno.env.get('PROSME_FROM_EMAIL')) ||
+    'ProSME <noreply@blumebyte.com>';
+  const safeLink = escapeHtml(actionLink);
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to: [email],
+      subject: 'Reset your ProSME password',
+      text: `Use this secure link to choose a new ProSME password: ${actionLink}`,
+      html: `<p>Use the button below to choose a new ProSME password.</p><p><a href="${safeLink}" style="display:inline-block;padding:12px 18px;background:#0f1b3d;color:#fff;text-decoration:none;border-radius:6px">Reset password</a></p><p>If you did not request this, you can ignore this email.</p>`,
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      clean(payload?.message) || clean(payload?.error) || `Resend returned HTTP ${response.status}`,
+    );
+  }
+};
+
+const sendPasswordRecovery = async ({
+  email,
+  adminClient,
+  publicClient,
+  redirectTo: requestedRedirectTo,
+}: {
+  email: string;
+  adminClient: ReturnType<typeof createClient>;
+  publicClient: ReturnType<typeof createClient>;
+  redirectTo: string;
+}) => {
+  const redirectTo = passwordResetRedirectUrl(requestedRedirectTo);
+  const { error: mailerError } = await publicClient.auth.resetPasswordForEmail(email, {
+    redirectTo,
+  });
+  if (!mailerError) return { provider: 'supabase' };
+
+  try {
+    const { data, error: linkError } = await adminClient.auth.admin.generateLink({
+      type: 'recovery',
+      email,
+      options: { redirectTo },
+    });
+    if (linkError) throw linkError;
+    const actionLink = clean(data?.properties?.action_link);
+    if (!actionLink) throw new Error('Supabase did not return a recovery link');
+    await sendRecoveryWithResend(email, actionLink);
+    return { provider: 'resend', mailerWarning: mailerError.message };
+  } catch (fallbackError) {
+    const fallbackMessage =
+      fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+    throw new Error(
+      `Recovery email failed. Supabase: ${mailerError.message}. Resend fallback: ${fallbackMessage}. Verify Auth email settings, PASSWORD_RESET_REDIRECT_URL, and Resend secrets.`,
+    );
+  }
+};
+
 const randomPassword = () => {
   const bytes = new Uint8Array(12);
   crypto.getRandomValues(bytes);
@@ -86,6 +178,9 @@ Deno.serve(async (req) => {
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    const publicClient = createClient(supabaseUrl, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
 
     const body = await req.json().catch(() => ({}));
     const action = clean(body.action);
@@ -126,13 +221,24 @@ Deno.serve(async (req) => {
       });
 
       if (profileError) return fail(profileError.message);
-      const redirectTo = Deno.env.get('PASSWORD_RESET_REDIRECT_URL') || undefined;
-      const { error: resetError } = await adminClient.auth.resetPasswordForEmail(email, { redirectTo });
+      let resetResult: Record<string, unknown> = {};
+      let resetWarning = '';
+      try {
+        resetResult = await sendPasswordRecovery({
+          email,
+          adminClient,
+          publicClient,
+          redirectTo: clean(body.redirectTo),
+        });
+      } catch (error) {
+        resetWarning = error instanceof Error ? error.message : String(error);
+      }
       return ok({
         userId: createdUser.id,
         temporaryPassword: password,
-        passwordResetSent: !resetError,
-        warning: resetError?.message,
+        passwordResetSent: !resetWarning,
+        warning: resetWarning || undefined,
+        ...resetResult,
       });
     }
 
@@ -187,14 +293,25 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const redirectTo = Deno.env.get('PASSWORD_RESET_REDIRECT_URL') || undefined;
-        const { error: resetError } = await adminClient.auth.resetPasswordForEmail(email, { redirectTo });
+        let resetResult: Record<string, unknown> = {};
+        let resetWarning = '';
+        try {
+          resetResult = await sendPasswordRecovery({
+            email,
+            adminClient,
+            publicClient,
+            redirectTo: clean(body.redirectTo),
+          });
+        } catch (resetError) {
+          resetWarning = resetError instanceof Error ? resetError.message : String(resetError);
+        }
         created.push({
           email,
           userId: data.user.id,
           temporaryPassword: password,
-          passwordResetSent: !resetError,
-          warning: resetError?.message,
+          passwordResetSent: !resetWarning,
+          warning: resetWarning || undefined,
+          ...resetResult,
         });
       }
 
@@ -312,10 +429,13 @@ Deno.serve(async (req) => {
       const email = clean(body.email).toLowerCase();
       if (!validEmail(email)) return fail('Valid email is required.');
 
-      const redirectTo = Deno.env.get('PASSWORD_RESET_REDIRECT_URL') || undefined;
-      const { error } = await adminClient.auth.resetPasswordForEmail(email, { redirectTo });
-      if (error) return fail(error.message);
-      return ok();
+      const result = await sendPasswordRecovery({
+        email,
+        adminClient,
+        publicClient,
+        redirectTo: clean(body.redirectTo),
+      });
+      return ok(result);
     }
 
     if (action === 'setPassword') {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../config/constants.dart';
 import '../../core/utils/currency.dart';
@@ -186,9 +187,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                         leading: const Icon(Icons.error_outline),
                         title: Text(settings.t('Could not load wallet.')),
                         subtitle: Text(
-                          settings.t(
-                            'Make sure the wallet migration has been deployed, then refresh.',
-                          ),
+                          _walletErrorText(settings, _error!),
                         ),
                         trailing: IconButton(
                           onPressed: () => _load(user),
@@ -236,6 +235,18 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
             ),
     );
   }
+}
+
+String _walletErrorText(AppSettings settings, Object error) {
+  final guidance = settings.t(
+    'Make sure the wallet migration has been deployed, then refresh.',
+  );
+  if (error is PostgrestException) {
+    final code = error.code?.trim();
+    final suffix = code == null || code.isEmpty ? '' : ' ($code)';
+    return '$guidance\n${error.message}$suffix';
+  }
+  return '$guidance\n$error';
 }
 
 class _WalletSummary extends StatelessWidget {

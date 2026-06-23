@@ -15,16 +15,116 @@ class WalletService {
   }) async {
     if (!shouldUseSupabase()) return const [];
 
-    dynamic query = _client.from('wallet_transactions').select();
-    if (role != UserRole.admin && role != UserRole.developer) {
-      query = query.or('user_id.eq.$userId,artisan_id.eq.$userId');
+    try {
+      dynamic query = _client.from('wallet_transactions').select();
+      if (role != UserRole.admin && role != UserRole.developer) {
+        query = query.or('user_id.eq.$userId,artisan_id.eq.$userId');
+      }
+      final rows = await query.order('created_at', ascending: false);
+      final items = rows
+          .map((row) => WalletTransaction.fromJson(
+                Map<String, dynamic>.from(row as Map),
+              ))
+          .toList(growable: false);
+      return _hydrateLegacyRows(items);
+    } on PostgrestException catch (error) {
+      if (!_canUseBidFallback(error)) rethrow;
+      return _loadAcceptedBidFallback(userId: userId, role: role);
     }
-    final rows = await query.order('created_at', ascending: false);
-    final items = rows
-        .map((row) => WalletTransaction.fromJson(
-              Map<String, dynamic>.from(row as Map),
-            ))
-        .toList(growable: false);
+  }
+
+  bool _canUseBidFallback(PostgrestException error) {
+    const recoverableCodes = {
+      '42P01',
+      '42703',
+      '42501',
+      'PGRST204',
+      'PGRST205',
+    };
+    if (recoverableCodes.contains(error.code)) return true;
+    final message = '${error.message} ${error.details}'.toLowerCase();
+    return message.contains('wallet_transactions') ||
+        message.contains('wallet transaction');
+  }
+
+  Future<List<WalletTransaction>> _loadAcceptedBidFallback({
+    required String userId,
+    required UserRole role,
+  }) async {
+    final platformRole = role == UserRole.admin || role == UserRole.developer;
+    final jobs = <String, Map<String, dynamic>>{};
+
+    if (role == UserRole.customer || platformRole) {
+      dynamic jobsQuery =
+          _client.from('jobs').select('id,title,location,created_by,status');
+      if (!platformRole) jobsQuery = jobsQuery.eq('created_by', userId);
+      final jobRows = await jobsQuery;
+      for (final row in jobRows) {
+        final value = Map<String, dynamic>.from(row as Map);
+        jobs[(value['id'] ?? '').toString()] = value;
+      }
+    }
+
+    dynamic bidsQuery = _client
+        .from('job_bids')
+        .select('id,job_id,artisan_id,amount,status,created_at,updated_at')
+        .eq('status', 'accepted');
+    if (role == UserRole.artisan) {
+      bidsQuery = bidsQuery.eq('artisan_id', userId);
+    } else if (!platformRole) {
+      if (jobs.isEmpty) return const [];
+      bidsQuery = bidsQuery.inFilter('job_id', jobs.keys.toList());
+    }
+    final bidRows = await bidsQuery.order('updated_at', ascending: false);
+
+    if (role == UserRole.artisan && bidRows.isNotEmpty) {
+      final jobIds = bidRows
+          .map((row) => (row['job_id'] ?? '').toString())
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList(growable: false);
+      final jobRows = await _client
+          .from('jobs')
+          .select('id,title,location,created_by,status')
+          .inFilter('id', jobIds);
+      for (final row in jobRows) {
+        final value = Map<String, dynamic>.from(row as Map);
+        jobs[(value['id'] ?? '').toString()] = value;
+      }
+    }
+
+    final items = bidRows.map((row) {
+      final value = Map<String, dynamic>.from(row as Map);
+      final bidId = (value['id'] ?? '').toString();
+      final jobId = (value['job_id'] ?? '').toString();
+      final job = jobs[jobId];
+      return WalletTransaction(
+        id: 'accepted-$bidId',
+        jobId: jobId,
+        bidId: bidId,
+        customerId: (job?['created_by'] ?? '').toString(),
+        artisanId: (value['artisan_id'] ?? '').toString(),
+        amount: (value['amount'] as num?)?.toDouble() ?? 0,
+        currency: 'GHS',
+        eventType: 'bid_accepted',
+        invoiceNumber: 'PSME-${_shortId(bidId)}',
+        jobTitle: (job?['title'] ?? '').toString(),
+        jobLocation: (job?['location'] ?? '').toString(),
+        customerName: '',
+        customerEmail: '',
+        artisanName: '',
+        artisanEmail: '',
+        paymentStatus: 'agreed',
+        workStatus: (job?['status'] ?? '').toString() == 'completed'
+            ? 'completed'
+            : 'accepted',
+        completedAt: null,
+        createdAt: DateTime.tryParse(
+              (value['updated_at'] ?? value['created_at'] ?? '').toString(),
+            ) ??
+            DateTime.now(),
+      );
+    }).toList(growable: false);
     return _hydrateLegacyRows(items);
   }
 
@@ -101,4 +201,11 @@ String _profileName(Map<String, dynamic>? profile, String fallback) {
   if (username.isNotEmpty) return username;
   final email = (profile?['email'] ?? '').toString().trim();
   return email.isEmpty ? fallback : email;
+}
+
+String _shortId(String value) {
+  final normalized = value.replaceAll('-', '').toUpperCase();
+  if (normalized.isEmpty) return 'PENDING';
+  final end = normalized.length < 12 ? normalized.length : 12;
+  return normalized.substring(0, end);
 }

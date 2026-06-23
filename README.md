@@ -58,14 +58,15 @@ flutter pub get
 2. Enable Authentication providers you need (Email, Google, Phone/OTP if implemented).
 3. Apply migration SQL:
    - Run every file in `supabase/migrations/` in timestamp order.
-4. For Google OAuth on Android, add this redirect URL in Supabase Auth settings:
+4. For Google OAuth and password recovery on Android, add this redirect URL in Supabase Auth settings:
    - `<your.android.applicationId>://login-callback`
 5. Add runtime defines when running the app:
    ```bash
    flutter run \
      --dart-define=SUPABASE_URL=https://<your-project>.supabase.co \
      --dart-define=SUPABASE_ANON_KEY=<your-anon-key> \
-     --dart-define=GOOGLE_OAUTH_REDIRECT_URL=<your.android.applicationId>://login-callback
+     --dart-define=GOOGLE_OAUTH_REDIRECT_URL=<your.android.applicationId>://login-callback \
+     --dart-define=PASSWORD_RECOVERY_REDIRECT_URL=<your.android.applicationId>://login-callback
    ```
    Or create a local ignored `supabase.local.json` from `supabase.local.example.json` and run:
    ```bash
@@ -110,7 +111,8 @@ Set the real Supabase values when building:
 flutter build appbundle --release \
   --dart-define=SUPABASE_URL=https://<your-project>.supabase.co \
   --dart-define=SUPABASE_ANON_KEY=<your-anon-key> \
-  --dart-define=GOOGLE_OAUTH_REDIRECT_URL=com.prosme.app://login-callback
+  --dart-define=GOOGLE_OAUTH_REDIRECT_URL=com.prosme.app://login-callback \
+  --dart-define=PASSWORD_RECOVERY_REDIRECT_URL=com.prosme.app://login-callback
 ```
 
 For a signed upload bundle, create `android/key.properties` with `storeFile`, `storePassword`, `keyAlias`, and `keyPassword`. Without that file, local release builds fall back to debug signing and are not Play Store upload-ready.
@@ -119,6 +121,7 @@ GitHub repository secrets are only available inside GitHub Actions. Add these se
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `GOOGLE_OAUTH_REDIRECT_URL`
+- `PASSWORD_RECOVERY_REDIRECT_URL`
 
 ## Notes
 - All images are loaded using `Image.network` and online URLs.

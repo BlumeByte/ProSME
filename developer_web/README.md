@@ -24,12 +24,14 @@ supabase functions deploy developer-admin
 supabase secrets set SUPABASE_URL="https://your-project-ref.supabase.co"
 supabase secrets set SUPABASE_ANON_KEY="your-publishable-or-anon-key"
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
-supabase secrets set PASSWORD_RESET_REDIRECT_URL="https://your-vercel-domain.vercel.app"
+supabase secrets set PASSWORD_RESET_REDIRECT_URL="https://your-vercel-domain.vercel.app/reset-password"
+supabase secrets set RESEND_API_KEY="your-resend-api-key"
+supabase secrets set RESEND_FROM_EMAIL="ProSME <noreply@your-verified-domain.com>"
 ```
 
 Use the same Supabase project for Vercel and the Edge Function. For example, if your function URL is `https://ivohczdtuxasyfoiphqu.supabase.co/functions/v1/developer-admin`, then Vercel's `VITE_SUPABASE_URL` and the function secret `SUPABASE_URL` must both be `https://ivohczdtuxasyfoiphqu.supabase.co`.
 
-The `SUPABASE_SERVICE_ROLE_KEY` belongs in Supabase Function secrets only. It is used for developer-only actions such as creating accounts, sending password reset emails, and setting temporary passwords.
+The `SUPABASE_SERVICE_ROLE_KEY` belongs in Supabase Function secrets only. It is used for developer-only actions such as creating accounts, generating recovery links, and setting temporary passwords. Password recovery first uses the Supabase Auth mailer and falls back to Resend when its secrets are configured. Add `https://your-vercel-domain.vercel.app/reset-password` to the Supabase Auth redirect URL allow list.
 
 ## Local Run
 

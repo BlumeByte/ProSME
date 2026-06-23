@@ -1,6 +1,7 @@
 class RouteNames {
   static const onboarding = '/onboarding';
   static const auth = '/auth';
+  static const resetPassword = '/reset-password';
   static const role = '/role';
   static const artisanVerification = '/artisan-verification';
   static const home = '/home';

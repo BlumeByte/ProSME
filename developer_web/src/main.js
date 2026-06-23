@@ -19,6 +19,9 @@ const emptyData = () => ({
 const state = {
   session: null,
   profile: null,
+  recoveringPassword:
+    window.location.pathname === '/reset-password' ||
+    window.location.hash.includes('type=recovery'),
   tab: 'overview',
   loading: true,
   checkingAccess: false,
@@ -154,8 +157,14 @@ async function init() {
   const { data } = await supabase.auth.getSession();
   state.session = data.session;
 
-  supabase.auth.onAuthStateChange((_event, session) => {
+  supabase.auth.onAuthStateChange((event, session) => {
     state.session = session;
+    if (event === 'PASSWORD_RECOVERY') state.recoveringPassword = true;
+    if (state.recoveringPassword) {
+      state.loading = false;
+      render();
+      return;
+    }
     if (!session) {
       state.profile = null;
       state.data = emptyData();
@@ -166,7 +175,10 @@ async function init() {
     loadDashboard();
   });
 
-  if (state.session) {
+  if (state.recoveringPassword) {
+    state.loading = false;
+    render();
+  } else if (state.session) {
     await loadDashboard();
   } else {
     state.loading = false;
@@ -293,7 +305,11 @@ async function refreshData() {
 
 async function developerAction(action, payload = {}) {
   const { data, error } = await supabase.functions.invoke('developer-admin', {
-    body: { action, ...payload },
+    body: {
+      action,
+      redirectTo: `${window.location.origin}/reset-password`,
+      ...payload,
+    },
   });
   if (error) {
     throw new Error(
@@ -650,6 +666,34 @@ async function sendPasswordReset(email) {
   await runAction(async () => {
     await developerAction('sendPasswordReset', { email });
     setNotice(`Password reset sent to ${email}.`);
+  });
+}
+
+async function updateRecoveredPassword(event) {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const password = normalize(form.get('password'));
+  const confirmation = normalize(form.get('confirmation'));
+  if (password.length < 8) {
+    state.error = 'Password must be at least 8 characters.';
+    render();
+    return;
+  }
+  if (password !== confirmation) {
+    state.error = 'Passwords do not match.';
+    render();
+    return;
+  }
+  await runAction(async () => {
+    if (!state.session) throw new Error('This recovery link is invalid or has expired. Request a new one.');
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+    await supabase.auth.signOut();
+    window.history.replaceState({}, '', '/');
+    state.recoveringPassword = false;
+    state.session = null;
+    state.profile = null;
+    setNotice('Password updated. You can now sign in.');
   });
 }
 
@@ -1286,6 +1330,7 @@ function renderLogin() {
         <h1>ProSME Developer Dashboard</h1>
         <p>Developer accounts only.</p>
         ${state.error ? `<div class="error">${esc(state.error)}</div>` : ''}
+        ${state.notice ? `<div class="notice">${esc(state.notice)}</div>` : ''}
         <label>
           Email
           <input name="email" type="email" autocomplete="email" placeholder="Email address" required />
@@ -1296,6 +1341,29 @@ function renderLogin() {
         </label>
         <button class="primary" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Signing in...' : 'Sign in'}</button>
         <small>Use Supabase Auth. The web dashboard does not store passwords.</small>
+      </form>
+    </div>
+  `;
+}
+
+function renderPasswordRecovery() {
+  return `
+    <div class="login-page">
+      <form class="login-card" id="password-recovery-form">
+        <img src="/prosme_logo.png" alt="ProSME" />
+        <h1>Choose a new password</h1>
+        <p>Enter a secure password for your ProSME account.</p>
+        ${state.error ? `<div class="error">${esc(state.error)}</div>` : ''}
+        ${!state.session && !state.loading ? '<div class="warning">This recovery link is invalid or has expired. Request another reset email.</div>' : ''}
+        <label>
+          New password
+          <input name="password" type="password" autocomplete="new-password" minlength="8" required />
+        </label>
+        <label>
+          Confirm password
+          <input name="confirmation" type="password" autocomplete="new-password" minlength="8" required />
+        </label>
+        <button class="primary" ${state.busy || !state.session ? 'disabled' : ''}>${state.busy ? 'Updating...' : 'Update password'}</button>
       </form>
     </div>
   `;
@@ -1325,7 +1393,9 @@ function renderContent() {
 }
 
 function render() {
-  if (!hasConfig || !state.session || state.profile?.role !== 'developer') {
+  if (state.recoveringPassword) {
+    app.innerHTML = renderPasswordRecovery();
+  } else if (!hasConfig || !state.session || state.profile?.role !== 'developer') {
     app.innerHTML = renderLogin();
   } else {
     app.innerHTML = renderContent();
@@ -1335,6 +1405,7 @@ function render() {
 
 function bindEvents() {
   document.querySelector('#login-form')?.addEventListener('submit', signIn);
+  document.querySelector('#password-recovery-form')?.addEventListener('submit', updateRecoveredPassword);
 
   document.querySelectorAll('[data-tab]').forEach((button) => {
     button.addEventListener('click', () => {

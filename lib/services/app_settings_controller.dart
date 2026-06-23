@@ -622,6 +622,19 @@ const _translations = <String, Map<String, String>>{
     'Confirm password': 'Confirmer le mot de passe',
     'Update password': 'Mettre a jour le mot de passe',
     'Passwords do not match.': 'Les mots de passe ne correspondent pas.',
+    'Create new password': 'Creer un nouveau mot de passe',
+    'Choose a new password for your account.':
+        'Choisissez un nouveau mot de passe pour votre compte.',
+    'Show password': 'Afficher le mot de passe',
+    'Updating password...': 'Mise a jour du mot de passe...',
+    'Password updated. Sign in again.':
+        'Mot de passe mis a jour. Reconnectez-vous.',
+    'Too many reset attempts. Please wait a few minutes and try again.':
+        'Trop de tentatives. Attendez quelques minutes puis reessayez.',
+    'Password reset redirect is not allowed in Supabase settings.':
+        'La redirection de reinitialisation est refusee par Supabase.',
+    'The reset email could not be sent. Check Supabase email settings.':
+        'L e-mail n a pas pu etre envoye. Verifiez les reglages Supabase.',
     'Password updated.': 'Mot de passe mis a jour.',
     'Change phone number': 'Changer le numero de telephone',
     'Enter a valid': 'Entrez un',
@@ -1020,6 +1033,19 @@ const _translations = <String, Map<String, String>>{
     'Confirm password': 'Confirmar contraseña',
     'Update password': 'Actualizar contraseña',
     'Passwords do not match.': 'Las contraseñas no coinciden.',
+    'Create new password': 'Crear nueva contraseña',
+    'Choose a new password for your account.':
+        'Elige una nueva contraseña para tu cuenta.',
+    'Show password': 'Mostrar contraseña',
+    'Updating password...': 'Actualizando contraseña...',
+    'Password updated. Sign in again.':
+        'Contraseña actualizada. Inicia sesion de nuevo.',
+    'Too many reset attempts. Please wait a few minutes and try again.':
+        'Demasiados intentos. Espera unos minutos e intentalo de nuevo.',
+    'Password reset redirect is not allowed in Supabase settings.':
+        'Supabase no permite la redireccion de restablecimiento.',
+    'The reset email could not be sent. Check Supabase email settings.':
+        'No se pudo enviar el correo. Revisa el correo de Supabase.',
     'Password updated.': 'Contraseña actualizada.',
     'Change phone number': 'Cambiar telefono',
     'Phone number saved.': 'Telefono guardado.',
@@ -1386,6 +1412,18 @@ const _translations = <String, Map<String, String>>{
     'open': 'مفتوح',
     'Accepted and completed bid money flow':
         'تدفق أموال العروض المقبولة والمكتملة',
+    'Create new password': 'إنشاء كلمة مرور جديدة',
+    'Choose a new password for your account.': 'اختر كلمة مرور جديدة لحسابك.',
+    'Show password': 'إظهار كلمة المرور',
+    'Updating password...': 'جار تحديث كلمة المرور...',
+    'Password updated. Sign in again.':
+        'تم تحديث كلمة المرور. سجل الدخول مرة أخرى.',
+    'Too many reset attempts. Please wait a few minutes and try again.':
+        'محاولات كثيرة. انتظر بضع دقائق ثم حاول مرة أخرى.',
+    'Password reset redirect is not allowed in Supabase settings.':
+        'إعادة توجيه كلمة المرور غير مسموحة في إعدادات Supabase.',
+    'The reset email could not be sent. Check Supabase email settings.':
+        'تعذر إرسال البريد. تحقق من إعدادات البريد في Supabase.',
   },
   'Twi': {
     'ProSME   Find Professionals': 'ProSME   Hwehwɛ adwumayɛfo',
@@ -1702,6 +1740,18 @@ const _translations = <String, Map<String, String>>{
     'open': 'abue',
     'Accepted and completed bid money flow':
         'Bo a woagye atom ne nea woawie no sika nkoso',
+    'Create new password': 'Yɛ password foforo',
+    'Choose a new password for your account.':
+        'Paw password foforo ma wo account.',
+    'Show password': 'Kyerɛ password',
+    'Updating password...': 'Yeresesa password...',
+    'Password updated. Sign in again.': 'Woasesa password. Kɔ mu bio.',
+    'Too many reset attempts. Please wait a few minutes and try again.':
+        'Woasɔ ahwɛ mpɛn pii. Twɛn kakra na san sɔ hwɛ.',
+    'Password reset redirect is not allowed in Supabase settings.':
+        'Supabase mma password reset kwan no ho kwan.',
+    'The reset email could not be sent. Check Supabase email settings.':
+        'Yentumi ansoma reset email no. Hwɛ Supabase email nhyehyɛe.',
   },
 };
 

@@ -19,6 +19,10 @@ const String kGoogleOAuthRedirectUrl = String.fromEnvironment(
   // Override with your Android applicationId, e.g. com.yourcompany.prosme://login-callback
   defaultValue: 'com.prosme.app://login-callback',
 );
+const String kPasswordRecoveryRedirectUrl = String.fromEnvironment(
+  'PASSWORD_RECOVERY_REDIRECT_URL',
+  defaultValue: 'com.prosme.app://login-callback',
+);
 const String kPaystackCheckoutUrl = String.fromEnvironment(
   'PAYSTACK_CHECKOUT_URL',
   defaultValue: '',

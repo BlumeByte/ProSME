@@ -2,11 +2,13 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../features/admin/admin_dashboard_screen.dart';
 import '../features/auth/artisan_verification_screen.dart';
 import '../features/auth/auth_screen.dart';
 import '../features/auth/role_selection_screen.dart';
+import '../features/auth/reset_password_screen.dart';
 import '../features/chat/chat_thread_screen.dart';
 import '../features/home/artisan_home_screen.dart';
 import '../features/home/user_home_screen.dart';
@@ -29,9 +31,21 @@ import '../services/app_launch_service.dart';
 import '../services/service_providers.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  StreamSubscription<AuthState>? recoverySubscription;
+  if (shouldUseSupabase()) {
+    recoverySubscription =
+        ref.read(supabaseClientProvider).auth.onAuthStateChange.listen((state) {
+      if (state.event == AuthChangeEvent.passwordRecovery) {
+        ref.read(passwordRecoveryActiveProvider.notifier).state = true;
+      }
+    });
+  }
   final authStream = ref.watch(authServiceProvider).authStateChanges();
   final refreshListenable = StreamRouterRefresh(authStream);
-  ref.onDispose(refreshListenable.dispose);
+  ref.onDispose(() {
+    refreshListenable.dispose();
+    unawaited(recoverySubscription?.cancel());
+  });
 
   return GoRouter(
     initialLocation: RouteNames.onboarding,
@@ -41,6 +55,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isLoggedIn = authState != null;
       final fullPath = state.fullPath ?? state.matchedLocation;
       final isOnboarding = fullPath == RouteNames.onboarding;
+      final isRecovering = ref.read(passwordRecoveryActiveProvider);
+
+      if (isRecovering && fullPath != RouteNames.resetPassword) {
+        return RouteNames.resetPassword;
+      }
 
       if (!isLoggedIn && !AppLaunchService.hasSeenWelcome && !isOnboarding) {
         return RouteNames.onboarding;
@@ -78,6 +97,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.auth,
         builder: (context, state) => const AuthScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.resetPassword,
+        builder: (context, state) => const ResetPasswordScreen(),
       ),
       GoRoute(
         path: RouteNames.role,

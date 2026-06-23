@@ -49,6 +49,8 @@ final authStateProvider = StreamProvider((ref) {
   return ref.watch(authServiceProvider).authStateChanges();
 });
 
+final passwordRecoveryActiveProvider = StateProvider<bool>((ref) => false);
+
 final listingServiceProvider = Provider<ListingService>((ref) {
   if (!shouldUseSupabase()) {
     return MockListingService();

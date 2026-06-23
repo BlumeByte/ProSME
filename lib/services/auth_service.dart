@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../models/app_user.dart';
+import '../routes/route_names.dart';
 
 final _emailRegex = RegExp(
   r'^(?=.{1,254}$)(?=.{1,64}@)[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
@@ -703,7 +704,13 @@ class SupabaseAuthService implements AuthService {
     if (!_isValidEmailAddress(normalized)) {
       throw StateError('Enter a valid email address.');
     }
-    await _supabase.auth.resetPasswordForEmail(normalized);
+    final redirectTo = kIsWeb
+        ? Uri.base.resolve(RouteNames.resetPassword).toString()
+        : kPasswordRecoveryRedirectUrl;
+    await _supabase.auth.resetPasswordForEmail(
+      normalized,
+      redirectTo: redirectTo,
+    );
   }
 
   @override

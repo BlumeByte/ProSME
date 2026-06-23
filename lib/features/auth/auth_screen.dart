@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/widgets/safe_back_button.dart';
 import '../../config/constants.dart';
 import '../../models/app_user.dart';
@@ -66,6 +67,23 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     return 'Something went wrong. Please try again.';
   }
 
+  String _friendlyPasswordResetError(Object error) {
+    final message = error is AuthException
+        ? error.message
+        : error.toString().replaceFirst(RegExp(r'^StateError:\s*'), '');
+    final normalized = message.toLowerCase();
+    if (normalized.contains('rate limit') || normalized.contains('too many')) {
+      return 'Too many reset attempts. Please wait a few minutes and try again.';
+    }
+    if (normalized.contains('redirect')) {
+      return 'Password reset redirect is not allowed in Supabase settings.';
+    }
+    if (normalized.contains('smtp') || normalized.contains('email')) {
+      return 'The reset email could not be sent. Check Supabase email settings.';
+    }
+    return message;
+  }
+
   Future<void> _showForgotPasswordDialog(AuthService authService) async {
     final settings = ref.read(appSettingsControllerProvider);
     final controller = TextEditingController(text: _email);
@@ -105,7 +123,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(settings.t(_friendlyError(error)))),
+        SnackBar(
+          content: Text(settings.t(_friendlyPasswordResetError(error))),
+        ),
       );
     }
   }
