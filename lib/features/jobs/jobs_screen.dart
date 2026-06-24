@@ -436,7 +436,7 @@ class _ArtisanJobFilters extends StatelessWidget {
                       (country) => DropdownMenuItem(
                         value: country,
                         child: Text(
-                          country?.name ?? 'Any country',
+                          country?.name ?? settings.t('Any country'),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -456,7 +456,7 @@ class _ArtisanJobFilters extends StatelessWidget {
                       (region) => DropdownMenuItem(
                         value: region,
                         child: Text(
-                          region?.name ?? 'Any region',
+                          region?.name ?? settings.t('Any region'),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),

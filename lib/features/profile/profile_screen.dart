@@ -295,9 +295,11 @@ Future<void> _showVerificationBillingSheet(
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
+    isScrollControlled: true,
     builder: (context) => StatefulBuilder(
       builder: (context, setSheetState) {
-        Future<void> startPayment(String interval, {String channel = ''}) async {
+        Future<void> startPayment(String interval,
+            {String channel = ''}) async {
           setSheetState(() => busy = true);
           try {
             await ref.read(paymentServiceProvider).startVerificationCheckout(
@@ -365,128 +367,133 @@ Future<void> _showVerificationBillingSheet(
         final pendingReference = subscription?.paystackReference ?? '';
         final paymentMethod = subscription?.paymentMethodLabel ?? '';
         final active = subscription?.isActive == true;
-        final interval = subscription?.planInterval == 'yearly'
-            ? 'yearly'
-            : 'monthly';
+        final interval =
+            subscription?.planInterval == 'yearly' ? 'yearly' : 'monthly';
         return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        settings.t('Verification subscription'),
-                        style: Theme.of(context).textTheme.titleLarge,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          settings.t('Verification subscription'),
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
                       ),
+                      IconButton(
+                        onPressed:
+                            busy ? null : () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    active
+                        ? settings.t(
+                            'Your badge is active. Paystack can save reusable cards or direct debit methods for renewal.',
+                          )
+                        : settings.t(
+                            'Your badge activates after Paystack confirms payment.',
+                          ),
+                  ),
+                  if (paymentMethod.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '${settings.t('Saved payment method')}: $paymentMethod',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    IconButton(
-                      onPressed:
-                          busy ? null : () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close),
+                    Text(
+                      subscription?.autoRenew == true
+                          ? settings.t('Auto-renew on')
+                          : settings.t('Auto-renew off'),
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
-                ),
-                Text(
-                  active
-                      ? settings.t(
-                          'Your badge is active. Paystack can save reusable cards or direct debit methods for renewal.',
-                        )
-                      : settings.t(
-                          'Your badge activates after Paystack confirms payment.',
-                        ),
-                ),
-                if (paymentMethod.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    '${settings.t('Saved payment method')}: $paymentMethod',
-                    style: Theme.of(context).textTheme.bodySmall,
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.calendar_month_outlined),
+                    title: Text(settings.t('Monthly')),
+                    subtitle: Text(paymentService.verificationPriceLabel(
+                      role: role,
+                      interval: 'monthly',
+                      currencyCode: settings.currencyCode,
+                    )),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: busy ? null : () => startPayment('monthly'),
                   ),
-                  Text(
-                    subscription?.autoRenew == true
-                        ? settings.t('Auto-renew on')
-                        : settings.t('Auto-renew off'),
-                    style: Theme.of(context).textTheme.bodySmall,
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.event_available_outlined),
+                    title: Text(settings.t('Yearly')),
+                    subtitle: Text(paymentService.verificationPriceLabel(
+                      role: role,
+                      interval: 'yearly',
+                      currencyCode: settings.currencyCode,
+                    )),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: busy ? null : () => startPayment('yearly'),
                   ),
-                ],
-                const SizedBox(height: 12),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.calendar_month_outlined),
-                  title: Text(settings.t('Monthly')),
-                  subtitle: Text(paymentService.verificationPriceLabel(
-                    role: role,
-                    interval: 'monthly',
-                    currencyCode: settings.currencyCode,
-                  )),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: busy ? null : () => startPayment('monthly'),
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.event_available_outlined),
-                  title: Text(settings.t('Yearly')),
-                  subtitle: Text(paymentService.verificationPriceLabel(
-                    role: role,
-                    interval: 'yearly',
-                    currencyCode: settings.currencyCode,
-                  )),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: busy ? null : () => startPayment('yearly'),
-                ),
-                const Divider(),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.credit_card_outlined),
-                  title: Text(settings.t('Save or change card')),
-                  subtitle: Text(settings.t(
-                    'Paystack saves reusable cards for automatic renewal.',
-                  )),
-                  onTap: busy
-                      ? null
-                      : () => startPayment(interval, channel: 'card'),
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.phone_android_outlined),
-                  title: Text(settings.t('Pay with mobile money')),
-                  subtitle: Text(settings.t(
-                    'Mobile money may need manual renewal if Paystack does not return a reusable method.',
-                  )),
-                  onTap: busy
-                      ? null
-                      : () => startPayment(interval, channel: 'mobile_money'),
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.account_balance_outlined),
-                  title: Text(settings.t('Pay by bank transfer')),
-                  subtitle: Text(settings.t(
-                    'Bank transfer payments are tracked after Paystack confirms them.',
-                  )),
-                  onTap: busy
-                      ? null
-                      : () => startPayment(interval, channel: 'bank_transfer'),
-                ),
-                if (pendingReference.trim().isNotEmpty) ...[
                   const Divider(),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.refresh),
-                    title: Text(settings.t('Refresh payment status')),
-                    subtitle: Text(pendingReference),
-                    onTap: busy ? null : verifyPending,
+                    leading: const Icon(Icons.credit_card_outlined),
+                    title: Text(settings.t('Save or change card')),
+                    subtitle: Text(settings.t(
+                      'Paystack saves reusable cards for automatic renewal.',
+                    )),
+                    onTap: busy
+                        ? null
+                        : () => startPayment(interval, channel: 'card'),
                   ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.phone_android_outlined),
+                    title: Text(settings.t('Pay with mobile money')),
+                    subtitle: Text(settings.t(
+                      'Mobile money may need manual renewal if Paystack does not return a reusable method.',
+                    )),
+                    onTap: busy
+                        ? null
+                        : () => startPayment(interval, channel: 'mobile_money'),
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.account_balance_outlined),
+                    title: Text(settings.t('Pay by bank transfer')),
+                    subtitle: Text(settings.t(
+                      'Bank transfer payments are tracked after Paystack confirms them.',
+                    )),
+                    onTap: busy
+                        ? null
+                        : () =>
+                            startPayment(interval, channel: 'bank_transfer'),
+                  ),
+                  if (pendingReference.trim().isNotEmpty) ...[
+                    const Divider(),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.refresh),
+                      title: Text(settings.t('Refresh payment status')),
+                      subtitle: Text(pendingReference),
+                      onTap: busy ? null : verifyPending,
+                    ),
+                  ],
+                  if (busy)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: LinearProgressIndicator(),
+                    ),
                 ],
-                if (busy)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 12),
-                    child: LinearProgressIndicator(),
-                  ),
-              ],
+              ),
             ),
           ),
         );
@@ -819,15 +826,19 @@ Future<void> _showChangePasswordDialog(
   try {
     await authService.updatePassword(password, '');
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(settings.t('Password updated.'))),
+      final messenger = ScaffoldMessenger.of(context);
+      final router = GoRouter.of(context);
+      await authService.signOut();
+      messenger.showSnackBar(
+        SnackBar(content: Text(settings.t('Password updated. Sign in again.'))),
       );
+      router.go(RouteNames.auth);
     }
   } catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${settings.t('Could not update full name')}: $error'),
+          content: Text('${settings.t('Could not update password')}: $error'),
         ),
       );
     }

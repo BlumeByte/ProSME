@@ -21,7 +21,7 @@ Future<void> main() async {
           child: Padding(
             padding: EdgeInsets.all(24),
             child: Text(
-              'Something went wrong. Please restart ProSME.',
+              'Processing, please wait. If this takes too long, restart ProSME.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Color(0xFF0F172A),

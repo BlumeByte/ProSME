@@ -124,6 +124,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                     () => _pdfService.printWalletReport(
                       _items,
                       reportOwner: reportOwner,
+                      translate: settings.t,
                     ),
                   );
                 } else if (value == 'share') {
@@ -131,6 +132,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                     () => _pdfService.shareWalletReport(
                       _items,
                       reportOwner: reportOwner,
+                      translate: settings.t,
                     ),
                   );
                 }
@@ -221,10 +223,18 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                           extra: item,
                         ),
                         onPrint: () => _runExport(
-                          () => _pdfService.printInvoice(item),
+                          () => _pdfService.printInvoice(
+                            item,
+                            currencyCode: currencyCode,
+                            translate: settings.t,
+                          ),
                         ),
                         onShare: () => _runExport(
-                          () => _pdfService.shareInvoice(item),
+                          () => _pdfService.shareInvoice(
+                            item,
+                            currencyCode: currencyCode,
+                            translate: settings.t,
+                          ),
                         ),
                       ),
                     ),

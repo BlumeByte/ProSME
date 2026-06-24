@@ -232,6 +232,7 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
   ) {
     final currentUser = ref.watch(authStateProvider).valueOrNull;
     final canSendToChat = currentUser?.id == transaction.artisanId;
+    final currencyCode = settings.currencyCode;
     return Scaffold(
       appBar: AppBar(
         leading: const SafeBackButton(),
@@ -240,14 +241,26 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
           IconButton(
             onPressed: _exporting
                 ? null
-                : () => _export(() => _pdfService.printInvoice(transaction)),
+                : () => _export(
+                      () => _pdfService.printInvoice(
+                        transaction,
+                        currencyCode: currencyCode,
+                        translate: settings.t,
+                      ),
+                    ),
             icon: const Icon(Icons.print_outlined),
             tooltip: settings.t('Print invoice'),
           ),
           IconButton(
             onPressed: _exporting
                 ? null
-                : () => _export(() => _pdfService.shareInvoice(transaction)),
+                : () => _export(
+                      () => _pdfService.shareInvoice(
+                        transaction,
+                        currencyCode: currencyCode,
+                        translate: settings.t,
+                      ),
+                    ),
             icon: const Icon(Icons.share_outlined),
             tooltip: settings.t('Share invoice'),
           ),
@@ -335,7 +348,10 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
             child: ListTile(
               title: Text(settings.t('Total')),
               trailing: Text(
-                '${transaction.currency} ${transaction.amount.toStringAsFixed(2)}',
+                formatCurrency(
+                  transaction.amount,
+                  currencyCode: currencyCode,
+                ),
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
@@ -346,7 +362,13 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
           FilledButton.icon(
             onPressed: _exporting
                 ? null
-                : () => _export(() => _pdfService.printInvoice(transaction)),
+                : () => _export(
+                      () => _pdfService.printInvoice(
+                        transaction,
+                        currencyCode: currencyCode,
+                        translate: settings.t,
+                      ),
+                    ),
             icon: const Icon(Icons.print_outlined),
             label: Text(settings.t('Print invoice')),
           ),
@@ -354,7 +376,13 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
           OutlinedButton.icon(
             onPressed: _exporting
                 ? null
-                : () => _export(() => _pdfService.shareInvoice(transaction)),
+                : () => _export(
+                      () => _pdfService.shareInvoice(
+                        transaction,
+                        currencyCode: currencyCode,
+                        translate: settings.t,
+                      ),
+                    ),
             icon: const Icon(Icons.share_outlined),
             label: Text(settings.t('Share invoice')),
           ),

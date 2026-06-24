@@ -20,7 +20,14 @@ const requiredEnv = (key: string) => {
   if (!value) throw new Error(`${key} is not configured`);
   return value;
 };
-const validChannels = new Set(['card', 'bank', 'bank_transfer', 'mobile_money', 'ussd', 'qr']);
+const validChannels = new Set([
+  'card',
+  'bank',
+  'bank_transfer',
+  'mobile_money',
+  'ussd',
+  'qr',
+]);
 
 const amountUsdFor = (role: string, interval: string) => {
   const monthly = role === 'artisan' ? 5 : 2;
@@ -48,7 +55,9 @@ const chargeAmount = (amountUsd: number, currency: string) => {
 };
 
 const hex = (buffer: ArrayBuffer) =>
-  [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  [...new Uint8Array(buffer)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
 
 const paystackSignature = async (secret: string, body: string) => {
   const key = await crypto.subtle.importKey(
@@ -58,10 +67,15 @@ const paystackSignature = async (secret: string, body: string) => {
     false,
     ['sign'],
   );
-  return hex(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body)));
+  return hex(
+    await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body)),
+  );
 };
 
-const verifyReferenceWithPaystack = async (secret: string, reference: string) => {
+const verifyReferenceWithPaystack = async (
+  secret: string,
+  reference: string,
+) => {
   const response = await fetch(
     `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
     { headers: { Authorization: `Bearer ${secret}` } },
@@ -90,24 +104,29 @@ const chargeAuthorization = async ({
   reference: string;
   metadata: Record<string, unknown>;
 }) => {
-  const response = await fetch('https://api.paystack.co/transaction/charge_authorization', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${secret}`,
-      'Content-Type': 'application/json',
+  const response = await fetch(
+    'https://api.paystack.co/transaction/charge_authorization',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${secret}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        authorization_code: authorizationCode,
+        email,
+        amount,
+        currency,
+        reference,
+        metadata,
+      }),
     },
-    body: JSON.stringify({
-      authorization_code: authorizationCode,
-      email,
-      amount,
-      currency,
-      reference,
-      metadata,
-    }),
-  });
+  );
   const payload = await response.json();
   if (!response.ok || payload?.status !== true) {
-    throw new Error(payload?.message || 'Paystack authorization charge failed.');
+    throw new Error(
+      payload?.message || 'Paystack authorization charge failed.',
+    );
   }
   return payload.data;
 };
@@ -118,21 +137,24 @@ const paymentMethodLabel = (authorization: Record<string, unknown>) => {
   const cardType = clean(authorization.card_type || authorization.brand);
   const last4 = clean(authorization.last4);
   const accountName = clean(authorization.account_name);
-  if (last4) return [bank, cardType, `ending ${last4}`].filter(Boolean).join(' ');
+  if (last4)
+    return [bank, cardType, `ending ${last4}`].filter(Boolean).join(' ');
   if (accountName) return [bank, accountName].filter(Boolean).join(' ');
   return channel || 'Paystack payment method';
 };
 
 const reusableAuthorizationPatch = (paymentData: Record<string, unknown>) => {
-  const authorization = paymentData.authorization && typeof paymentData.authorization === 'object'
-    ? paymentData.authorization as Record<string, unknown>
-    : {};
+  const authorization =
+    paymentData.authorization && typeof paymentData.authorization === 'object'
+      ? (paymentData.authorization as Record<string, unknown>)
+      : {};
   const reusable = authorization.reusable === true;
   const authorizationCode = clean(authorization.authorization_code);
   if (!reusable || !authorizationCode) return {};
-  const customer = paymentData.customer && typeof paymentData.customer === 'object'
-    ? paymentData.customer as Record<string, unknown>
-    : {};
+  const customer =
+    paymentData.customer && typeof paymentData.customer === 'object'
+      ? (paymentData.customer as Record<string, unknown>)
+      : {};
   return {
     auto_renew: true,
     paystack_customer_code: clean(customer.customer_code),
@@ -157,16 +179,22 @@ const activateSubscription = async ({
   subscription: Record<string, unknown>;
   paymentData: Record<string, unknown>;
 }) => {
-  const reference = clean(paymentData.reference || subscription.paystack_reference);
+  const reference = clean(
+    paymentData.reference || subscription.paystack_reference,
+  );
   const expectedAmount = Number(subscription.charge_amount || 0);
   const actualAmount = Number(paymentData.amount || 0);
   const expectedCurrency = clean(subscription.charge_currency).toUpperCase();
-  const actualCurrency = clean(paymentData.currency || expectedCurrency).toUpperCase();
+  const actualCurrency = clean(
+    paymentData.currency || expectedCurrency,
+  ).toUpperCase();
   if (clean(paymentData.status) !== 'success') {
     throw new Error('Payment is not successful.');
   }
   if (actualAmount !== expectedAmount || actualCurrency !== expectedCurrency) {
-    throw new Error('Payment amount or currency does not match the subscription.');
+    throw new Error(
+      'Payment amount or currency does not match the subscription.',
+    );
   }
 
   const now = new Date().toISOString();
@@ -243,9 +271,12 @@ const syncExpired = async (adminClient: ReturnType<typeof createClient>) => {
 };
 
 const isDispatchSecret = (req: Request) => {
-  const expected = clean(Deno.env.get('EMAIL_DISPATCH_SECRET')) ||
+  const expected =
+    clean(Deno.env.get('EMAIL_DISPATCH_SECRET')) ||
     clean(Deno.env.get('BILLING_DISPATCH_SECRET'));
-  return Boolean(expected && req.headers.get('x-email-dispatch-secret') === expected);
+  return Boolean(
+    expected && req.headers.get('x-email-dispatch-secret') === expected,
+  );
 };
 
 const assertAdmin = async ({
@@ -259,7 +290,8 @@ const assertAdmin = async ({
 }) => {
   if (isDispatchSecret(req)) return { userId: null, profile: null };
   const authorization = req.headers.get('Authorization') || '';
-  if (!authorization.startsWith('Bearer ')) throw new Error('Missing admin session.');
+  if (!authorization.startsWith('Bearer '))
+    throw new Error('Missing admin session.');
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authorization } },
   });
@@ -274,7 +306,8 @@ const assertAdmin = async ({
     .eq('id', user.id)
     .maybeSingle();
   if (profileError) throw new Error(profileError.message);
-  if (profile?.role !== 'admin') throw new Error('Only admin accounts can use this billing action.');
+  if (profile?.role !== 'admin')
+    throw new Error('Only admin accounts can use this billing action.');
   return { userId: user.id, profile };
 };
 
@@ -302,24 +335,34 @@ const renewDueSubscriptions = async ({
   const failed: Array<{ id: string; error: string }> = [];
   for (const subscription of rows ?? []) {
     const subscriptionId = clean(subscription.id);
-    const role = clean(subscription.role) === 'artisan' ? 'artisan' : 'customer';
-    const interval = clean(subscription.plan_interval) === 'yearly' ? 'yearly' : 'monthly';
-    const currency = clean(subscription.charge_currency || Deno.env.get('PAYSTACK_CURRENCY') || 'GHS').toUpperCase();
+    const role =
+      clean(subscription.role) === 'artisan' ? 'artisan' : 'customer';
+    const interval =
+      clean(subscription.plan_interval) === 'yearly' ? 'yearly' : 'monthly';
+    const currency = clean(
+      subscription.charge_currency ||
+        Deno.env.get('PAYSTACK_CURRENCY') ||
+        'GHS',
+    ).toUpperCase();
     const amountUsd = amountUsdFor(role, interval);
     const amount = chargeAmount(amountUsd, currency);
     const reference = `prosme_renew_${clean(subscription.user_id).replaceAll('-', '').slice(0, 12)}_${Date.now()}`;
     const email = clean(subscription.paystack_email);
     const authorizationCode = clean(subscription.paystack_authorization_code);
     try {
-      if (!email || !authorizationCode) throw new Error('Saved reusable payment method is missing.');
-      await adminClient.from('verification_subscriptions').update({
-        paystack_reference: reference,
-        amount_usd: amountUsd,
-        charge_currency: currency,
-        charge_amount: amount,
-        last_renewal_attempt_at: now,
-        updated_at: now,
-      }).eq('id', subscriptionId);
+      if (!email || !authorizationCode)
+        throw new Error('Saved reusable payment method is missing.');
+      await adminClient
+        .from('verification_subscriptions')
+        .update({
+          paystack_reference: reference,
+          amount_usd: amountUsd,
+          charge_currency: currency,
+          charge_amount: amount,
+          last_renewal_attempt_at: now,
+          updated_at: now,
+        })
+        .eq('id', subscriptionId);
       await adminClient.from('verification_payments').insert({
         subscription_id: subscriptionId,
         user_id: clean(subscription.user_id),
@@ -377,19 +420,26 @@ const renewDueSubscriptions = async ({
         },
         { onConflict: 'paystack_reference' },
       );
-      await adminClient.from('verification_subscriptions').update({
-        status: 'expired',
-        auto_renew: false,
-        renewal_attempt_count: Number(subscription.renewal_attempt_count || 0) + 1,
-        last_renewal_attempt_at: now,
-        last_renewal_error: message,
-        updated_at: now,
-      }).eq('id', subscriptionId);
-      await adminClient.from('profiles').update({
-        verification_status: 'pending',
-        verification_expires_at: subscription.current_period_end,
-        updated_at: now,
-      }).eq('id', clean(subscription.user_id));
+      await adminClient
+        .from('verification_subscriptions')
+        .update({
+          status: 'expired',
+          auto_renew: false,
+          renewal_attempt_count:
+            Number(subscription.renewal_attempt_count || 0) + 1,
+          last_renewal_attempt_at: now,
+          last_renewal_error: message,
+          updated_at: now,
+        })
+        .eq('id', subscriptionId);
+      await adminClient
+        .from('profiles')
+        .update({
+          verification_status: 'pending',
+          verification_expires_at: subscription.current_period_end,
+          updated_at: now,
+        })
+        .eq('id', clean(subscription.user_id));
       await adminClient.from('admin_notifications').insert({
         type: 'verification_renewal_failed',
         title: 'Verification renewal failed',
@@ -404,7 +454,9 @@ const renewDueSubscriptions = async ({
   return { renewed, failed };
 };
 
-const backfillVerifiedSubscriptions = async (adminClient: ReturnType<typeof createClient>) => {
+const backfillVerifiedSubscriptions = async (
+  adminClient: ReturnType<typeof createClient>,
+) => {
   const now = new Date().toISOString();
   const end = new Date();
   end.setUTCFullYear(end.getUTCFullYear() + 1);
@@ -425,32 +477,40 @@ const backfillVerifiedSubscriptions = async (adminClient: ReturnType<typeof crea
     if (existing) continue;
     const role = clean(profile.role) === 'artisan' ? 'artisan' : 'customer';
     const amountUsd = amountUsdFor(role, 'yearly');
-    const { error: insertError } = await adminClient.from('verification_subscriptions').insert({
-      user_id: profile.id,
-      role,
-      plan_interval: 'yearly',
-      status: 'active',
-      amount_usd: amountUsd,
-      charge_currency: clean(Deno.env.get('PAYSTACK_CURRENCY') || 'GHS').toUpperCase(),
-      charge_amount: 0,
-      current_period_start: now,
-      current_period_end: end.toISOString(),
-      last_payment_at: now,
-      auto_renew: false,
-      updated_at: now,
-    });
+    const { error: insertError } = await adminClient
+      .from('verification_subscriptions')
+      .insert({
+        user_id: profile.id,
+        role,
+        plan_interval: 'yearly',
+        status: 'active',
+        amount_usd: amountUsd,
+        charge_currency: clean(
+          Deno.env.get('PAYSTACK_CURRENCY') || 'GHS',
+        ).toUpperCase(),
+        charge_amount: 0,
+        current_period_start: now,
+        current_period_end: end.toISOString(),
+        last_payment_at: now,
+        auto_renew: false,
+        updated_at: now,
+      });
     if (insertError) throw new Error(insertError.message);
-    await adminClient.from('profiles').update({
-      verification_expires_at: end.toISOString(),
-      updated_at: now,
-    }).eq('id', profile.id);
+    await adminClient
+      .from('profiles')
+      .update({
+        verification_expires_at: end.toISOString(),
+        updated_at: now,
+      })
+      .eq('id', profile.id);
     created += 1;
   }
   return { created };
 };
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method === 'OPTIONS')
+    return new Response('ok', { headers: corsHeaders });
 
   try {
     const supabaseUrl = requiredEnv('SUPABASE_URL');
@@ -463,9 +523,11 @@ Deno.serve(async (req) => {
     const signature = req.headers.get('x-paystack-signature');
     if (signature) {
       const expected = await paystackSignature(paystackSecret, rawBody);
-      if (expected !== signature) return json(401, { ok: false, error: 'Invalid webhook signature.' });
+      if (expected !== signature)
+        return json(401, { ok: false, error: 'Invalid webhook signature.' });
       const event = JSON.parse(rawBody);
-      if (event?.event !== 'charge.success') return json(200, { ok: true, ignored: true });
+      if (event?.event !== 'charge.success')
+        return json(200, { ok: true, ignored: true });
       const reference = clean(event?.data?.reference);
       const { data: subscription, error } = await adminClient
         .from('verification_subscriptions')
@@ -503,8 +565,40 @@ Deno.serve(async (req) => {
       return json(200, { ok: true, ...result });
     }
 
+    if (action === 'adminVerifyReference') {
+      await assertAdmin({ req, supabaseUrl, anonKey });
+      const reference = clean(body.reference);
+      if (!reference)
+        return json(400, {
+          ok: false,
+          error: 'Payment reference is required.',
+        });
+      const { data: subscription, error } = await adminClient
+        .from('verification_subscriptions')
+        .select('*')
+        .eq('paystack_reference', reference)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!subscription)
+        return json(404, {
+          ok: false,
+          error: 'Subscription payment was not found.',
+        });
+      const paymentData = await verifyReferenceWithPaystack(
+        paystackSecret,
+        reference,
+      );
+      const activated = await activateSubscription({
+        adminClient,
+        subscription,
+        paymentData,
+      });
+      return json(200, { ok: true, ...activated });
+    }
+
     const authorization = req.headers.get('Authorization') || '';
-    if (!authorization.startsWith('Bearer ')) return json(401, { ok: false, error: 'Missing session.' });
+    if (!authorization.startsWith('Bearer '))
+      return json(401, { ok: false, error: 'Missing session.' });
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authorization } },
     });
@@ -512,7 +606,8 @@ Deno.serve(async (req) => {
       data: { user },
       error: userError,
     } = await userClient.auth.getUser();
-    if (userError || !user) return json(401, { ok: false, error: 'Invalid session.' });
+    if (userError || !user)
+      return json(401, { ok: false, error: 'Invalid session.' });
 
     const { data: profile, error: profileError } = await adminClient
       .from('profiles')
@@ -524,7 +619,11 @@ Deno.serve(async (req) => {
 
     if (action === 'verify') {
       const reference = clean(body.reference);
-      if (!reference) return json(400, { ok: false, error: 'Payment reference is required.' });
+      if (!reference)
+        return json(400, {
+          ok: false,
+          error: 'Payment reference is required.',
+        });
       const { data: subscription, error } = await adminClient
         .from('verification_subscriptions')
         .select('*')
@@ -532,25 +631,44 @@ Deno.serve(async (req) => {
         .eq('paystack_reference', reference)
         .maybeSingle();
       if (error) throw new Error(error.message);
-      if (!subscription) return json(404, { ok: false, error: 'Subscription payment was not found.' });
-      const paymentData = await verifyReferenceWithPaystack(paystackSecret, reference);
-      const activated = await activateSubscription({ adminClient, subscription, paymentData });
+      if (!subscription)
+        return json(404, {
+          ok: false,
+          error: 'Subscription payment was not found.',
+        });
+      const paymentData = await verifyReferenceWithPaystack(
+        paystackSecret,
+        reference,
+      );
+      const activated = await activateSubscription({
+        adminClient,
+        subscription,
+        paymentData,
+      });
       return json(200, { ok: true, ...activated });
     }
 
-    if (action !== 'initialize') return json(400, { ok: false, error: 'Unknown billing action.' });
+    if (action !== 'initialize')
+      return json(400, { ok: false, error: 'Unknown billing action.' });
 
     const role = lower(profile.role);
     if (role !== 'customer' && role !== 'artisan') {
-      return json(400, { ok: false, error: 'Only customer and artisan accounts can buy verification.' });
+      return json(400, {
+        ok: false,
+        error: 'Only customer and artisan accounts can buy verification.',
+      });
     }
     const interval = lower(body.interval) === 'yearly' ? 'yearly' : 'monthly';
     const requestedChannel = lower(body.channel);
     const amountUsd = amountUsdFor(role, interval);
-    const chargeCurrency = clean(Deno.env.get('PAYSTACK_CURRENCY') || 'GHS').toUpperCase();
+    const chargeCurrency = clean(
+      Deno.env.get('PAYSTACK_CURRENCY') || 'GHS',
+    ).toUpperCase();
     const amount = chargeAmount(amountUsd, chargeCurrency);
     const reference = `prosme_ver_${user.id.replaceAll('-', '').slice(0, 12)}_${Date.now()}`;
-    const callbackUrl = clean(body.callbackUrl || Deno.env.get('PAYSTACK_CALLBACK_URL'));
+    const callbackUrl = clean(
+      body.callbackUrl || Deno.env.get('PAYSTACK_CALLBACK_URL'),
+    );
 
     const transactionPayload: Record<string, unknown> = {
       email: clean(profile.email || user.email),
@@ -565,20 +683,26 @@ Deno.serve(async (req) => {
         amount_usd: amountUsd,
       },
     };
-    if (validChannels.has(requestedChannel)) transactionPayload.channels = [requestedChannel];
+    if (validChannels.has(requestedChannel))
+      transactionPayload.channels = [requestedChannel];
     if (callbackUrl) transactionPayload.callback_url = callbackUrl;
 
-    const initResponse = await fetch('https://api.paystack.co/transaction/initialize', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${paystackSecret}`,
-        'Content-Type': 'application/json',
+    const initResponse = await fetch(
+      'https://api.paystack.co/transaction/initialize',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${paystackSecret}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(transactionPayload),
       },
-      body: JSON.stringify(transactionPayload),
-    });
+    );
     const initPayload = await initResponse.json();
     if (!initResponse.ok || initPayload?.status !== true) {
-      throw new Error(initPayload?.message || 'Could not initialize Paystack transaction.');
+      throw new Error(
+        initPayload?.message || 'Could not initialize Paystack transaction.',
+      );
     }
 
     const now = new Date().toISOString();
@@ -595,7 +719,9 @@ Deno.serve(async (req) => {
           charge_amount: amount,
           paystack_reference: reference,
           paystack_access_code: clean(initPayload.data?.access_code),
-          paystack_authorization_url: clean(initPayload.data?.authorization_url),
+          paystack_authorization_url: clean(
+            initPayload.data?.authorization_url,
+          ),
           updated_at: now,
         },
         { onConflict: 'user_id' },

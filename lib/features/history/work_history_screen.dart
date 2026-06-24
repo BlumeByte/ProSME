@@ -23,6 +23,7 @@ class _WorkHistoryScreenState extends ConsumerState<WorkHistoryScreen> {
   String? _attemptedLoadKey;
   Object? _error;
   bool _loading = false;
+  String _bidSort = 'newest';
 
   Future<void> _load(AppUser user) async {
     if (_loading) return;
@@ -87,7 +88,15 @@ class _WorkHistoryScreenState extends ConsumerState<WorkHistoryScreen> {
                 ? _HistoryError(onRetry: () => _load(user))
                 : TabBarView(
                     children: [
-                      _BidHistoryList(items: _history.bids),
+                      _BidHistoryList(
+                        items: _history.bids,
+                        sort: _bidSort,
+                        onSortChanged: (value) {
+                          if (value != null) {
+                            setState(() => _bidSort = value);
+                          }
+                        },
+                      ),
                       _RequestHistoryList(items: _history.requests),
                     ],
                   ),
@@ -97,9 +106,15 @@ class _WorkHistoryScreenState extends ConsumerState<WorkHistoryScreen> {
 }
 
 class _BidHistoryList extends ConsumerWidget {
-  const _BidHistoryList({required this.items});
+  const _BidHistoryList({
+    required this.items,
+    required this.sort,
+    required this.onSortChanged,
+  });
 
   final List<BidHistoryItem> items;
+  final String sort;
+  final ValueChanged<String?> onSortChanged;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -107,12 +122,46 @@ class _BidHistoryList extends ConsumerWidget {
     if (items.isEmpty) {
       return Center(child: Text(settings.t('No bid history yet.')));
     }
+    final visibleItems = [...items]..sort((a, b) {
+        switch (sort) {
+          case 'oldest':
+            return a.createdAt.compareTo(b.createdAt);
+          case 'amount':
+            return b.amount.compareTo(a.amount);
+          case 'status':
+            return a.status.compareTo(b.status);
+          case 'newest':
+          default:
+            return b.createdAt.compareTo(a.createdAt);
+        }
+      });
     return ListView.separated(
       padding: const EdgeInsets.all(16),
-      itemCount: items.length,
+      itemCount: visibleItems.length + 1,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
-        final item = items[index];
+        if (index == 0) {
+          return DropdownButtonFormField<String>(
+            initialValue: sort,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: settings.t('Sort bid history'),
+              prefixIcon: const Icon(Icons.sort),
+            ),
+            items: [
+              DropdownMenuItem(
+                  value: 'newest', child: Text(settings.t('Newest first'))),
+              DropdownMenuItem(
+                  value: 'oldest', child: Text(settings.t('Oldest first'))),
+              DropdownMenuItem(
+                  value: 'amount', child: Text(settings.t('Highest amount'))),
+              DropdownMenuItem(
+                  value: 'status', child: Text(settings.t('Status'))),
+            ],
+            onChanged: onSortChanged,
+          );
+        }
+        final item = visibleItems[index - 1];
         final accepted = item.status == 'accepted';
         return Card(
           child: ListTile(

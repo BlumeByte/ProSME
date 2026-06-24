@@ -2,7 +2,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -12,7 +13,8 @@ const json = (status: number, body: Record<string, unknown>) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
-const ok = (body: Record<string, unknown> = {}) => json(200, { ok: true, ...body });
+const ok = (body: Record<string, unknown> = {}) =>
+  json(200, { ok: true, ...body });
 
 const fail = (error: unknown) =>
   json(200, {
@@ -41,6 +43,16 @@ const numberOrZero = (value: unknown) => {
 };
 
 const verificationAmountUsdFor = (role: string) => (role === 'artisan' ? 5 : 2);
+
+const verificationPeriodEnd = (interval: string) => {
+  const end = new Date();
+  if (interval === 'yearly') {
+    end.setUTCFullYear(end.getUTCFullYear() + 1);
+  } else {
+    end.setUTCMonth(end.getUTCMonth() + 1);
+  }
+  return end.toISOString();
+};
 
 const queueVerificationPayment = async ({
   adminClient,
@@ -84,12 +96,15 @@ const queueVerificationPayment = async ({
     .maybeSingle();
   if (subscriptionError) throw new Error(subscriptionError.message);
 
-  await adminClient.from('profiles').update({
-    verification_status: 'pending',
-    verification_notes: notes,
-    verification_reviewed_at: now,
-    verification_retry_after: null,
-  }).eq('id', userId);
+  await adminClient
+    .from('profiles')
+    .update({
+      verification_status: 'pending',
+      verification_notes: notes,
+      verification_reviewed_at: now,
+      verification_retry_after: null,
+    })
+    .eq('id', userId);
 
   await adminClient.from('admin_notifications').insert({
     type: 'verification_payment_required',
@@ -104,18 +119,168 @@ const queueVerificationPayment = async ({
   await adminClient.from('email_outbox').insert({
     to_email: null,
     subject: 'Your ProSME verification was accepted',
-    body:
-      'Your verification documents were accepted. Open ProSME and pay the verification subscription to activate your badge.',
+    body: 'Your verification documents were accepted. Open ProSME and pay the verification subscription to activate your badge.',
     related_user_id: userId,
   });
 };
 
-const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
+const overrideVerificationPaid = async ({
+  adminClient,
+  userId,
+  adminId,
+  notes,
+  interval,
+}: {
+  adminClient: ReturnType<typeof createClient>;
+  userId: string;
+  adminId: string;
+  notes: string;
+  interval: string;
+}) => {
+  const { data: profile, error: profileError } = await adminClient
+    .from('profiles')
+    .select('id,email,role')
+    .eq('id', userId)
+    .maybeSingle();
+  if (profileError) throw new Error(profileError.message);
+  if (!profile) throw new Error('Profile not found.');
+
+  const role = clean(profile.role) === 'artisan' ? 'artisan' : 'customer';
+  const planInterval = clean(interval) === 'yearly' ? 'yearly' : 'monthly';
+  const now = new Date().toISOString();
+  const end = verificationPeriodEnd(planInterval);
+  const reference = `admin_override_${userId.replaceAll('-', '').slice(0, 12)}_${Date.now()}`;
+  const amountUsd =
+    verificationAmountUsdFor(role) * (planInterval === 'yearly' ? 12 : 1);
+
+  const { data: subscription, error: subscriptionError } = await adminClient
+    .from('verification_subscriptions')
+    .upsert(
+      {
+        user_id: userId,
+        role,
+        plan_interval: planInterval,
+        status: 'active',
+        amount_usd: amountUsd,
+        charge_currency: clean(Deno.env.get('PAYSTACK_CURRENCY')) || 'GHS',
+        charge_amount: 0,
+        paystack_reference: reference,
+        current_period_start: now,
+        current_period_end: end,
+        last_payment_at: now,
+        auto_renew: false,
+        admin_approved_by: adminId,
+        admin_approved_at: now,
+        updated_at: now,
+      },
+      { onConflict: 'user_id' },
+    )
+    .select('id')
+    .maybeSingle();
+  if (subscriptionError) throw new Error(subscriptionError.message);
+
+  await adminClient.from('verification_payments').upsert(
+    {
+      subscription_id: subscription?.id,
+      user_id: userId,
+      role,
+      plan_interval: planInterval,
+      status: 'success',
+      amount_usd: amountUsd,
+      charge_currency: clean(Deno.env.get('PAYSTACK_CURRENCY')) || 'GHS',
+      charge_amount: 0,
+      paystack_reference: reference,
+      gateway_response: 'Admin marked paid and verified',
+      paid_at: now,
+      raw_payload: { source: 'admin_override', admin_id: adminId, notes },
+    },
+    { onConflict: 'paystack_reference' },
+  );
+
+  await adminClient
+    .from('profiles')
+    .update({
+      verification_status: 'verified',
+      verification_notes: notes,
+      verification_expires_at: end,
+      verification_reviewed_at: now,
+      verification_retry_after: null,
+    })
+    .eq('id', userId);
+
+  await adminClient.from('admin_notifications').insert({
+    type: 'verification_admin_override',
+    title: 'Verification manually activated',
+    body: `${role} verification was marked paid and active by admin.`,
+    actor_id: adminId,
+    related_user_id: userId,
+    related_table: 'verification_subscriptions',
+    related_id: subscription?.id,
+  });
+
+  await adminClient.from('email_outbox').insert({
+    to_email: null,
+    subject: 'Your ProSME verification is active',
+    body: `Your verification badge is active until ${new Date(end).toDateString()}.`,
+    related_user_id: userId,
+  });
+
+  return { subscriptionId: subscription?.id, currentPeriodEnd: end, reference };
+};
+
+const requestExtraVerification = async ({
+  adminClient,
+  userId,
+  adminId,
+  message,
+}: {
+  adminClient: ReturnType<typeof createClient>;
+  userId: string;
+  adminId: string;
+  message: string;
+}) => {
+  const body =
+    clean(message) ||
+    'Please upload clearer or additional verification documents before approval.';
+  const now = new Date().toISOString();
+  await adminClient
+    .from('profiles')
+    .update({
+      verification_status: 'pending',
+      verification_notes: body,
+      verification_reviewed_at: now,
+      verification_retry_after: null,
+    })
+    .eq('id', userId);
+
+  await adminClient.from('admin_notifications').insert({
+    type: 'verification_more_info_requested',
+    title: 'More verification information requested',
+    body,
+    actor_id: adminId,
+    related_user_id: userId,
+    related_table: 'profiles',
+    related_id: userId,
+  });
+
+  await adminClient.from('email_outbox').insert({
+    to_email: null,
+    subject: 'More information needed for ProSME verification',
+    body,
+    related_user_id: userId,
+  });
+};
+
+const validEmail = (value: string) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
 
 const passwordResetRedirectUrl = (requestedValue: string) => {
-  const value = clean(Deno.env.get('PASSWORD_RESET_REDIRECT_URL')) || clean(requestedValue);
+  const value =
+    clean(Deno.env.get('PASSWORD_RESET_REDIRECT_URL')) || clean(requestedValue);
   if (!value) {
-    throw new Error('PASSWORD_RESET_REDIRECT_URL is not configured and no recovery URL was supplied.');
+    throw new Error(
+      'PASSWORD_RESET_REDIRECT_URL is not configured and no recovery URL was supplied.',
+    );
   }
   let url: URL;
   try {
@@ -162,7 +327,9 @@ const sendRecoveryWithResend = async (email: string, actionLink: string) => {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(
-      clean(payload?.message) || clean(payload?.error) || `Resend returned HTTP ${response.status}`,
+      clean(payload?.message) ||
+        clean(payload?.error) ||
+        `Resend returned HTTP ${response.status}`,
     );
   }
 };
@@ -179,17 +346,21 @@ const sendPasswordRecovery = async ({
   redirectTo: string;
 }) => {
   const redirectTo = passwordResetRedirectUrl(requestedRedirectTo);
-  const { error: mailerError } = await publicClient.auth.resetPasswordForEmail(email, {
-    redirectTo,
-  });
+  const { error: mailerError } = await publicClient.auth.resetPasswordForEmail(
+    email,
+    {
+      redirectTo,
+    },
+  );
   if (!mailerError) return { provider: 'supabase' };
 
   try {
-    const { data, error: linkError } = await adminClient.auth.admin.generateLink({
-      type: 'recovery',
-      email,
-      options: { redirectTo },
-    });
+    const { data, error: linkError } =
+      await adminClient.auth.admin.generateLink({
+        type: 'recovery',
+        email,
+        options: { redirectTo },
+      });
     if (linkError) throw linkError;
     const actionLink = clean(data?.properties?.action_link);
     if (!actionLink) throw new Error('Supabase did not return a recovery link');
@@ -197,7 +368,9 @@ const sendPasswordRecovery = async ({
     return { provider: 'resend', mailerWarning: mailerError.message };
   } catch (fallbackError) {
     const fallbackMessage =
-      fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+      fallbackError instanceof Error
+        ? fallbackError.message
+        : String(fallbackError);
     throw new Error(
       `Recovery email failed. Supabase: ${mailerError.message}. Resend fallback: ${fallbackMessage}. Verify Auth email settings, PASSWORD_RESET_REDIRECT_URL, and Resend secrets.`,
     );
@@ -207,12 +380,15 @@ const sendPasswordRecovery = async ({
 const randomPassword = () => {
   const bytes = new Uint8Array(12);
   crypto.getRandomValues(bytes);
-  const token = btoa(String.fromCharCode(...bytes)).replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+  const token = btoa(String.fromCharCode(...bytes))
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .slice(0, 12);
   return `${token}Aa!7`;
 };
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method === 'OPTIONS')
+    return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
   try {
@@ -221,7 +397,8 @@ Deno.serve(async (req) => {
     const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY');
     const authorization = req.headers.get('Authorization') || '';
 
-    if (!authorization.startsWith('Bearer ')) return fail('Missing admin session.');
+    if (!authorization.startsWith('Bearer '))
+      return fail('Missing admin session.');
 
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authorization } },
@@ -279,16 +456,18 @@ Deno.serve(async (req) => {
       if (error) return fail(error.message);
       const createdUser = data.user;
 
-      const { error: profileError } = await adminClient.from('profiles').upsert({
-        id: createdUser.id,
-        email,
-        full_name: fullName,
-        phone,
-        country: country || undefined,
-        location,
-        role,
-        verification_status: 'pending',
-      });
+      const { error: profileError } = await adminClient
+        .from('profiles')
+        .upsert({
+          id: createdUser.id,
+          email,
+          full_name: fullName,
+          phone,
+          country: country || undefined,
+          location,
+          role,
+          verification_status: 'pending',
+        });
 
       if (profileError) return fail(profileError.message);
       let resetResult: Record<string, unknown> = {};
@@ -319,10 +498,16 @@ Deno.serve(async (req) => {
       const allowedRoles = new Set(['customer', 'artisan', 'admin']);
 
       for (const rawAccount of accounts.slice(0, 200)) {
-        const account = rawAccount && typeof rawAccount === 'object' ? rawAccount as Record<string, unknown> : {};
+        const account =
+          rawAccount && typeof rawAccount === 'object'
+            ? (rawAccount as Record<string, unknown>)
+            : {};
         const email = clean(account.email).toLowerCase();
         const role = clean(account.role) || 'customer';
-        const fullName = clean(account.full_name) || clean(account.name) || email.split('@')[0];
+        const fullName =
+          clean(account.full_name) ||
+          clean(account.name) ||
+          email.split('@')[0];
         const password = clean(account.password) || randomPassword();
 
         if (!validEmail(email)) {
@@ -343,20 +528,25 @@ Deno.serve(async (req) => {
         });
 
         if (error || !data.user) {
-          failed.push({ email, error: error?.message || 'Could not create user.' });
+          failed.push({
+            email,
+            error: error?.message || 'Could not create user.',
+          });
           continue;
         }
 
-        const { error: profileError } = await adminClient.from('profiles').upsert({
-          id: data.user.id,
-          email,
-          full_name: fullName,
-          phone: clean(account.phone),
-          country: cleanNullable(account.country),
-          location: clean(account.location),
-          role,
-          verification_status: 'pending',
-        });
+        const { error: profileError } = await adminClient
+          .from('profiles')
+          .upsert({
+            id: data.user.id,
+            email,
+            full_name: fullName,
+            phone: clean(account.phone),
+            country: cleanNullable(account.country),
+            location: clean(account.location),
+            role,
+            verification_status: 'pending',
+          });
 
         if (profileError) {
           failed.push({ email, error: profileError.message });
@@ -373,7 +563,10 @@ Deno.serve(async (req) => {
             redirectTo: clean(body.redirectTo),
           });
         } catch (resetError) {
-          resetWarning = resetError instanceof Error ? resetError.message : String(resetError);
+          resetWarning =
+            resetError instanceof Error
+              ? resetError.message
+              : String(resetError);
         }
         created.push({
           email,
@@ -390,7 +583,10 @@ Deno.serve(async (req) => {
 
     if (action === 'updateProfile') {
       const id = clean(body.id);
-      const patch = body.patch && typeof body.patch === 'object' ? body.patch as Record<string, unknown> : {};
+      const patch =
+        body.patch && typeof body.patch === 'object'
+          ? (body.patch as Record<string, unknown>)
+          : {};
       if (!id) return fail('Profile id is required.');
 
       const sanitized: Record<string, unknown> = {};
@@ -417,8 +613,38 @@ Deno.serve(async (req) => {
       ]) {
         if (hasOwn(patch, key)) sanitized[key] = cleanNullable(patch[key]);
       }
-      const { error } = await adminClient.from('profiles').update(sanitized).eq('id', id);
+      const { error } = await adminClient
+        .from('profiles')
+        .update(sanitized)
+        .eq('id', id);
       if (error) return fail(error.message);
+      return ok();
+    }
+
+    if (action === 'overrideVerificationPaid') {
+      const userId = clean(body.userId || body.id);
+      if (!userId) return fail('Profile id is required.');
+      const result = await overrideVerificationPaid({
+        adminClient,
+        userId,
+        adminId: user.id,
+        notes:
+          clean(body.notes) ||
+          'Admin reviewed documents and marked payment complete.',
+        interval: clean(body.interval),
+      });
+      return ok(result);
+    }
+
+    if (action === 'requestExtraVerification') {
+      const userId = clean(body.userId || body.id);
+      if (!userId) return fail('Profile id is required.');
+      await requestExtraVerification({
+        adminClient,
+        userId,
+        adminId: user.id,
+        message: clean(body.message),
+      });
       return ok();
     }
 
@@ -426,7 +652,9 @@ Deno.serve(async (req) => {
       const userId = clean(body.userId || body.id);
       if (!userId) return fail('User id is required.');
       if (userId === user.id) {
-        return fail('You cannot delete the Admin Account you are currently using.');
+        return fail(
+          'You cannot delete the Admin Account you are currently using.',
+        );
       }
 
       const { error } = await adminClient.auth.admin.deleteUser(userId);
@@ -438,7 +666,10 @@ Deno.serve(async (req) => {
 
     if (action === 'upsertListing') {
       const id = clean(body.id);
-      const patch = body.patch && typeof body.patch === 'object' ? body.patch as Record<string, unknown> : {};
+      const patch =
+        body.patch && typeof body.patch === 'object'
+          ? (body.patch as Record<string, unknown>)
+          : {};
       const row = {
         title: clean(patch.title),
         description: clean(patch.description),
@@ -450,14 +681,25 @@ Deno.serve(async (req) => {
         tenant_id: cleanNullable(patch.tenant_id),
       };
       const update = Object.fromEntries(
-        Object.entries(row).filter(([, value]) => value !== '' && value !== null)
+        Object.entries(row).filter(
+          ([, value]) => value !== '' && value !== null,
+        ),
       );
       if (!id && !row.artisan_id) return fail('Artisan owner is required.');
       if (!id && !row.title) return fail('Listing title is required.');
 
       const query = id
-        ? adminClient.from('listings').update(update).eq('id', id).select('id').maybeSingle()
-        : adminClient.from('listings').insert(update).select('id').maybeSingle();
+        ? adminClient
+            .from('listings')
+            .update(update)
+            .eq('id', id)
+            .select('id')
+            .maybeSingle()
+        : adminClient
+            .from('listings')
+            .insert(update)
+            .select('id')
+            .maybeSingle();
       const { data, error } = await query;
       if (error) return fail(error.message);
       return ok({ id: data?.id || id });
@@ -466,14 +708,20 @@ Deno.serve(async (req) => {
     if (action === 'deleteListing') {
       const id = clean(body.id);
       if (!id) return fail('Listing id is required.');
-      const { error } = await adminClient.from('listings').delete().eq('id', id);
+      const { error } = await adminClient
+        .from('listings')
+        .delete()
+        .eq('id', id);
       if (error) return fail(error.message);
       return ok();
     }
 
     if (action === 'upsertJob') {
       const id = clean(body.id);
-      const patch = body.patch && typeof body.patch === 'object' ? body.patch as Record<string, unknown> : {};
+      const patch =
+        body.patch && typeof body.patch === 'object'
+          ? (body.patch as Record<string, unknown>)
+          : {};
       const row = {
         title: clean(patch.title),
         description: clean(patch.description),
@@ -484,13 +732,20 @@ Deno.serve(async (req) => {
         tenant_id: cleanNullable(patch.tenant_id),
       };
       const update = Object.fromEntries(
-        Object.entries(row).filter(([, value]) => value !== '' && value !== null)
+        Object.entries(row).filter(
+          ([, value]) => value !== '' && value !== null,
+        ),
       );
       if (!id && !row.created_by) return fail('Job owner is required.');
       if (!id && !row.title) return fail('Job title is required.');
 
       const query = id
-        ? adminClient.from('jobs').update(update).eq('id', id).select('id').maybeSingle()
+        ? adminClient
+            .from('jobs')
+            .update(update)
+            .eq('id', id)
+            .select('id')
+            .maybeSingle()
         : adminClient.from('jobs').insert(update).select('id').maybeSingle();
       const { data, error } = await query;
       if (error) return fail(error.message);
@@ -523,7 +778,9 @@ Deno.serve(async (req) => {
       const password = clean(body.password) || randomPassword();
       if (!userId) return fail('User id is required.');
 
-      const { error } = await adminClient.auth.admin.updateUserById(userId, { password });
+      const { error } = await adminClient.auth.admin.updateUserById(userId, {
+        password,
+      });
       if (error) return fail(error.message);
       return ok({ temporaryPassword: password });
     }
