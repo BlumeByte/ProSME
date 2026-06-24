@@ -9,6 +9,7 @@ This repository now contains a Vercel-ready web dashboard at `admin_web`.
 - **Build Command:** `npm run build`
 - **Output Directory:** `dist`
 - **Install Command:** `npm install`
+- **Production Domain:** `prosme.blumebyte.com`
 
 ## Required Environment Variables
 
@@ -58,3 +59,22 @@ npm run dev
 ```
 
 Fill `.env.local` before running locally.
+
+## Production URLs
+
+Configure Supabase Auth with `https://prosme.blumebyte.com` as the Site URL and add these redirect URLs:
+
+```text
+https://prosme.blumebyte.com/reset-password
+https://prosme.vercel.app/reset-password
+https://pro-sme.vercel.app/reset-password
+com.prosme.app://login-callback
+```
+
+Verify `prosme.blumebyte.com` in Resend before using `ProSME <noreply@prosme.blumebyte.com>` as the production sender.
+
+Add this Paystack webhook URL in Paystack Dashboard > Settings > API Keys & Webhooks:
+
+```text
+https://wbnvifrzckjttyxhmlcf.supabase.co/functions/v1/verification-billing
+```

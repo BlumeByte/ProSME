@@ -269,7 +269,7 @@ class AdminService {
     final client = _supabase;
     if (client == null) return;
     final status =
-        approved ? VerificationStatus.verified : VerificationStatus.rejected;
+        approved ? VerificationStatus.pending : VerificationStatus.rejected;
     await client.from('profiles').update({
       'verification_status': status.name,
       'verification_notes': notes,
@@ -281,13 +281,31 @@ class AdminService {
               .add(const Duration(days: 30))
               .toIso8601String(),
     }).eq('id', userId);
+    if (approved) {
+      final profile = await client
+          .from('profiles')
+          .select('role')
+          .eq('id', userId)
+          .maybeSingle();
+      final role = (profile?['role'] ?? UserRole.customer.name).toString();
+      final normalizedRole =
+          role == UserRole.artisan.name ? UserRole.artisan.name : 'customer';
+      await client.from('verification_subscriptions').upsert({
+        'user_id': userId,
+        'role': normalizedRole,
+        'plan_interval': 'monthly',
+        'status': 'payment_required',
+        'amount_usd': normalizedRole == UserRole.artisan.name ? 5 : 2,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'user_id');
+    }
     await client.from('email_outbox').insert({
       'to_email': null,
       'subject': approved
-          ? 'Your ProSME account is verified'
+          ? 'Your ProSME verification was accepted'
           : 'Your ProSME verification needs attention',
       'body': approved
-          ? 'Your account has been verified and now shows a public checkmark.'
+          ? 'Your documents were accepted. Pay the verification subscription in ProSME to activate your public checkmark.'
           : 'Your verification was rejected. Notes: $notes',
       'related_user_id': userId,
     });

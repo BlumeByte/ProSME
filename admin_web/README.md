@@ -12,6 +12,7 @@ This is the Vercel-ready web dashboard for ProSME admins.
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_PUBLISHABLE_KEY`
 6. Deploy.
+7. Add `prosme.blumebyte.com` as the production custom domain for the project.
 
 Do not add a Supabase `service_role` or secret key to Vercel. This dashboard runs in the browser, so it must use only the publishable or anon key and rely on Supabase Row Level Security.
 
@@ -24,14 +25,23 @@ supabase functions deploy admin-dashboard
 supabase secrets set SUPABASE_URL="https://your-project-ref.supabase.co"
 supabase secrets set SUPABASE_ANON_KEY="your-publishable-or-anon-key"
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
-supabase secrets set PASSWORD_RESET_REDIRECT_URL="https://your-vercel-domain.vercel.app/reset-password"
+supabase secrets set PASSWORD_RESET_REDIRECT_URL="https://prosme.blumebyte.com/reset-password"
+supabase secrets set PASSWORD_RESET_ALLOWED_REDIRECTS="com.prosme.app://login-callback,https://prosme.blumebyte.com/reset-password,https://prosme.vercel.app/reset-password,https://pro-sme.vercel.app/reset-password"
 supabase secrets set RESEND_API_KEY="your-resend-api-key"
-supabase secrets set RESEND_FROM_EMAIL="ProSME <noreply@your-verified-domain.com>"
+supabase secrets set RESEND_FROM_EMAIL="ProSME <noreply@prosme.blumebyte.com>"
 ```
 
 Use the same Supabase project for Vercel and the Edge Function. For example, if your function URL is `https://ivohczdtuxasyfoiphqu.supabase.co/functions/v1/admin-dashboard`, then Vercel's `VITE_SUPABASE_URL` and the function secret `SUPABASE_URL` must both be `https://ivohczdtuxasyfoiphqu.supabase.co`.
 
-The `SUPABASE_SERVICE_ROLE_KEY` belongs in Supabase Function secrets only. It is used for admin-only actions such as creating accounts, generating recovery links, and setting temporary passwords. Password recovery first uses the Supabase Auth mailer and falls back to Resend when its secrets are configured. Add `https://your-vercel-domain.vercel.app/reset-password` to the Supabase Auth redirect URL allow list.
+The `SUPABASE_SERVICE_ROLE_KEY` belongs in Supabase Function secrets only. It is used for admin-only actions such as creating accounts, generating recovery links, and setting temporary passwords. Password recovery first uses the Supabase Auth mailer and falls back to Resend when its secrets are configured. Add `https://prosme.blumebyte.com/reset-password` to the Supabase Auth redirect URL allow list. Keep `noreply@prosme.blumebyte.com` in Resend only after the `prosme.blumebyte.com` domain is verified.
+
+## Paystack Webhook
+
+Add this webhook URL in Paystack Dashboard > Settings > API Keys & Webhooks so verification subscription payments activate automatically:
+
+```text
+https://wbnvifrzckjttyxhmlcf.supabase.co/functions/v1/verification-billing
+```
 
 ## Local Run
 

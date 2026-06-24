@@ -280,6 +280,10 @@ class _ArtisanVerificationScreenState
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
     final settings = ref.watch(appSettingsControllerProvider);
+    final subscription = user == null
+        ? null
+        : ref.watch(verificationSubscriptionProvider(user.id)).valueOrNull;
+    final needsPayment = subscription?.needsPayment == true;
     final retryAfter = _retryAfter;
     final isRetryLocked =
         retryAfter != null && retryAfter.isAfter(DateTime.now());
@@ -305,6 +309,14 @@ class _ArtisanVerificationScreenState
               const Padding(
                 padding: EdgeInsets.all(24),
                 child: Center(child: CircularProgressIndicator()),
+              )
+            else if (needsPayment)
+              _StatusPanel(
+                icon: Icons.payments_outlined,
+                title: settings.t('Payment required'),
+                message: settings.t(
+                  'Your documents were accepted. Open Profile to pay the verification subscription and activate your badge.',
+                ),
               )
             else if (user?.verificationStatus == VerificationStatus.verified)
               _StatusPanel(

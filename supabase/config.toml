@@ -1,4 +1,37 @@
 
+[auth]
+site_url = "https://prosme.blumebyte.com"
+additional_redirect_urls = [
+  "com.prosme.app://login-callback",
+  "com.prosme.app",
+  "https://prosme.blumebyte.com/reset-password",
+  "https://prosme.vercel.app/",
+  "https://prosme.vercel.app/reset-password",
+  "https://prosme.vercel.app/login-callback/",
+  "https://prosme.vercel.app/login-callback",
+  "prosme.vercel.app/",
+  "prosme.vercel.app/reset-password",
+  "https://pro-sme-blumebyte.vercel.app/",
+  "https://pro-sme-blumebyte.vercel.app/**",
+  "https://pro-*-sme-blumebyte.vercel.app",
+  "https://pro-*-sme-blumebyte.vercel.app/**",
+  "https://pro-sme.vercel.app/reset-password",
+  "http://localhost:3000/reset-password",
+]
+minimum_password_length = 8
+password_requirements = "lower_upper_letters_digits_symbols"
+
+[auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"
+
+[auth.mfa]
+max_enrolled_factors = 5
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
 [functions.password-recovery]
 enabled = true
 verify_jwt = false
@@ -24,3 +57,8 @@ entrypoint = "./functions/account-verification/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/admin-dashboard/index.ts"
+
+[functions.verification-billing]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/verification-billing/index.ts"

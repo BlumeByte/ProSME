@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
     const resendApiKey = requiredAnyEnv(['RESEND_API_KEY', 'ProSME']);
     const from =
       firstEnv(['RESEND_FROM_EMAIL', 'PROSME_FROM_EMAIL']) ||
-      'ProSME <info@blumebyte.com>';
+      'ProSME <noreply@prosme.blumebyte.com>';
 
     const auth = await authorize(req, supabaseUrl, anonKey);
 

@@ -27,6 +27,9 @@ const String kPaystackCheckoutUrl = String.fromEnvironment(
   'PAYSTACK_CHECKOUT_URL',
   defaultValue: '',
 );
+const double kVerificationCustomerMonthlyUsd = 2;
+const double kVerificationArtisanMonthlyUsd = 5;
+const double kUsdToGhsEstimate = 15.5;
 
 // OAuth 2.1 / OIDC endpoints – derived from kSupabaseUrl.
 // Share these with third-party applications that integrate with this server.

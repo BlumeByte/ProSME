@@ -71,7 +71,19 @@ final chatServiceProvider = Provider<ChatService>((ref) {
   );
 });
 
-final paymentServiceProvider = Provider((ref) => PaymentService());
+final paymentServiceProvider = Provider((ref) {
+  if (shouldUseSupabase()) {
+    return PaymentService(Supabase.instance.client);
+  }
+  return const PaymentService();
+});
+
+final verificationSubscriptionProvider =
+    StreamProvider.family((ref, String userId) {
+  return ref
+      .watch(paymentServiceProvider)
+      .watchVerificationSubscription(userId);
+});
 
 final adminServiceProvider = Provider((ref) {
   if (shouldUseSupabase()) {

@@ -17,6 +17,7 @@ const emptyData = () => ({
   ratings: [],
   notifications: [],
   reports: [],
+  verificationSubscriptions: [],
 });
 
 const state = {
@@ -104,14 +105,12 @@ const dateText = (value) => {
 };
 
 const roleBadge = (role) => {
-  const displayRole = role === 'admin' ? 'admin' : role;
   const map = {
-    admin: 'badge badge-purple',
     admin: 'badge badge-purple',
     artisan: 'badge badge-teal',
     customer: 'badge',
   };
-  return `<span class="${map[role] || 'badge'}">${esc(displayRole || 'customer')}</span>`;
+  return `<span class="${map[role] || 'badge'}">${esc(role || 'customer')}</span>`;
 };
 
 const statusBadge = (status) => {
@@ -124,6 +123,12 @@ const statusBadge = (status) => {
     in_progress: 'badge badge-blue',
     cancelled: 'badge badge-red',
     accepted: 'badge badge-green',
+    active: 'badge badge-green',
+    payment_required: 'badge badge-orange',
+    pending_payment: 'badge badge-blue',
+    expired: 'badge badge-red',
+    renewal_failed: 'badge badge-red',
+    cancelled: 'badge badge-red',
     resolved: 'badge badge-green',
     reviewing: 'badge badge-blue',
     open: 'badge badge-orange',
@@ -206,7 +211,7 @@ async function loadDashboard() {
   const userId = state.session.user.id;
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('id,full_name,email,role,verification_status,tenant_id,created_at')
+    .select('id,full_name,email,role,verification_status,verification_expires_at,tenant_id,created_at')
     .eq('id', userId)
     .maybeSingle();
 
@@ -255,13 +260,14 @@ async function refreshData() {
     ratings,
     notifications,
     reports,
+    verificationSubscriptions,
   ] = await Promise.all([
     safeSelect(
       'profiles',
       supabase
         .from('profiles')
         .select(
-          'id,full_name,email,phone,role,verification_status,tenant_id,country,location,categories,description,bio,rating_summary,national_id_front_url,national_id_back_url,business_certificate_urls,verification_notes,verification_submitted_at,verification_reviewed_at,created_at'
+          'id,full_name,email,phone,role,verification_status,verification_expires_at,tenant_id,country,location,categories,description,bio,rating_summary,national_id_front_url,national_id_back_url,business_certificate_urls,verification_notes,verification_submitted_at,verification_reviewed_at,created_at'
         )
         .order('created_at', { ascending: false })
         .limit(500)
@@ -340,6 +346,14 @@ async function refreshData() {
         .order('created_at', { ascending: false })
         .limit(500)
     ),
+    safeSelect(
+      'verification_subscriptions',
+      supabase
+        .from('verification_subscriptions')
+        .select('*')
+        .order('updated_at', { ascending: false })
+        .limit(500)
+    ),
   ]);
 
   state.data = {
@@ -353,6 +367,7 @@ async function refreshData() {
     ratings,
     notifications,
     reports,
+    verificationSubscriptions,
   };
 }
 
@@ -370,6 +385,15 @@ async function adminAction(action, payload = {}) {
     );
   }
   if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+async function billingAction(action, payload = {}) {
+  const { data, error } = await supabase.functions.invoke('verification-billing', {
+    body: { action, ...payload },
+  });
+  if (error) throw new Error(error.message);
+  if (data?.ok === false) throw new Error(data.error || 'Verification billing action failed.');
   return data;
 }
 
@@ -447,10 +471,19 @@ async function signOut() {
 }
 
 async function setVerification(userId, status) {
+  const profile = state.data.profiles.find((item) => item.id === userId);
+  if (status === 'verified' && profile?.verification_status === 'verified') {
+    await runAction(async () => {
+      await billingAction('backfillVerified');
+      setNotice('Verified accounts were marked active for payment tracking.');
+      await refreshData();
+    });
+    return;
+  }
   const notes =
     status === 'rejected'
       ? window.prompt('Reason for rejection', 'Documents are unclear or incomplete.') || ''
-      : '';
+      : window.prompt('Approval notes', 'Documents accepted. Payment is required to activate or renew the badge.') || '';
   const update = {
     verification_status: status,
     verification_notes: notes,
@@ -463,7 +496,28 @@ async function setVerification(userId, status) {
     update.verification_retry_after = retry.toISOString();
   }
 
-  await updateTableRow('profiles', userId, update, `Verification ${status}.`);
+  await updateTableRow(
+    'profiles',
+    userId,
+    update,
+    status === 'verified'
+      ? 'Documents accepted. Verification payment is now required.'
+      : `Verification ${status}.`
+  );
+}
+
+async function syncVerificationBilling(action) {
+  await runAction(async () => {
+    const result = await billingAction(action, { limit: 50 });
+    if (action === 'renewDue') {
+      setNotice(`Renewed ${result.renewed?.length || 0}; failed ${result.failed?.length || 0}.`);
+    } else if (action === 'backfillVerified') {
+      setNotice(`Marked ${result.created || 0} already verified account${result.created === 1 ? '' : 's'} active.`);
+    } else {
+      setNotice('Verification expiry status synced.');
+    }
+    await refreshData();
+  });
 }
 
 async function updateProfile(id) {
@@ -935,8 +989,20 @@ function renderOverview() {
 
 function pendingVerifications() {
   return state.data.profiles.filter(
-    (profile) => profile.role === 'artisan' && profile.verification_status === 'pending'
+    (profile) =>
+      ['customer', 'artisan'].includes(profile.role) &&
+      profile.verification_status === 'pending' &&
+      (profile.national_id_front_url || profile.national_id_back_url)
   );
+}
+
+function subscriptionForUser(userId) {
+  return state.data.verificationSubscriptions.find((item) => item.user_id === userId) || null;
+}
+
+function subscriptionBadge(subscription) {
+  if (!subscription) return '<span class="badge">not started</span>';
+  return statusBadge(subscription.status || 'payment_required');
 }
 
 function controls({ roleFilter = true, statusFilter = true } = {}) {
@@ -955,7 +1021,7 @@ function controls({ roleFilter = true, statusFilter = true } = {}) {
       ${
         statusFilter
           ? `<select data-filter="status">
-              ${['all', 'pending', 'accepted', 'rejected', 'verified', 'active', 'in_progress', 'open', 'reviewing', 'resolved', 'completed', 'cancelled']
+              ${['all', 'pending', 'accepted', 'rejected', 'verified', 'payment_required', 'pending_payment', 'active', 'expired', 'renewal_failed', 'in_progress', 'open', 'reviewing', 'resolved', 'completed', 'cancelled']
                 .map(
                   (status) => `<option value="${status}" ${state.filters.status === status ? 'selected' : ''}>${status}</option>`
                 )
@@ -1002,13 +1068,13 @@ function renderVerificationList(items) {
           (profile) => `
         <div class="list-row">
           <div>
-            <strong>${esc(profile.full_name || profile.email || 'Unnamed artisan')}</strong>
+            <strong>${esc(profile.full_name || profile.email || 'Unnamed account')}</strong>
             <span>${esc(profile.email || 'No email')} ${profile.location ? `- ${esc(profile.location)}` : ''}</span>
-            <small>Submitted ${dateText(profile.verification_submitted_at || profile.created_at)}</small>
+            <small>${esc(profile.role || 'customer')} · Submitted ${dateText(profile.verification_submitted_at || profile.created_at)}</small>
           </div>
           <div class="row-actions">
             ${documentLinks(profile)}
-            <button class="approve" data-verify="verified" data-id="${esc(profile.id)}">Approve</button>
+            <button class="approve" data-verify="verified" data-id="${esc(profile.id)}">Accept docs</button>
             <button class="reject" data-verify="rejected" data-id="${esc(profile.id)}">Reject</button>
           </div>
         </div>`
@@ -1080,13 +1146,14 @@ function renderProfiles(filterRole = null) {
               <th>Phone</th>
               <th>Role</th>
               <th>Verification</th>
+              <th>Subscription</th>
               <th>Tenant</th>
               <th>Joined</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            ${rows.map(renderProfileRow).join('') || tableEmpty(8)}
+            ${rows.map(renderProfileRow).join('') || tableEmpty(9)}
           </tbody>
         </table>
       </div>
@@ -1095,6 +1162,7 @@ function renderProfiles(filterRole = null) {
 }
 
 function renderProfileRow(profile) {
+  const subscription = subscriptionForUser(profile.id);
   return `
     <tr>
       <td>
@@ -1105,6 +1173,10 @@ function renderProfileRow(profile) {
       <td>${esc(profile.phone || '')}</td>
       <td>${roleBadge(profile.role)}</td>
       <td>${statusBadge(profile.verification_status)}</td>
+      <td>
+        ${subscriptionBadge(subscription)}
+        <small>${subscription?.current_period_end ? `Expires ${dateText(subscription.current_period_end)}` : ''}</small>
+      </td>
       <td>${esc(profile.tenant_id || 'default')}</td>
       <td>${dateText(profile.created_at)}</td>
       <td class="row-actions">
@@ -1124,14 +1196,20 @@ function renderProfileRow(profile) {
 
 function renderVerifications() {
   const rows = filterRows(
-    state.data.profiles.filter((profile) => profile.role === 'artisan'),
+    state.data.profiles.filter((profile) => ['customer', 'artisan'].includes(profile.role)),
     ['full_name', 'email', 'location', 'verification_notes']
   );
+  const subscriptions = filterRows(state.data.verificationSubscriptions, ['status', 'role', 'paystack_reference']);
   return `
     <section class="panel">
       <div class="panel-head">
-        <h2>Artisan Verification Queue</h2>
-        <span class="badge">${pendingVerifications().length} pending</span>
+        <h2>Verification Queue</h2>
+        <div class="row-actions">
+          <span class="badge">${pendingVerifications().length} pending</span>
+          <button class="ghost small" data-billing-action="syncExpirations">Check expiries</button>
+          <button class="ghost small" data-billing-action="renewDue">Run renewals</button>
+          <button class="ghost small" data-billing-action="backfillVerified">Mark existing verified active</button>
+        </div>
       </div>
       ${controls({ roleFilter: false })}
       <div class="table-wrap">
@@ -1140,6 +1218,7 @@ function renderVerifications() {
             <tr>
               <th>Artisan</th>
               <th>Status</th>
+              <th>Payment tracking</th>
               <th>Documents</th>
               <th>Notes</th>
               <th>Submitted</th>
@@ -1153,16 +1232,66 @@ function renderVerifications() {
                 <tr>
                   <td><strong>${esc(profile.full_name || profile.email || 'Unnamed')}</strong><small>${esc(profile.email || '')}</small></td>
                   <td>${statusBadge(profile.verification_status)}</td>
+                  <td>
+                    ${subscriptionBadge(subscriptionForUser(profile.id))}
+                    <small>${subscriptionForUser(profile.id)?.current_period_end ? `Expires ${dateText(subscriptionForUser(profile.id).current_period_end)}` : ''}</small>
+                  </td>
                   <td class="doc-cell">${documentLinks(profile)}</td>
                   <td>${esc(profile.verification_notes || '')}</td>
                   <td>${dateText(profile.verification_submitted_at || profile.created_at)}</td>
                   <td class="row-actions">
-                    <button class="approve small" data-verify="verified" data-id="${esc(profile.id)}">Approve</button>
+                    <button class="approve small" data-verify="verified" data-id="${esc(profile.id)}">Accept docs</button>
                     <button class="reject small" data-verify="rejected" data-id="${esc(profile.id)}">Reject</button>
                   </td>
                 </tr>`
               )
-              .join('') || tableEmpty(6)}
+              .join('') || tableEmpty(7)}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Verification Payment Tracking</h2>
+        <span class="badge">${subscriptions.length} subscriptions</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th>Role</th>
+              <th>Plan</th>
+              <th>Status</th>
+              <th>Auto-renew</th>
+              <th>Payment method</th>
+              <th>Reference</th>
+              <th>Expires</th>
+              <th>Last payment</th>
+              <th>Renewal issue</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              subscriptions
+                .map((sub) => {
+                  const profile = profileFor(sub.user_id);
+                  return `
+                    <tr>
+                      <td><strong>${esc(profileLabel(sub.user_id))}</strong><small>${esc(profile?.email || '')}</small></td>
+                      <td>${roleBadge(sub.role)}</td>
+                      <td>${esc(sub.plan_interval || 'monthly')} · $${Number(sub.amount_usd || 0).toFixed(2)}</td>
+                      <td>${statusBadge(sub.status)}</td>
+                      <td>${sub.auto_renew ? '<span class="badge badge-green">on</span>' : '<span class="badge">off</span>'}</td>
+                      <td><strong>${esc(sub.payment_method_label || 'Not saved')}</strong><small>${esc(sub.payment_method_channel || '')}</small></td>
+                      <td>${esc(sub.paystack_reference || '')}</td>
+                      <td>${dateText(sub.current_period_end)}</td>
+                      <td>${dateText(sub.last_payment_at)}</td>
+                      <td>${esc(sub.last_renewal_error || '')}</td>
+                    </tr>`;
+                })
+                .join('') || tableEmpty(10)
+            }
           </tbody>
         </table>
       </div>
@@ -1759,6 +1888,10 @@ function bindEvents() {
 
   document.querySelectorAll('[data-verify]').forEach((button) => {
     button.addEventListener('click', () => setVerification(button.dataset.id, button.dataset.verify));
+  });
+
+  document.querySelectorAll('[data-billing-action]').forEach((button) => {
+    button.addEventListener('click', () => syncVerificationBilling(button.dataset.billingAction));
   });
 
   document.querySelectorAll('[data-read]').forEach((button) => {

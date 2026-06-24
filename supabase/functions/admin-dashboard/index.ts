@@ -40,6 +40,76 @@ const numberOrZero = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const verificationAmountUsdFor = (role: string) => (role === 'artisan' ? 5 : 2);
+
+const queueVerificationPayment = async ({
+  adminClient,
+  userId,
+  adminId,
+  notes,
+}: {
+  adminClient: ReturnType<typeof createClient>;
+  userId: string;
+  adminId: string;
+  notes: string;
+}) => {
+  const { data: profile, error: profileError } = await adminClient
+    .from('profiles')
+    .select('id,email,role')
+    .eq('id', userId)
+    .maybeSingle();
+  if (profileError) throw new Error(profileError.message);
+  if (!profile) throw new Error('Profile not found.');
+  const role = clean(profile.role) === 'artisan' ? 'artisan' : 'customer';
+  const now = new Date().toISOString();
+
+  const { data: subscription, error: subscriptionError } = await adminClient
+    .from('verification_subscriptions')
+    .upsert(
+      {
+        user_id: userId,
+        role,
+        plan_interval: 'monthly',
+        status: 'payment_required',
+        amount_usd: verificationAmountUsdFor(role),
+        charge_currency: clean(Deno.env.get('PAYSTACK_CURRENCY')) || 'GHS',
+        charge_amount: 0,
+        admin_approved_by: adminId,
+        admin_approved_at: now,
+        updated_at: now,
+      },
+      { onConflict: 'user_id' },
+    )
+    .select('id')
+    .maybeSingle();
+  if (subscriptionError) throw new Error(subscriptionError.message);
+
+  await adminClient.from('profiles').update({
+    verification_status: 'pending',
+    verification_notes: notes,
+    verification_reviewed_at: now,
+    verification_retry_after: null,
+  }).eq('id', userId);
+
+  await adminClient.from('admin_notifications').insert({
+    type: 'verification_payment_required',
+    title: 'Verification approved, payment required',
+    body: `${role} documents were accepted. Verification badge activates after subscription payment.`,
+    actor_id: adminId,
+    related_user_id: userId,
+    related_table: 'verification_subscriptions',
+    related_id: subscription?.id,
+  });
+
+  await adminClient.from('email_outbox').insert({
+    to_email: null,
+    subject: 'Your ProSME verification was accepted',
+    body:
+      'Your verification documents were accepted. Open ProSME and pay the verification subscription to activate your badge.',
+    related_user_id: userId,
+  });
+};
+
 const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
 
 const passwordResetRedirectUrl = (requestedValue: string) => {
@@ -73,7 +143,7 @@ const sendRecoveryWithResend = async (email: string, actionLink: string) => {
   const from =
     clean(Deno.env.get('RESEND_FROM_EMAIL')) ||
     clean(Deno.env.get('PROSME_FROM_EMAIL')) ||
-    'ProSME <noreply@blumebyte.com>';
+    'ProSME <noreply@prosme.blumebyte.com>';
   const safeLink = escapeHtml(actionLink);
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -324,6 +394,16 @@ Deno.serve(async (req) => {
       if (!id) return fail('Profile id is required.');
 
       const sanitized: Record<string, unknown> = {};
+      const requestedVerificationStatus = clean(patch.verification_status);
+      if (requestedVerificationStatus === 'verified') {
+        await queueVerificationPayment({
+          adminClient,
+          userId: id,
+          adminId: user.id,
+          notes: clean(patch.verification_notes),
+        });
+        return ok({ paymentRequired: true });
+      }
       for (const key of [
         'full_name',
         'phone',

@@ -597,7 +597,7 @@ const _translations = <String, Map<String, String>>{
     'Report chat': 'Signaler la discussion',
     'Block chat': 'Bloquer la discussion',
     'Report sent to Admin Dashboard.':
-        'Rapport envoye au tableau developpeur.',
+        'Rapport envoye au tableau admin.',
     'Share conversation': 'Partager la conversation',
     'Share to phone app': 'Partager vers une application',
     'Send as SMS': 'Envoyer par SMS',

@@ -59,14 +59,19 @@ flutter pub get
 3. Apply migration SQL:
    - Run every file in `supabase/migrations/` in timestamp order.
    - Password recovery specifically requires `20260623135621_password_recovery_rate_limit.sql`.
-4. For Google OAuth and password recovery on Android, add this redirect URL in Supabase Auth settings:
+4. For Google OAuth and password recovery, add these redirect URLs in Supabase Auth settings:
    - `<your.android.applicationId>://login-callback`
+   - `com.prosme.app://login-callback`
+   - `https://prosme.blumebyte.com/reset-password`
+   - `https://prosme.vercel.app/reset-password`
+   - `https://pro-sme.vercel.app/reset-password`
 5. Deploy the password recovery function and configure the existing Resend account:
    ```powershell
    npx supabase functions deploy password-recovery --project-ref <your-project-ref>
-   npx supabase secrets set RESEND_API_KEY="<your-resend-key>" RESEND_FROM_EMAIL="ProSME <noreply@your-verified-domain.com>" --project-ref <your-project-ref>
+   npx supabase secrets set PASSWORD_RESET_REDIRECT_URL="https://prosme.blumebyte.com/reset-password" PASSWORD_RESET_ALLOWED_REDIRECTS="com.prosme.app://login-callback,https://prosme.blumebyte.com/reset-password,https://prosme.vercel.app/reset-password,https://pro-sme.vercel.app/reset-password" --project-ref <your-project-ref>
+   npx supabase secrets set RESEND_API_KEY="<your-resend-key>" RESEND_FROM_EMAIL="ProSME <noreply@prosme.blumebyte.com>" --project-ref <your-project-ref>
    ```
-   The sender domain must be verified in Resend. The function accepts the Android redirect above and `https://prosme.vercel.app/reset-password`; add any additional exact URLs with the `PASSWORD_RESET_ALLOWED_REDIRECTS` secret, separated by commas.
+   The `prosme.blumebyte.com` sender domain must be verified in Resend before switching `RESEND_FROM_EMAIL` to `noreply@prosme.blumebyte.com`.
 6. Add runtime defines when running the app:
    ```bash
    flutter run \
@@ -98,6 +103,8 @@ flutter pub get
 ### 4) Paystack setup
 - Use Paystack’s hosted checkout URL for MoMo.
 - Update the Paystack public key in your payment service if needed.
+- Add the production webhook URL in Paystack Dashboard > Settings > API Keys & Webhooks:
+  `https://wbnvifrzckjttyxhmlcf.supabase.co/functions/v1/verification-billing`
 
 ### 5) Run the app
 ```bash

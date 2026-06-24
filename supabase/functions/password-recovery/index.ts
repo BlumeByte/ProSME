@@ -35,7 +35,9 @@ const allowedRedirect = (value: string) => {
     .filter(Boolean);
   const allowed = new Set([
     'com.prosme.app://login-callback',
+    'https://prosme.blumebyte.com/reset-password',
     'https://prosme.vercel.app/reset-password',
+    'https://pro-sme.vercel.app/reset-password',
     ...configured,
   ]);
   if (!allowed.has(value)) throw new Error('Password reset redirect is not allowed.');
@@ -54,7 +56,7 @@ const sendEmail = async (email: string, actionLink: string) => {
   const apiKey = requiredEnv('RESEND_API_KEY');
   const from = env('RESEND_FROM_EMAIL') ||
     env('PROSME_FROM_EMAIL') ||
-    'ProSME <noreply@blumebyte.com>';
+    'ProSME <noreply@prosme.blumebyte.com>';
   const safeLink = escapeHtml(actionLink);
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
