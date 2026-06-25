@@ -82,9 +82,6 @@ const publicNav = [
   ['/', 'Home'],
   ['/about', 'About'],
   ['/features', 'Features'],
-  ['/terms', 'Terms'],
-  ['/privacy', 'Privacy'],
-  ['/security', 'Security'],
 ];
 
 const socials = [
@@ -149,6 +146,24 @@ const artisanImages = {
     'https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&w=1600&q=80',
   workshop:
     'https://images.unsplash.com/photo-1504917595217-d4dc5ebe6122?auto=format&fit=crop&w=1600&q=80',
+  request:
+    'https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1200&q=80',
+  marketplace:
+    'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80',
+  verification:
+    'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?auto=format&fit=crop&w=1200&q=80',
+  chat:
+    'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80',
+  invoices:
+    'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1200&q=80',
+  account:
+    'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1200&q=80',
+  visibility:
+    'https://images.unsplash.com/photo-1531206715517-5c0ba140b2b8?auto=format&fit=crop&w=1200&q=80',
+  records:
+    'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80',
+  growth:
+    'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80',
 };
 
 const smeBanner = ({
@@ -164,6 +179,16 @@ const smeBanner = ({
       <p>${esc(body)}</p>
     </div>
   </section>
+`;
+
+const imageCard = ({ title, body, image, className = 'feature-card' }) => `
+  <article class="${className} glass-card">
+    <div class="card-image" style="background-image:url('${image}')"></div>
+    <div class="card-copy">
+      <h3>${esc(title)}</h3>
+      <p>${esc(body)}</p>
+    </div>
+  </article>
 `;
 
 const money = (value) =>
@@ -2405,54 +2430,61 @@ function renderHome() {
       </div>
       <div class="feature-grid">
         ${[
-          [
-            'Job requests',
-            'Customers can describe work, location, budget, and receive bids from artisans.',
-          ],
-          [
-            'Artisan marketplace',
-            'Artisans list services, manage bids, and build trust with ratings and verified status.',
-          ],
-          [
-            'Verification subscriptions',
-            'Accepted users and artisans keep verification active through monthly or yearly Paystack billing.',
-          ],
-          [
-            'Chat and alerts',
-            'Messages, status changes, reports, and verification decisions stay visible in the account.',
-          ],
-          [
-            'Invoices and wallet tracking',
-            'Accepted work creates invoice and wallet records for clearer payment follow-up.',
-          ],
-          [
-            'Shared account system',
-            'The same Supabase account powers the app and browser experience.',
-          ],
+          {
+            title: 'Job requests',
+            body: 'Customers can describe work, location, budget, and receive bids from artisans.',
+            image: artisanImages.request,
+          },
+          {
+            title: 'Artisan marketplace',
+            body: 'Artisans list services, manage bids, and build trust with ratings and verified status.',
+            image: artisanImages.marketplace,
+          },
+          {
+            title: 'Verification subscriptions',
+            body: 'Accepted users and artisans keep verification active through monthly or yearly Paystack billing.',
+            image: artisanImages.verification,
+          },
+          {
+            title: 'Chat and alerts',
+            body: 'Messages, status changes, reports, and verification decisions stay visible in the account.',
+            image: artisanImages.chat,
+          },
+          {
+            title: 'Invoices and wallet tracking',
+            body: 'Accepted work creates invoice and wallet records for clearer payment follow-up.',
+            image: artisanImages.invoices,
+          },
+          {
+            title: 'Shared account system',
+            body: 'The same Supabase account powers the app and browser experience.',
+            image: artisanImages.account,
+          },
         ]
-          .map(
-            ([title, body]) => `
-              <article class="feature-card">
-                <h3>${title}</h3>
-                <p>${body}</p>
-              </article>`,
-          )
+          .map((card) => imageCard(card))
           .join('')}
       </div>
     </section>
     <section class="site-section sme-info-grid">
-      <article>
-        <h2>SME visibility</h2>
-        <p>Artisans can show service areas, skills, ratings, and verification status so customers can compare options before contacting them.</p>
-      </article>
-      <article>
-        <h2>Work records</h2>
-        <p>Requests, bids, invoices, wallet records, and notifications create a clearer history than scattered phone calls and screenshots.</p>
-      </article>
-      <article>
-        <h2>Local growth</h2>
-        <p>Digital profiles make it easier for small teams, solo makers, repairers, builders, and home-service providers to earn repeat work.</p>
-      </article>
+      ${[
+        {
+          title: 'SME visibility',
+          body: 'Artisans can show service areas, skills, ratings, and verification status so customers can compare options before contacting them.',
+          image: artisanImages.visibility,
+        },
+        {
+          title: 'Work records',
+          body: 'Requests, bids, invoices, wallet records, and notifications create a clearer history than scattered phone calls and screenshots.',
+          image: artisanImages.records,
+        },
+        {
+          title: 'Local growth',
+          body: 'Digital profiles make it easier for small teams, solo makers, repairers, builders, and home-service providers to earn repeat work.',
+          image: artisanImages.growth,
+        },
+      ]
+        .map((card) => imageCard({ ...card, className: 'sme-info-card' }))
+        .join('')}
     </section>
   `);
 }
@@ -2473,14 +2505,20 @@ function renderAboutPage() {
       </p>
     </section>
     <section class="site-section two-column">
-      <div>
-        <h2>Why it exists</h2>
-        <p>Small businesses and independent professionals often manage requests, quotes, documents, payments, and follow-ups across too many channels. ProSME brings those steps into one account.</p>
-      </div>
-      <div>
-        <h2>Who it serves</h2>
-        <p>Customers can request services and track accepted work. Artisans can receive jobs, prove their identity, manage bids, and keep verified status active.</p>
-      </div>
+      ${[
+        {
+          title: 'Why it exists',
+          body: 'Small businesses and independent professionals often manage requests, quotes, documents, payments, and follow-ups across too many channels. ProSME brings those steps into one account.',
+          image: artisanImages.records,
+        },
+        {
+          title: 'Who it serves',
+          body: 'Customers can request services and track accepted work. Artisans can receive jobs, prove their identity, manage bids, and keep verified status active.',
+          image: artisanImages.marketplace,
+        },
+      ]
+        .map((card) => imageCard({ ...card, className: 'about-card' }))
+        .join('')}
     </section>
   `);
 }
