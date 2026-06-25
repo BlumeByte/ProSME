@@ -2487,7 +2487,7 @@ function renderHome() {
           },
           {
             title: 'Shared account system',
-            body: 'The same Supabase account powers the app and browser experience.',
+            body: 'One secure account powers the app and browser experience.',
             image: artisanImages.account,
           },
         ]
@@ -2631,11 +2631,11 @@ function renderPolicyPage(type) {
     ],
     '/security': [
       'Security Policy',
-      'Passwords are handled through Supabase Auth. Admin operations use Supabase Edge Functions, and service-role keys are not exposed in browser code. Report suspected account misuse or security issues through Blumebyte contact.',
+      'Passwords are handled through secure account services. Admin operations use protected server functions, and service keys are not exposed in browser code. Report suspected account misuse or security issues through Blumebyte contact.',
     ],
     '/cookies': [
       'Cookie Policy',
-      'The web app uses browser storage and Supabase session cookies or tokens to keep users signed in and route them to the correct customer, artisan, or admin experience.',
+      'The web app uses browser storage and secure session cookies or tokens to keep users signed in and route them to the correct customer, artisan, or admin experience.',
     ],
   };
   const [title, body] = pages[type] || pages['/terms'];
@@ -2661,7 +2661,7 @@ function renderAuthPage(mode = state.authMode) {
       <div>
         <span class="eyebrow">Account access</span>
         <h1>${isSignup ? 'Create your ProSME account' : 'Log in to ProSME'}</h1>
-        <p>Your browser account uses the same Supabase login as the mobile app, so profile, verification, job, bid, invoice, and notification data stay connected.</p>
+        <p>Your browser account uses the same secure login as the mobile app, so profile, verification, job, bid, invoice, and notification data stay connected.</p>
       </div>
       <form class="login-card" id="${isSignup ? 'signup-form' : 'login-form'}">
         <img src="/prosme_logo.png" alt="ProSME" />
@@ -2725,7 +2725,7 @@ function renderPortal() {
           <div>
             <span class="eyebrow">${esc(profile.role || 'customer')} account</span>
             <h1>${esc(profile.full_name || profile.email || 'Your ProSME account')}</h1>
-            <p>Your web and mobile sessions use the same Supabase account.</p>
+            <p>Your web and mobile sessions stay connected through one secure account.</p>
           </div>
           <div class="row-actions">
             ${roleBadge(profile.role)}
@@ -2816,7 +2816,7 @@ function renderLogin() {
           <input name="password" type="password" autocomplete="current-password" required />
         </label>
         <button class="primary" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Signing in...' : 'Sign in'}</button>
-        <small>Use Supabase Auth. The web dashboard does not store passwords.</small>
+        <small>Use secure account access. The web dashboard does not store passwords.</small>
       </form>
     </div>
   `;

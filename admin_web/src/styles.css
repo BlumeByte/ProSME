@@ -1213,13 +1213,64 @@ code {
 
 @media (max-width: 920px) {
   .site-header {
-    grid-template-columns: 1fr;
-    align-items: stretch;
+    grid-template-columns: auto auto;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .site-menu-toggle {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .site-menu-button {
+    display: inline-grid;
+    justify-self: end;
+    gap: 5px;
+    width: 44px;
+    height: 40px;
+    place-content: center;
+    border: 1px solid var(--site-border);
+    border-radius: 8px;
+    background: var(--site-panel);
+    backdrop-filter: blur(18px);
+  }
+
+  .site-menu-button span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    border-radius: 999px;
+    background: var(--site-heading);
   }
 
   .site-nav,
-  .site-actions {
-    justify-content: flex-start;
+  .site-auth-actions {
+    display: none;
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .site-menu-toggle:checked ~ .site-nav,
+  .site-menu-toggle:checked ~ .site-auth-actions {
+    display: grid;
+  }
+
+  .site-nav {
+    gap: 8px;
+    padding-top: 10px;
+  }
+
+  .site-nav button,
+  .site-auth-actions button {
+    width: 100%;
+    text-align: left;
+  }
+
+  .site-auth-actions {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
   }
 
   .hero-section,
@@ -1227,6 +1278,9 @@ code {
   .two-column,
   .feature-grid,
   .sme-info-grid,
+  .insight-strip,
+  .narrative-panel,
+  .about-story,
   .site-footer {
     grid-template-columns: 1fr;
   }
@@ -1234,6 +1288,10 @@ code {
   .hero-section {
     min-height: auto;
     padding-top: 34px;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(2.1rem, 11vw, 3.5rem);
   }
 
   .hero-section::before,
@@ -1252,6 +1310,18 @@ code {
     align-items: end;
   }
 
+  .glass-row {
+    grid-template-columns: 1fr;
+  }
+
+  .row-image {
+    order: -1;
+  }
+
+  .story-image {
+    min-height: 240px;
+  }
+
   .portal-head {
     align-items: flex-start;
     flex-direction: column;
@@ -1266,7 +1336,7 @@ code {
     height: auto;
   }
 
-  nav {
+  .sidebar nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
