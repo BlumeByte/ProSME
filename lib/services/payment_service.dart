@@ -53,7 +53,7 @@ class PaymentService {
   }) async {
     final client = _supabase;
     if (client == null) {
-      throw StateError('Supabase is not connected.');
+      throw StateError('Account service is not connected.');
     }
     final response = await client.functions.invoke(
       'verification-billing',

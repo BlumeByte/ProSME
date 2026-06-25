@@ -1475,7 +1475,7 @@ Future<void> _showAccountSettingsSheet(
                     title: Text(settings.t('Account security')),
                     subtitle: Text(
                       settings.t(
-                        'Email codes, password recovery, and Google verification are handled by Supabase.',
+                        'Email codes, password recovery, and Google verification are handled securely.',
                       ),
                     ),
                     onTap: () {

@@ -37,7 +37,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       const _AdminInfoPanel(
         title: 'Reports',
         body:
-            'Verification decisions and email tasks are recorded in Supabase for audit review.',
+            'Verification decisions and email tasks are recorded for audit review.',
         icon: Icons.analytics_outlined,
       ),
     ];
@@ -91,7 +91,7 @@ class _VerificationQueue extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               child: Text(
                 settings.t(
-                  'Could not load verification queue. Check Supabase policies.',
+                  'Could not load verification queue. Please check access settings.',
                 ),
                 textAlign: TextAlign.center,
               ),

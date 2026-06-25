@@ -586,7 +586,7 @@ async function adminAction(action, payload = {}) {
   });
   if (error) {
     throw new Error(
-      `${error.message}. Confirm the admin-dashboard Edge Function is deployed and its SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY secrets are set for the same Supabase project as Vercel.`,
+      `${error.message}. Confirm the admin-dashboard Edge Function is deployed and its backend secrets are set for the same project as Vercel.`,
     );
   }
   if (data?.error) throw new Error(data.error);
@@ -1363,7 +1363,7 @@ function renderShell(content) {
 function renderTableErrors() {
   return `
     <details class="warning" open>
-      <summary>Some Supabase tables or policies need attention</summary>
+      <summary>Some data tables or access policies need attention</summary>
       <ul>
         ${Object.entries(state.tableErrors)
           .map(
@@ -2324,11 +2324,11 @@ function renderSettings() {
     <section class="panel narrow">
       <h2>Vercel Environment</h2>
       <div class="setting-row">
-        <span>Supabase URL</span>
+        <span>Backend URL</span>
         <strong>${supabaseUrl ? 'Configured' : 'Missing'}</strong>
       </div>
       <div class="setting-row">
-        <span>Supabase publishable key</span>
+        <span>Backend publishable key</span>
         <strong>${supabaseKey ? 'Configured' : 'Missing'}</strong>
       </div>
       <div class="callout">

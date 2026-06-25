@@ -65,7 +65,7 @@ _LegalContent _contentFor(LegalPageKind kind) {
           ),
           _LegalSection(
             'Third parties',
-            'The app uses Supabase for authentication, database, storage, realtime services, and Edge Functions. Payment, email, SMS, and map providers may process data when those features are used.',
+            'The app uses secure cloud services for authentication, database, storage, realtime updates, and server functions. Payment, email, SMS, and map providers may process data when those features are used.',
           ),
         ],
       );
@@ -133,15 +133,15 @@ _LegalContent _contentFor(LegalPageKind kind) {
         sections: [
           _LegalSection(
             'Authentication',
-            'Accounts are protected through Supabase Auth with email verification, password recovery, and OAuth providers when configured.',
+            'Accounts are protected through secure authentication with email verification, password recovery, and OAuth providers when configured.',
           ),
           _LegalSection(
             'Access controls',
-            'Supabase row-level security policies restrict private data and limit verification, report, and admin review tools to authorized accounts.',
+            'Database access rules restrict private data and limit verification, report, and admin review tools to authorized accounts.',
           ),
           _LegalSection(
             'Verification documents',
-            'Artisan ID files are limited to PDF or image files up to 1 MB and are stored in the configured Supabase Storage bucket.',
+            'Artisan ID files are limited to PDF or image files up to 1 MB and are stored in secure document storage.',
           ),
           _LegalSection(
             'Incident response',

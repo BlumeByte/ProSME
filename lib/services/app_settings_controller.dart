@@ -195,10 +195,10 @@ const _translations = <String, Map<String, String>>{
         'L autorisation de localisation est requise.',
     'Sign in to upload requests': 'Connectez-vous pour publier des demandes',
     'Request uploaded successfully.': 'Demande publiee avec succes.',
-    'Could not upload request. Check Supabase setup.':
-        'Impossible de publier la demande. Verifiez Supabase.',
-    'Could not load uploads. Check Supabase credentials and try again.':
-        'Impossible de charger les publications. Verifiez Supabase.',
+    'Could not upload request. Please check your connection and try again.':
+        'Impossible de publier la demande. Verifiez votre connexion.',
+    'Could not load uploads. Please check your connection and try again.':
+        'Impossible de charger les publications. Verifiez votre connexion.',
     'Notifications': 'Notifications',
     'Refresh': 'Actualiser',
     'Could not load notifications.': 'Impossible de charger les notifications.',
@@ -321,8 +321,8 @@ const _translations = <String, Map<String, String>>{
         'Description de l entreprise ou de l artisan',
     'Customer profile description': 'Description du profil client',
     'Account security': 'Securite du compte',
-    'Email codes, password recovery, and Google verification are handled by Supabase.':
-        'Les codes e-mail, la recuperation du mot de passe et Google sont geres par Supabase.',
+    'Email codes, password recovery, and Google verification are handled securely.':
+        'Les codes e-mail, la recuperation du mot de passe et Google sont geres de facon securisee.',
     'Privacy': 'Confidentialite',
     'Support': 'Assistance',
     'Terms of Service': 'Conditions d utilisation',
@@ -427,10 +427,10 @@ const _translations = <String, Map<String, String>>{
     'Job Moderation': 'Moderation des travaux',
     'Review posted jobs from the Bookings tab and remove anything that violates ProSME rules.':
         'Verifiez les travaux publies et retirez ceux qui violent les regles ProSME.',
-    'Verification decisions and email tasks are recorded in Supabase for audit review.':
+    'Verification decisions and email tasks are recorded for audit review.':
         'Les decisions de verification et taches e-mail sont enregistrees pour audit.',
-    'Could not load verification queue. Check Supabase policies.':
-        'Impossible de charger la file de verification. Verifiez les politiques Supabase.',
+    'Could not load verification queue. Please check access settings.':
+        'Impossible de charger la file de verification. Verifiez les parametres d acces.',
     'No pending verifications': 'Aucune verification en attente',
     'New account ID submissions will appear here automatically.':
         'Les nouvelles pieces d identite apparaitront ici automatiquement.',
@@ -667,10 +667,10 @@ const _translations = <String, Map<String, String>>{
         'Mot de passe mis a jour. Reconnectez-vous.',
     'Too many reset attempts. Please wait a few minutes and try again.':
         'Trop de tentatives. Attendez quelques minutes puis reessayez.',
-    'Password reset redirect is not allowed in Supabase settings.':
-        'La redirection de reinitialisation est refusee par Supabase.',
-    'The reset email could not be sent. Check Supabase email settings.':
-        'L e-mail n a pas pu etre envoye. Verifiez les reglages Supabase.',
+    'Password reset redirect is not allowed in account settings.':
+        'La redirection de reinitialisation est refusee par les parametres du compte.',
+    'The reset email could not be sent. Check account email settings.':
+        'L e-mail n a pas pu etre envoye. Verifiez les reglages e-mail du compte.',
     'Password updated.': 'Mot de passe mis a jour.',
     'Change phone number': 'Changer le numero de telephone',
     'Enter a valid': 'Entrez un',
@@ -1122,10 +1122,10 @@ const _translations = <String, Map<String, String>>{
         'Contraseña actualizada. Inicia sesion de nuevo.',
     'Too many reset attempts. Please wait a few minutes and try again.':
         'Demasiados intentos. Espera unos minutos e intentalo de nuevo.',
-    'Password reset redirect is not allowed in Supabase settings.':
-        'Supabase no permite la redireccion de restablecimiento.',
-    'The reset email could not be sent. Check Supabase email settings.':
-        'No se pudo enviar el correo. Revisa el correo de Supabase.',
+    'Password reset redirect is not allowed in account settings.':
+        'La configuracion de la cuenta no permite la redireccion de restablecimiento.',
+    'The reset email could not be sent. Check account email settings.':
+        'No se pudo enviar el correo. Revisa la configuracion de correo de la cuenta.',
     'Password updated.': 'Contraseña actualizada.',
     'Change phone number': 'Cambiar telefono',
     'Phone number saved.': 'Telefono guardado.',
@@ -1542,10 +1542,10 @@ const _translations = <String, Map<String, String>>{
         'تم تحديث كلمة المرور. سجل الدخول مرة أخرى.',
     'Too many reset attempts. Please wait a few minutes and try again.':
         'محاولات كثيرة. انتظر بضع دقائق ثم حاول مرة أخرى.',
-    'Password reset redirect is not allowed in Supabase settings.':
-        'إعادة توجيه كلمة المرور غير مسموحة في إعدادات Supabase.',
-    'The reset email could not be sent. Check Supabase email settings.':
-        'تعذر إرسال البريد. تحقق من إعدادات البريد في Supabase.',
+    'Password reset redirect is not allowed in account settings.':
+        'إعادة توجيه كلمة المرور غير مسموحة في إعدادات الحساب.',
+    'The reset email could not be sent. Check account email settings.':
+        'تعذر إرسال البريد. تحقق من إعدادات بريد الحساب.',
   },
   'Twi': {
     'Track': 'Di akyi',
@@ -1905,10 +1905,10 @@ const _translations = <String, Map<String, String>>{
     'Password updated. Sign in again.': 'Woasesa password. Kɔ mu bio.',
     'Too many reset attempts. Please wait a few minutes and try again.':
         'Woasɔ ahwɛ mpɛn pii. Twɛn kakra na san sɔ hwɛ.',
-    'Password reset redirect is not allowed in Supabase settings.':
-        'Supabase mma password reset kwan no ho kwan.',
-    'The reset email could not be sent. Check Supabase email settings.':
-        'Yentumi ansoma reset email no. Hwɛ Supabase email nhyehyɛe.',
+    'Password reset redirect is not allowed in account settings.':
+        'Account nhyehyee mma password reset kwan no ho kwan.',
+    'The reset email could not be sent. Check account email settings.':
+        'Yentumi ansoma reset email no. Hwe account email nhyehyee.',
   },
 };
 

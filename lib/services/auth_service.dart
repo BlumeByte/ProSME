@@ -702,7 +702,7 @@ class SupabaseAuthService implements AuthService {
     );
     if (!launched) {
       throw StateError(
-        'Google sign-in could not open. Confirm Google provider and redirect URL are configured in Supabase.',
+        'Google sign-in could not open. Confirm Google sign-in and redirect settings are configured.',
       );
     }
     return _waitForActiveUser();
@@ -742,7 +742,7 @@ class SupabaseAuthService implements AuthService {
     } catch (authError) {
       throw StateError(
         'The reset email could not be sent. Recovery service: '
-        '${_readableError(functionError)}. Supabase Auth: ${_readableError(authError)}',
+        '${_readableError(functionError)}. Account service: ${_readableError(authError)}',
       );
     }
   }

@@ -36,7 +36,7 @@ class ListingManageScreen extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               child: Text(
                 settings.t(
-                  'Could not load listings. Check Supabase credentials and try again.',
+                  'Could not load listings. Please check your connection and try again.',
                 ),
                 textAlign: TextAlign.center,
               ),

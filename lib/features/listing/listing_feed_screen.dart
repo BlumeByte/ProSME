@@ -367,7 +367,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               padding: const EdgeInsets.all(16),
               child: Text(
                 settings.t(
-                  'Could not load professionals. Check Supabase credentials and try again.',
+                  'Could not load professionals. Please check your connection and try again.',
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -1153,7 +1153,7 @@ class _OpenJobsPreview extends ConsumerWidget {
       ),
       error: (_, __) => Text(
         settings.t(
-          'Could not load service requests. Check Supabase credentials and try again.',
+          'Could not load service requests. Please check your connection and try again.',
         ),
       ),
       data: (jobs) {

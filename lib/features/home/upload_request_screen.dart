@@ -81,7 +81,9 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            settings.t('Could not upload request. Check Supabase setup.'),
+            settings.t(
+              'Could not upload request. Please check your connection and try again.',
+            ),
           ),
         ),
       );
@@ -126,7 +128,8 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${settings.t('Could not get location')}: $error')),
+          SnackBar(
+              content: Text('${settings.t('Could not get location')}: $error')),
         );
       }
     } finally {
@@ -243,7 +246,7 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
         const SizedBox(height: 8),
         if (jobsAsync.hasError)
           Text(settings.t(
-              'Could not load uploads. Check Supabase credentials and try again.'))
+              'Could not load uploads. Please check your connection and try again.'))
         else if (myUploads.isEmpty)
           Text(settings.t('No uploads yet.'))
         else

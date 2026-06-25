@@ -62,7 +62,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         message.contains('provider is not enabled') ||
         message.contains('redirect url') ||
         message.contains('oauth')) {
-      return 'Google sign-in is not configured yet. Check Supabase Google provider and redirect URL.';
+      return 'Google sign-in is not configured yet. Check Google sign-in and redirect settings.';
     }
     return 'Something went wrong. Please try again.';
   }
@@ -76,10 +76,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       return 'Too many reset attempts. Please wait a few minutes and try again.';
     }
     if (normalized.contains('redirect')) {
-      return 'Password reset redirect is not allowed in Supabase settings.';
+      return 'Password reset redirect is not allowed in account settings.';
     }
     if (normalized.contains('smtp') || normalized.contains('email')) {
-      return 'The reset email could not be sent. Check Supabase email settings.';
+      return 'The reset email could not be sent. Check account email settings.';
     }
     return message;
   }

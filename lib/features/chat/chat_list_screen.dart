@@ -82,7 +82,7 @@ class ChatListScreen extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               child: Text(
                 settings.t(
-                  'Could not load chats. Check your Supabase setup and try again.',
+                  'Could not load chats. Please check your connection and try again.',
                 ),
                 textAlign: TextAlign.center,
               ),
