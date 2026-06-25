@@ -788,6 +788,6 @@ Deno.serve(async (req) => {
     return fail('Unknown admin action.');
   } catch (error) {
     console.error('admin-dashboard failed', error);
-    return fail(error);
+    return fail('Admin request failed.');
   }
 });
