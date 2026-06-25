@@ -164,6 +164,12 @@ const artisanImages = {
     'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80',
   growth:
     'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80',
+  training:
+    'https://images.unsplash.com/photo-1556761175-4b46a572b786?auto=format&fit=crop&w=1200&q=80',
+  planning:
+    'https://images.unsplash.com/photo-1559136555-9303baea8ebd?auto=format&fit=crop&w=1200&q=80',
+  support:
+    'https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=1200&q=80',
 };
 
 const smeBanner = ({
@@ -188,6 +194,16 @@ const imageCard = ({ title, body, image, className = 'feature-card' }) => `
       <h3>${esc(title)}</h3>
       <p>${esc(body)}</p>
     </div>
+  </article>
+`;
+
+const wideFeatureCard = ({ title, body, image }) => `
+  <article class="wide-row glass-row">
+    <div>
+      <h2>${esc(title)}</h2>
+      <p>${esc(body)}</p>
+    </div>
+    <div class="row-image" style="background-image:url('${image}')"></div>
   </article>
 `;
 
@@ -2338,6 +2354,12 @@ function publicHeader() {
         <img src="/prosme_logo.png" alt="ProSME" />
         <span>ProSME</span>
       </button>
+      <input class="site-menu-toggle" id="site-menu-toggle" type="checkbox" aria-label="Open menu" />
+      <label class="site-menu-button" for="site-menu-toggle" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </label>
       <nav class="site-nav" aria-label="Main navigation">
         ${publicNav
           .map(
@@ -2346,7 +2368,7 @@ function publicHeader() {
           )
           .join('')}
       </nav>
-      <div class="site-actions">
+      <div class="site-actions site-auth-actions">
         ${
           signedIn
             ? `<button class="ghost small" data-action="refresh-portal">Refresh</button>
@@ -2365,6 +2387,7 @@ function publicFooter() {
       <div>
         <strong>Blumebyte ProSME</strong>
         <p>Professional service matching, job tracking, verification, invoices, and account tools for customers and artisans.</p>
+        <small>Built for practical SME service work across Ghana and beyond.</small>
       </div>
       <div>
         <strong>Company</strong>
@@ -2388,7 +2411,8 @@ function publicFooter() {
 
 function renderPublicLayout(content) {
   return `
-    <div class="site-page">
+    <div class="site-page public-site" onmousemove="this.style.setProperty('--mouse-x', event.clientX + 'px'); this.style.setProperty('--mouse-y', event.clientY + 'px')">
+      <div class="cursor-glow" aria-hidden="true"></div>
       ${publicHeader()}
       <main>${content}</main>
       ${publicFooter()}
@@ -2401,9 +2425,9 @@ function renderHome() {
     <section class="hero-section" style="--hero-image:url('${artisanImages.market}')">
       <div class="hero-copy">
         <span class="eyebrow">Built by Blumebyte</span>
-        <h1>ProSME connects service buyers with verified artisans and keeps the work organized.</h1>
+        <h1>Find verified artisans. Manage service work.</h1>
         <p>
-          Post jobs, receive bids, chat, track accepted work, manage verification, and keep invoices in one account that works across the mobile app and web.
+          Post jobs, receive bids, chat, track work, manage verification, and keep invoices in one connected account.
         </p>
         <div class="hero-actions">
           <button class="primary compact-button" data-link="/signup">Create an account</button>
@@ -2421,6 +2445,12 @@ function renderHome() {
         <div class="product-row"><span>Invoices</span><strong>PDF + wallet</strong></div>
         <div class="product-row"><span>Notifications</span><strong>Email + dashboard</strong></div>
       </div>
+    </section>
+    <section class="site-section insight-strip">
+      <article class="glass-mini"><strong>Request</strong><span>Describe the work clearly.</span></article>
+      <article class="glass-mini"><strong>Compare</strong><span>Review bids, profiles, and verification.</span></article>
+      <article class="glass-mini"><strong>Track</strong><span>Keep chat, invoices, and status together.</span></article>
+      <article class="glass-mini"><strong>Grow</strong><span>Help serious SMEs earn repeat work.</span></article>
     </section>
     ${smeBanner()}
     <section class="site-section">
@@ -2486,6 +2516,15 @@ function renderHome() {
         .map((card) => imageCard({ ...card, className: 'sme-info-card' }))
         .join('')}
     </section>
+    <section class="site-section narrative-panel">
+      <div>
+        <span class="eyebrow">For everyday operations</span>
+        <h2>One place for the moments that usually get lost.</h2>
+      </div>
+      <p>
+        ProSME gives customers and artisans a shared record of what was requested, who responded, what was agreed, and what still needs attention. It is designed for repeat service work, trust-building, and clear follow-up.
+      </p>
+    </section>
   `);
 }
 
@@ -2503,6 +2542,14 @@ function renderAboutPage() {
       <p>
         ProSME helps customers find artisans and gives artisans a structured place to manage opportunities, verification, payments, and service history.
       </p>
+    </section>
+    <section class="site-section about-story">
+      <div class="glass-copy">
+        <span class="eyebrow">Why this matters</span>
+        <h2>SMEs need visibility, trust, and records they can return to.</h2>
+        <p>Small service businesses often win work through relationships, referrals, and fast responses. ProSME adds a digital layer around those habits so customers can act with more confidence and artisans can keep better proof of their work.</p>
+      </div>
+      <div class="story-image" style="background-image:url('${artisanImages.training}')"></div>
     </section>
     <section class="site-section two-column">
       ${[
@@ -2534,34 +2581,40 @@ function renderFeaturesPage() {
     <section class="page-hero">
       <span class="eyebrow">Features</span>
       <h1>Service operations for customers, artisans, and administrators.</h1>
+      <p>Each workflow is designed around the real steps of service work: request, compare, chat, approve, pay, and follow up.</p>
     </section>
     <section class="site-section feature-list">
       ${[
-        [
-          'For customers',
-          'Create requests, compare bids, chat with artisans, receive alerts, and keep invoice records.',
-        ],
-        [
-          'For artisans',
-          'Manage listings, bid on requests, track work history, renew verification, and keep payment records.',
-        ],
-        [
-          'For admins',
-          'Review documents, approve payment-required verification, confirm Paystack references, request more information, reject, or override when needed.',
-        ],
-        [
-          'For trust',
-          'Verification status, expiration checks, renewal tracking, and email/dashboard notifications are built into the workflow.',
-        ],
+        {
+          title: 'For customers',
+          body: 'Create requests, compare bids, chat with artisans, receive alerts, and keep invoice records.',
+          image: artisanImages.request,
+        },
+        {
+          title: 'For artisans',
+          body: 'Manage listings, bid on requests, track work history, renew verification, and keep payment records.',
+          image: artisanImages.craft,
+        },
+        {
+          title: 'For admins',
+          body: 'Review documents, approve payment-required verification, confirm Paystack references, request more information, reject, or override when needed.',
+          image: artisanImages.support,
+        },
+        {
+          title: 'For trust',
+          body: 'Verification status, expiration checks, renewal tracking, and email/dashboard notifications are built into the workflow.',
+          image: artisanImages.verification,
+        },
       ]
-        .map(
-          ([title, body]) => `
-            <article class="wide-row">
-              <h2>${title}</h2>
-              <p>${body}</p>
-            </article>`,
-        )
+        .map((card) => wideFeatureCard(card))
         .join('')}
+    </section>
+    <section class="site-section narrative-panel">
+      <div>
+        <span class="eyebrow">Designed for clarity</span>
+        <h2>Every action leaves a useful trail.</h2>
+      </div>
+      <p>Profiles, verification, messages, jobs, bids, invoices, notifications, and admin decisions are connected so users can understand what happened and what to do next.</p>
     </section>
   `);
 }
