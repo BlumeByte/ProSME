@@ -207,6 +207,39 @@ const wideFeatureCard = ({ title, body, image }) => `
   </article>
 `;
 
+const journeyStep = ({ label, title, body }) => `
+  <article class="journey-step">
+    <span>${esc(label)}</span>
+    <h3>${esc(title)}</h3>
+    <p>${esc(body)}</p>
+  </article>
+`;
+
+const smeScene = ({
+  image = artisanImages.workshop,
+  eyebrow = 'SME operating system',
+  title = 'A practical workspace for quotes, trust, records, and repeat work.',
+  body = 'Each layer supports a real service moment: request intake, artisan comparison, verification, chat, invoices, and follow-up.',
+} = {}) => `
+  <section class="site-section scene-section">
+    <div class="scene-copy">
+      <span class="eyebrow">${esc(eyebrow)}</span>
+      <h2>${esc(title)}</h2>
+      <p>${esc(body)}</p>
+    </div>
+    <div class="sme-3d-scene" aria-label="Animated SME workflow layers">
+      <div class="scene-orbit" aria-hidden="true"></div>
+      <div class="scene-card scene-card-main" style="--scene-image:url('${image}')">
+        <span>Verified work desk</span>
+        <strong>Requests to records</strong>
+      </div>
+      <div class="scene-chip scene-chip-a">Bids</div>
+      <div class="scene-chip scene-chip-b">Invoices</div>
+      <div class="scene-chip scene-chip-c">Trust</div>
+    </div>
+  </section>
+`;
+
 const money = (value) =>
   Number(value || 0).toLocaleString('en-GH', {
     style: 'currency',
@@ -2422,7 +2455,7 @@ function renderPublicLayout(content) {
 
 function renderHome() {
   return renderPublicLayout(`
-    <section class="hero-section" style="--hero-image:url('${artisanImages.market}')">
+    <section class="hero-section hero-showcase" style="--hero-image:url('${artisanImages.market}')">
       <div class="hero-copy">
         <span class="eyebrow">Built by Blumebyte</span>
         <h1>Find verified artisans. Manage service work.</h1>
@@ -2446,6 +2479,12 @@ function renderHome() {
         <div class="product-row"><span>Notifications</span><strong>Email + dashboard</strong></div>
       </div>
     </section>
+    ${smeScene({
+      image: artisanImages.craft,
+      eyebrow: '3D service flow',
+      title: 'Built around the way SMEs win, deliver, and repeat work.',
+      body: 'The public website now mirrors the product: layered, traceable, and designed for customers and artisans moving from first request to finished work.',
+    })}
     <section class="site-section insight-strip">
       <article class="glass-mini"><strong>Request</strong><span>Describe the work clearly.</span></article>
       <article class="glass-mini"><strong>Compare</strong><span>Review bids, profiles, and verification.</span></article>
@@ -2525,24 +2564,54 @@ function renderHome() {
         ProSME gives customers and artisans a shared record of what was requested, who responded, what was agreed, and what still needs attention. It is designed for repeat service work, trust-building, and clear follow-up.
       </p>
     </section>
+    <section class="site-section journey-panel">
+      ${[
+        {
+          label: '01',
+          title: 'A customer describes the job',
+          body: 'The request captures location, budget, photos, and context so artisans can respond with better bids.',
+        },
+        {
+          label: '02',
+          title: 'Artisans compete with trust',
+          body: 'Profiles, service areas, ratings, and verification status make comparison clearer before a chat starts.',
+        },
+        {
+          label: '03',
+          title: 'Accepted work stays recorded',
+          body: 'Bids, invoices, wallet records, notifications, and decisions remain available after the work is done.',
+        },
+      ]
+        .map((step) => journeyStep(step))
+        .join('')}
+    </section>
   `);
 }
 
 function renderAboutPage() {
   return renderPublicLayout(`
+    <section class="page-hero page-hero-split">
+      <div>
+        <span class="eyebrow">About ProSME</span>
+        <h1>Blumebyte built ProSME for practical service work, not just listings.</h1>
+        <p>
+          ProSME helps customers find artisans and gives artisans a structured place to manage opportunities, verification, payments, and service history.
+        </p>
+      </div>
+      <div class="page-hero-image" style="--hero-image:url('${artisanImages.textile}')"></div>
+    </section>
     ${smeBanner({
       image: artisanImages.textile,
       eyebrow: 'About ProSME',
       title: 'Digital tools for artisans, service teams, and the customers who rely on them.',
       body: 'The platform is designed around practical SME workflows: find work, prove identity, organize jobs, and keep communication traceable.',
     })}
-    <section class="page-hero">
-      <span class="eyebrow">About ProSME</span>
-      <h1>Blumebyte built ProSME for practical service work, not just listings.</h1>
-      <p>
-        ProSME helps customers find artisans and gives artisans a structured place to manage opportunities, verification, payments, and service history.
-      </p>
-    </section>
+    ${smeScene({
+      image: artisanImages.training,
+      eyebrow: 'Local business depth',
+      title: 'A stronger digital layer for work that still depends on trust.',
+      body: 'The platform supports the practical details small teams need: identity, communication, accepted bids, records, and follow-up.',
+    })}
     <section class="site-section about-story">
       <div class="glass-copy">
         <span class="eyebrow">Why this matters</span>
@@ -2572,17 +2641,26 @@ function renderAboutPage() {
 
 function renderFeaturesPage() {
   return renderPublicLayout(`
+    <section class="page-hero page-hero-split">
+      <div>
+        <span class="eyebrow">Features</span>
+        <h1>Service operations for customers, artisans, and administrators.</h1>
+        <p>Each workflow is designed around the real steps of service work: request, compare, chat, approve, pay, and follow up.</p>
+      </div>
+      <div class="page-hero-image" style="--hero-image:url('${artisanImages.craft}')"></div>
+    </section>
     ${smeBanner({
       image: artisanImages.craft,
       eyebrow: 'SME workflows',
       title: 'From first request to paid work, each tab supports a real service step.',
       body: 'Customers can search and request help; artisans can manage listings, bids, verification, messages, bookings, and profile trust signals.',
     })}
-    <section class="page-hero">
-      <span class="eyebrow">Features</span>
-      <h1>Service operations for customers, artisans, and administrators.</h1>
-      <p>Each workflow is designed around the real steps of service work: request, compare, chat, approve, pay, and follow up.</p>
-    </section>
+    ${smeScene({
+      image: artisanImages.support,
+      eyebrow: 'Layered controls',
+      title: 'Every role gets the right surface without losing the shared record.',
+      body: 'Customers see requests and accepted work. Artisans see listings, bids, verification, and payments. Admins see the review controls that keep the marketplace accountable.',
+    })}
     <section class="site-section feature-list">
       ${[
         {
@@ -2621,35 +2699,78 @@ function renderFeaturesPage() {
 
 function renderPolicyPage(type) {
   const pages = {
-    '/terms': [
-      'Terms of Service',
-      'Use ProSME to request, offer, manage, and track legitimate services. Users are responsible for accurate account details, lawful documents, fair communication, and honoring accepted job terms. Blumebyte may suspend accounts that abuse payments, verification, messages, reviews, or platform safety tools.',
-    ],
-    '/privacy': [
-      'Privacy Policy',
-      'ProSME uses account, profile, job, bid, chat, verification, notification, and payment reference data to operate the service. Payment card or bank details are handled by Paystack and reusable payment references are stored only when Paystack marks them reusable.',
-    ],
-    '/security': [
-      'Security Policy',
-      'Passwords are handled through secure account services. Admin operations use protected server functions, and service keys are not exposed in browser code. Report suspected account misuse or security issues through Blumebyte contact.',
-    ],
-    '/cookies': [
-      'Cookie Policy',
-      'The web app uses browser storage and secure session cookies or tokens to keep users signed in and route them to the correct customer, artisan, or admin experience.',
-    ],
+    '/terms': {
+      title: 'Terms of Service',
+      eyebrow: 'Fair work rules',
+      image: artisanImages.records,
+      body: 'Use ProSME to request, offer, manage, and track legitimate services. Users are responsible for accurate account details, lawful documents, fair communication, and honoring accepted job terms.',
+      cards: [
+        ['Marketplace role', 'ProSME helps customers and artisans discover, message, negotiate, and record service requests. Private work agreements remain the responsibility of the customer and artisan unless a separate written contract says otherwise.'],
+        ['User conduct', 'Accounts may be limited when activity appears fraudulent, unsafe, abusive, misleading, unlawful, or harmful to marketplace trust.'],
+        ['Service records', 'Requests, bids, invoices, wallet records, messages, reports, and verification decisions may be kept to support safety, disputes, and account history.'],
+      ],
+    },
+    '/privacy': {
+      title: 'Privacy Policy',
+      eyebrow: 'Data and trust',
+      image: artisanImages.planning,
+      body: 'ProSME uses account, profile, job, bid, chat, verification, notification, and payment reference data to operate the service. Payment card or bank details are handled by Paystack.',
+      cards: [
+        ['Data collected', 'Profile details, listings, requests, bids, messages, verification documents, reports, notifications, payment references, and account activity help operate the marketplace.'],
+        ['How it is used', 'Data supports authentication, service matching, artisan verification, safety review, support, alerts, dispute context, abuse prevention, and transaction records.'],
+        ['User choices', 'Users can update profile details, request account deletion, report unsafe activity, block chats, and contact Blumebyte about data access or correction.'],
+      ],
+    },
+    '/security': {
+      title: 'Security Policy',
+      eyebrow: 'Protected access',
+      image: artisanImages.verification,
+      body: 'Passwords are handled through secure account services. Admin operations use protected server functions, and service keys are not exposed in browser code.',
+      cards: [
+        ['Account protection', 'Email verification, password recovery, and configured sign-in providers protect access to customer, artisan, and admin accounts.'],
+        ['Access controls', 'Database access rules restrict private data and limit verification, report, and admin review tools to authorized accounts.'],
+        ['Incident response', 'Report suspicious behavior or security concerns through Support or Blumebyte contact so the team can review account and platform activity.'],
+      ],
+    },
+    '/cookies': {
+      title: 'Cookie Policy',
+      eyebrow: 'Session clarity',
+      image: artisanImages.account,
+      body: 'The web app uses browser storage and secure session cookies or tokens to keep users signed in and route them to the correct customer, artisan, or admin experience.',
+      cards: [
+        ['Session storage', 'Local browser storage helps keep the account session active and remembers the right web experience after login.'],
+        ['Functional use', 'Cookies and tokens support authentication, navigation, security checks, and continuity between public pages and the account portal.'],
+        ['User control', 'Users can clear browser storage or sign out to remove the local session from the current device.'],
+      ],
+    },
   };
-  const [title, body] = pages[type] || pages['/terms'];
+  const page = pages[type] || pages['/terms'];
   return renderPublicLayout(`
-    <section class="page-hero policy-hero">
-      <span class="eyebrow">Policy</span>
-      <h1>${title}</h1>
-      <p>${body}</p>
-      <a class="ghost button-link" href="https://blumebyte.com/contact/">Questions? Contact Blumebyte</a>
+    <section class="page-hero page-hero-split policy-hero">
+      <div>
+        <span class="eyebrow">${esc(page.eyebrow)}</span>
+        <h1>${esc(page.title)}</h1>
+        <p>${esc(page.body)}</p>
+        <a class="ghost button-link" href="https://blumebyte.com/contact/">Questions? Contact Blumebyte</a>
+      </div>
+      <div class="page-hero-image" style="--hero-image:url('${page.image}')"></div>
     </section>
-    <section class="site-section policy-list">
-      <article><h2>Account responsibility</h2><p>Keep login details private, use accurate profile information, and notify Blumebyte if your account or verification documents may be compromised.</p></article>
-      <article><h2>Platform decisions</h2><p>Verification, reports, disputes, and abuse checks may be reviewed by admins. Admin decisions may request more information, reject a submission, or temporarily restrict features.</p></article>
-      <article><h2>Payments</h2><p>Verification subscription payments are processed through Paystack. ProSME tracks payment references, subscription status, renewals, expiry, and admin overrides.</p></article>
+    ${smeScene({
+      image: page.image,
+      eyebrow: 'Policy workflow',
+      title: 'Rules stay close to the work they protect.',
+      body: 'The policies are written around real SME activity: account access, service records, verification, payments, support review, and safe communication.',
+    })}
+    <section class="site-section policy-list policy-grid">
+      ${page.cards
+        .map(
+          ([heading, copy]) =>
+            `<article><span class="eyebrow">ProSME</span><h2>${esc(heading)}</h2><p>${esc(copy)}</p></article>`,
+        )
+        .join('')}
+      <article><span class="eyebrow">Payments</span><h2>Paystack processing</h2><p>Verification subscription payments are processed through Paystack. ProSME tracks payment references, subscription status, renewals, expiry, and admin overrides.</p></article>
+      <article><span class="eyebrow">Support</span><h2>Platform decisions</h2><p>Verification, reports, disputes, and abuse checks may be reviewed by admins. Admin decisions may request more information, reject a submission, or temporarily restrict features.</p></article>
+      <article><span class="eyebrow">Account</span><h2>Account responsibility</h2><p>Keep login details private, use accurate profile information, and notify Blumebyte if your account or verification documents may be compromised.</p></article>
     </section>
   `);
 }
@@ -2876,7 +2997,21 @@ function render() {
   if (state.recoveringPassword) {
     app.innerHTML = renderPasswordRecovery();
   } else if (!hasConfig) {
-    app.innerHTML = renderAuthPage('login');
+    if (state.publicPage === '/about') {
+      app.innerHTML = renderAboutPage();
+    } else if (state.publicPage === '/features') {
+      app.innerHTML = renderFeaturesPage();
+    } else if (
+      ['/terms', '/privacy', '/security', '/cookies'].includes(state.publicPage)
+    ) {
+      app.innerHTML = renderPolicyPage(state.publicPage);
+    } else if (state.publicPage === '/signup') {
+      app.innerHTML = renderAuthPage('signup');
+    } else if (state.publicPage === '/login') {
+      app.innerHTML = renderAuthPage('login');
+    } else {
+      app.innerHTML = renderHome();
+    }
   } else if (!state.session) {
     if (state.publicPage === '/login') {
       app.innerHTML = renderAuthPage('login');
