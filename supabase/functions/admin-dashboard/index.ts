@@ -19,7 +19,7 @@ const ok = (body: Record<string, unknown> = {}) =>
 const fail = (error: unknown) =>
   json(200, {
     ok: false,
-    error: error instanceof Error ? error.message : String(error),
+    error: typeof error === 'string' ? error : 'Admin request failed.',
   });
 
 const requiredEnv = (key: string) => {
@@ -787,6 +787,7 @@ Deno.serve(async (req) => {
 
     return fail('Unknown admin action.');
   } catch (error) {
+    console.error('admin-dashboard failed', error);
     return fail(error);
   }
 });

@@ -244,9 +244,10 @@ Deno.serve(async (req) => {
 
     return json(200, { ok: false, error: 'Unknown verification action.' });
   } catch (error) {
+    console.error('account-verification failed', error);
     return json(200, {
       ok: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: 'Verification request failed. Please try again.',
     });
   }
 });

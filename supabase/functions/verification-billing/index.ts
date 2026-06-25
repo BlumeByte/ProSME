@@ -752,9 +752,13 @@ Deno.serve(async (req) => {
       chargeAmount: amount,
     });
   } catch (error) {
+    console.error('verification-billing failed', error);
     return json(500, {
       ok: false,
-      error: error instanceof Error ? error.message : String(error),
+      error:
+        error instanceof Error && error.message.includes('Paystack')
+          ? error.message
+          : 'Verification billing failed. Please try again or contact support.',
     });
   }
 });

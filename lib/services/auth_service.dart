@@ -673,6 +673,7 @@ class SupabaseAuthService implements AuthService {
     final response = await _supabase.auth.signUp(
       email: email.trim(),
       password: password,
+      emailRedirectTo: kIsWeb ? null : kEmailVerificationRedirectUrl,
       data: {
         'full_name': normalizedUsername,
         'username': normalizedUsername,

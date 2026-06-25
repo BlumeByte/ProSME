@@ -113,16 +113,45 @@ const generateStrongPassword = () => {
   const all = lowercase + uppercase + numbers + symbols;
   const pick = (chars) =>
     chars[crypto.getRandomValues(new Uint32Array(1))[0] % chars.length];
-  return [
+  const password = [
     pick(lowercase),
     pick(uppercase),
     pick(numbers),
     pick(symbols),
     ...Array.from({ length: 10 }, () => pick(all)),
-  ]
-    .sort(() => crypto.getRandomValues(new Uint32Array(1))[0] - 2147483648)
-    .join('');
+  ];
+  for (let index = password.length - 1; index > 0; index -= 1) {
+    const random = crypto.getRandomValues(new Uint32Array(1))[0] % (index + 1);
+    [password[index], password[random]] = [password[random], password[index]];
+  }
+  return password.join('');
 };
+
+const artisanImages = {
+  market:
+    'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1600&q=80',
+  textile:
+    'https://images.unsplash.com/photo-1516762689617-e1cffcef479d?auto=format&fit=crop&w=1600&q=80',
+  craft:
+    'https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&w=1600&q=80',
+  workshop:
+    'https://images.unsplash.com/photo-1504917595217-d4dc5ebe6122?auto=format&fit=crop&w=1600&q=80',
+};
+
+const smeBanner = ({
+  image = artisanImages.market,
+  eyebrow = 'SME growth',
+  title = 'African small businesses run on trust, visibility, and timely work.',
+  body = 'ProSME helps customers discover skilled artisans while giving SMEs digital records for requests, bids, verification, messages, and follow-up.',
+} = {}) => `
+  <section class="sme-banner" style="--banner-image:url('${image}')">
+    <div>
+      <span class="eyebrow">${esc(eyebrow)}</span>
+      <h2>${esc(title)}</h2>
+      <p>${esc(body)}</p>
+    </div>
+  </section>
+`;
 
 const money = (value) =>
   Number(value || 0).toLocaleString('en-GH', {
@@ -2331,7 +2360,7 @@ function renderPublicLayout(content) {
 
 function renderHome() {
   return renderPublicLayout(`
-    <section class="hero-section">
+    <section class="hero-section" style="--hero-image:url('${artisanImages.market}')">
       <div class="hero-copy">
         <span class="eyebrow">Built by Blumebyte</span>
         <h1>ProSME connects service buyers with verified artisans and keeps the work organized.</h1>
@@ -2355,6 +2384,7 @@ function renderHome() {
         <div class="product-row"><span>Notifications</span><strong>Email + dashboard</strong></div>
       </div>
     </section>
+    ${smeBanner()}
     <section class="site-section">
       <div class="section-head">
         <span class="eyebrow">What it does</span>
@@ -2397,11 +2427,31 @@ function renderHome() {
           .join('')}
       </div>
     </section>
+    <section class="site-section sme-info-grid">
+      <article>
+        <h2>SME visibility</h2>
+        <p>Artisans can show service areas, skills, ratings, and verification status so customers can compare options before contacting them.</p>
+      </article>
+      <article>
+        <h2>Work records</h2>
+        <p>Requests, bids, invoices, wallet records, and notifications create a clearer history than scattered phone calls and screenshots.</p>
+      </article>
+      <article>
+        <h2>Local growth</h2>
+        <p>Digital profiles make it easier for small teams, solo makers, repairers, builders, and home-service providers to earn repeat work.</p>
+      </article>
+    </section>
   `);
 }
 
 function renderAboutPage() {
   return renderPublicLayout(`
+    ${smeBanner({
+      image: artisanImages.textile,
+      eyebrow: 'About ProSME',
+      title: 'Digital tools for artisans, service teams, and the customers who rely on them.',
+      body: 'The platform is designed around practical SME workflows: find work, prove identity, organize jobs, and keep communication traceable.',
+    })}
     <section class="page-hero">
       <span class="eyebrow">About ProSME</span>
       <h1>Blumebyte built ProSME for practical service work, not just listings.</h1>
@@ -2424,6 +2474,12 @@ function renderAboutPage() {
 
 function renderFeaturesPage() {
   return renderPublicLayout(`
+    ${smeBanner({
+      image: artisanImages.craft,
+      eyebrow: 'SME workflows',
+      title: 'From first request to paid work, each tab supports a real service step.',
+      body: 'Customers can search and request help; artisans can manage listings, bids, verification, messages, bookings, and profile trust signals.',
+    })}
     <section class="page-hero">
       <span class="eyebrow">Features</span>
       <h1>Service operations for customers, artisans, and administrators.</h1>

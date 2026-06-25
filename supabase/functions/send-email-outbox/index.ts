@@ -57,6 +57,33 @@ const toHtml = (body: string) =>
     body,
   ).replaceAll('\n', '<br>')}</div>`;
 
+const humanizeBody = (body: string) => {
+  const value = clean(body);
+  if (!value.startsWith('{') && !value.startsWith('[')) return value;
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return value;
+    }
+    const record = parsed as Record<string, unknown>;
+    const candidates = [
+      clean(record.message),
+      clean(record.body),
+      clean(record.content),
+      clean(record.title),
+      clean(record.description),
+    ].filter(Boolean);
+    if (candidates.length) return candidates.join('\n\n');
+    const lines = Object.entries(record)
+      .filter(([, field]) => field !== null && field !== undefined)
+      .slice(0, 8)
+      .map(([key, field]) => `${key.replaceAll('_', ' ')}: ${clean(field)}`);
+    return lines.length ? lines.join('\n') : value;
+  } catch (_) {
+    return value;
+  }
+};
+
 const authorize = async (
   req: Request,
   supabaseUrl: string,
@@ -136,8 +163,8 @@ const sendWithResend = async ({
       from,
       to: [to],
       subject,
-      text: body,
-      html: toHtml(body),
+      text: humanizeBody(body),
+      html: toHtml(humanizeBody(body)),
     }),
   });
   const payload = await response.json().catch(() => ({}));
@@ -232,9 +259,10 @@ Deno.serve(async (req) => {
 
     return json(200, { ok: true, sent, failed });
   } catch (error) {
+    console.error('send-email-outbox failed', error);
     return json(200, {
       ok: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: 'Email dispatch failed. Check Edge Function logs.',
     });
   }
 });

@@ -21,7 +21,11 @@ const String kGoogleOAuthRedirectUrl = String.fromEnvironment(
 );
 const String kPasswordRecoveryRedirectUrl = String.fromEnvironment(
   'PASSWORD_RECOVERY_REDIRECT_URL',
-  defaultValue: 'com.prosme.app://login-callback',
+  defaultValue: 'https://prosme.blumebyte.com/reset-password',
+);
+const String kEmailVerificationRedirectUrl = String.fromEnvironment(
+  'EMAIL_VERIFICATION_REDIRECT_URL',
+  defaultValue: 'https://prosme.blumebyte.com/login',
 );
 const String kPaystackCheckoutUrl = String.fromEnvironment(
   'PAYSTACK_CHECKOUT_URL',

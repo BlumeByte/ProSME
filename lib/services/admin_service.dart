@@ -244,20 +244,25 @@ class AdminService {
       'business_certificate_urls': businessCertificateUrls,
       'verification_submitted_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', userId);
-    await client.from('admin_notifications').insert({
-      'type': 'account_verification',
-      'title': 'New account verification',
-      'body':
-          'An account uploaded national ID documents for review. Phone: $phone',
-      'actor_id': userId,
-    });
-    await client.from('email_outbox').insert({
-      'to_email': 'blumebyte@gmail.com',
-      'subject': 'New ProSME account verification',
-      'body':
-          'An account uploaded front and back ID documents for verification. Phone: $phone. Review them in the Support dashboard.',
-      'related_user_id': userId,
-    });
+    try {
+      await client.from('admin_notifications').insert({
+        'type': 'account_verification',
+        'title': 'New account verification',
+        'body':
+            'An account uploaded national ID documents for review. Phone: $phone',
+        'actor_id': userId,
+        'related_user_id': userId,
+      });
+      await client.from('email_outbox').insert({
+        'to_email': 'blumebyte@gmail.com',
+        'subject': 'New ProSME account verification',
+        'body':
+            'An account uploaded front and back ID documents for verification. Phone: $phone. Review them in the Support dashboard.',
+        'related_user_id': userId,
+      });
+    } catch (_) {
+      // The uploaded documents are saved; background alerts can be retried.
+    }
     await _flushEmailOutbox(relatedUserId: userId);
   }
 

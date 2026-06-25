@@ -134,9 +134,10 @@ Deno.serve(async (req) => {
     await sendEmail(email, actionLink);
     return json({ ok: true });
   } catch (error) {
+    console.error('password-recovery failed', error);
     return json({
       ok: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: 'Password recovery failed. Please try again.',
     });
   }
 });

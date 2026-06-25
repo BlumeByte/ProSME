@@ -253,7 +253,7 @@ class _ArtisanVerificationScreenState
       if (!mounted) return;
       _showMessage(error is StateError
           ? error.message
-          : 'Could not submit verification. Check Supabase storage setup.');
+          : 'Could not submit verification: $error');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

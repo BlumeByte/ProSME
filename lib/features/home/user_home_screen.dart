@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/widgets/app_scaffold.dart';
+import '../../core/widgets/sme_page_banner.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
@@ -44,6 +45,44 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     final chatService = ref.watch(chatServiceProvider);
     final settings = ref.watch(appSettingsControllerProvider);
     final currentIndex = user == null && _currentIndex > 0 ? 0 : _currentIndex;
+    final banners = [
+      (
+        title: settings.t('Find trusted SME services'),
+        body: settings.t(
+          'Discover artisans, compare service listings, and keep local work easy to follow.',
+        ),
+        image: SmePageBanner.textileImage,
+      ),
+      (
+        title: settings.t('Post clear work requests'),
+        body: settings.t(
+          'SMEs respond faster when your location, budget, photos, and service needs are organized.',
+        ),
+        image: SmePageBanner.workshopImage,
+      ),
+      (
+        title: settings.t('Keep service conversations together'),
+        body: settings.t(
+          'Use chat and alerts to keep requests, bids, and next steps connected to the job.',
+        ),
+        image: SmePageBanner.craftImage,
+      ),
+      (
+        title: settings.t('Track bookings and bids'),
+        body: settings.t(
+          'Customers and artisans can follow accepted work, invoice records, and job history.',
+        ),
+        image: SmePageBanner.workshopImage,
+      ),
+      (
+        title: settings.t('Build SME trust'),
+        body: settings.t(
+          'Profile details, verification, ratings, and notification settings help serious artisans stand out.',
+        ),
+        image: SmePageBanner.textileImage,
+      ),
+    ];
+    final banner = banners[currentIndex];
 
     return PopScope(
       canPop: false,
@@ -74,7 +113,18 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
                 ),
               ]
             : null,
-        body: IndexedStack(index: currentIndex, children: _pages),
+        body: Column(
+          children: [
+            SmePageBanner(
+              title: banner.title,
+              body: banner.body,
+              imageUrl: banner.image,
+            ),
+            Expanded(
+              child: IndexedStack(index: currentIndex, children: _pages),
+            ),
+          ],
+        ),
         bottomNavigationBar: StreamBuilder(
           stream: user == null ? null : chatService.watchThreads(user.id),
           builder: (context, snapshot) {
