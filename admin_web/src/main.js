@@ -51,6 +51,8 @@ const state = {
   notice: '',
   publicPage: currentPublicPage(),
   authMode: window.location.pathname === '/signup' ? 'signup' : 'login',
+  pendingConfirmationEmail:
+    window.localStorage.getItem('prosme_pending_confirmation_email') || '',
   filters: { q: '', role: 'all', status: 'all', sort: 'newest' },
   data: emptyData(),
   tableErrors: {},
@@ -102,6 +104,8 @@ const normalize = (value) => String(value ?? '').trim();
 const lower = (value) => normalize(value).toLowerCase();
 const validEmail = (value) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalize(value));
+const authRedirectUrl = (path = '/login') =>
+  new URL(path, window.location.origin).toString();
 const secureRandomIndex = (bound) => {
   if (!Number.isInteger(bound) || bound <= 0) {
     throw new RangeError('bound must be a positive integer');
@@ -369,7 +373,7 @@ async function loadDashboard() {
   state.error = '';
 
   const userId = state.session.user.id;
-  const { data: profile, error: profileError } = await supabase
+  let { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select(
       'id,full_name,email,role,verification_status,verification_expires_at,tenant_id,created_at',
@@ -389,7 +393,25 @@ async function loadDashboard() {
     return;
   }
 
+  if (!profile) {
+    const createdProfile = await createProfileForSessionUser();
+    if (createdProfile.error) {
+      await supabase.auth.signOut({ scope: 'local' });
+      state.session = null;
+      state.profile = null;
+      state.data = emptyData();
+      state.error = `Your email was confirmed, but your account profile could not be created: ${createdProfile.error.message}`;
+      state.loading = false;
+      state.checkingAccess = false;
+      render();
+      return;
+    }
+    profile = createdProfile.profile;
+  }
+
   state.profile = profile;
+  state.pendingConfirmationEmail = '';
+  window.localStorage.removeItem('prosme_pending_confirmation_email');
 
   if (profile?.role !== 'admin') {
     await refreshPortalData();
@@ -403,6 +425,39 @@ async function loadDashboard() {
   state.loading = false;
   state.checkingAccess = false;
   render();
+}
+
+async function createProfileForSessionUser() {
+  const user = state.session?.user;
+  if (!user) {
+    return { profile: null, error: new Error('No signed-in user was found.') };
+  }
+  const metadata = user.user_metadata || {};
+  const role = ['customer', 'artisan'].includes(metadata.role)
+    ? metadata.role
+    : 'customer';
+  const fullName =
+    normalize(metadata.full_name || metadata.username) ||
+    normalize(user.email).split('@')[0] ||
+    'ProSME user';
+  const email = normalize(user.email);
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert(
+      {
+        id: user.id,
+        email,
+        full_name: fullName,
+        role,
+        verification_status: 'pending',
+      },
+      { onConflict: 'id' },
+    )
+    .select(
+      'id,full_name,email,role,verification_status,verification_expires_at,tenant_id,created_at',
+    )
+    .single();
+  return { profile: data, error };
 }
 
 async function refreshPortalData() {
@@ -737,7 +792,7 @@ async function signUp(event) {
     password,
     options: {
       data: { full_name: fullName, role },
-      emailRedirectTo: `${window.location.origin}/login`,
+      emailRedirectTo: authRedirectUrl('/login'),
     },
   });
 
@@ -746,6 +801,16 @@ async function signUp(event) {
     state.error = error.message;
     render();
     return;
+  }
+
+  state.pendingConfirmationEmail = data.session ? '' : email;
+  if (state.pendingConfirmationEmail) {
+    window.localStorage.setItem(
+      'prosme_pending_confirmation_email',
+      state.pendingConfirmationEmail,
+    );
+  } else {
+    window.localStorage.removeItem('prosme_pending_confirmation_email');
   }
 
   if (data.session?.user) {
@@ -764,6 +829,35 @@ async function signUp(event) {
     : 'Check your email to confirm your account, then sign in.';
   state.authMode = 'login';
   navigate('/login');
+}
+
+async function resendConfirmationEmail() {
+  const email = normalize(state.pendingConfirmationEmail).toLowerCase();
+  if (!validEmail(email)) {
+    state.error = 'Enter your email and create the account again to request confirmation.';
+    render();
+    return;
+  }
+  state.busy = true;
+  state.error = '';
+  state.notice = '';
+  render();
+
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email,
+    options: {
+      emailRedirectTo: authRedirectUrl('/login'),
+    },
+  });
+
+  state.busy = false;
+  if (error) {
+    state.error = error.message;
+  } else {
+    state.notice = `Confirmation email resent to ${email}.`;
+  }
+  render();
 }
 
 function navigate(path) {
@@ -2813,6 +2907,11 @@ function renderAuthPage(mode = state.authMode) {
           <input name="password" type="password" autocomplete="${isSignup ? 'new-password' : 'current-password'}" minlength="8" required />
         </label>
         <button class="primary" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Please wait...' : isSignup ? 'Create account' : 'Log in'}</button>
+        ${
+          !isSignup && state.pendingConfirmationEmail
+            ? `<button class="ghost full-width" type="button" data-action="resend-confirmation" ${state.busy ? 'disabled' : ''}>Resend confirmation email</button>`
+            : ''
+        }
         <small>
           ${
             isSignup
@@ -3046,6 +3145,9 @@ function bindEvents() {
   document
     .querySelector('#password-recovery-form')
     ?.addEventListener('submit', updateRecoveredPassword);
+  document
+    .querySelector('[data-action="resend-confirmation"]')
+    ?.addEventListener('click', resendConfirmationEmail);
 
   document.querySelectorAll('[data-link]').forEach((element) => {
     element.addEventListener('click', (event) => {

@@ -1203,6 +1203,11 @@ td small {
   padding: 9px 12px;
 }
 
+.full-width {
+  width: 100%;
+  margin-top: 0;
+}
+
 .bid-stat-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
