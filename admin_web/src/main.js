@@ -105,14 +105,27 @@ const normalize = (value) => String(value ?? '').trim();
 const lower = (value) => normalize(value).toLowerCase();
 const validEmail = (value) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalize(value));
+const secureRandomIndex = (bound) => {
+  if (!Number.isInteger(bound) || bound <= 0) {
+    throw new RangeError('bound must be a positive integer');
+  }
+  const maxUint32 = 0x100000000;
+  const limit = Math.floor(maxUint32 / bound) * bound;
+  const buffer = new Uint32Array(1);
+  let value = 0;
+  do {
+    crypto.getRandomValues(buffer);
+    value = buffer[0];
+  } while (value >= limit);
+  return value % bound;
+};
 const generateStrongPassword = () => {
   const lowercase = 'abcdefghijkmnopqrstuvwxyz';
   const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const numbers = '23456789';
   const symbols = '!@#$%^&*';
   const all = lowercase + uppercase + numbers + symbols;
-  const pick = (chars) =>
-    chars[crypto.getRandomValues(new Uint32Array(1))[0] % chars.length];
+  const pick = (chars) => chars[secureRandomIndex(chars.length)];
   const password = [
     pick(lowercase),
     pick(uppercase),
@@ -121,7 +134,7 @@ const generateStrongPassword = () => {
     ...Array.from({ length: 10 }, () => pick(all)),
   ];
   for (let index = password.length - 1; index > 0; index -= 1) {
-    const random = crypto.getRandomValues(new Uint32Array(1))[0] % (index + 1);
+    const random = secureRandomIndex(index + 1);
     [password[index], password[random]] = [password[random], password[index]];
   }
   return password.join('');
