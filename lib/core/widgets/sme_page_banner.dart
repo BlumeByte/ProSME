@@ -5,10 +5,10 @@ class SmePageBanner extends StatelessWidget {
     super.key,
     required this.title,
     required this.body,
-    this.imageUrl = _marketImage,
+    this.imageUrl = marketImage,
   });
 
-  static const _marketImage =
+  static const marketImage =
       'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=80';
   static const textileImage =
       'https://images.unsplash.com/photo-1516762689617-e1cffcef479d?auto=format&fit=crop&w=1200&q=80';
@@ -16,6 +16,10 @@ class SmePageBanner extends StatelessWidget {
       'https://images.unsplash.com/photo-1452860606245-08befc0ff44b?auto=format&fit=crop&w=1200&q=80';
   static const workshopImage =
       'https://images.unsplash.com/photo-1504917595217-d4dc5ebe6122?auto=format&fit=crop&w=1200&q=80';
+  static const recordsImage =
+      'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80';
+  static const promoImage =
+      'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80';
 
   final String title;
   final String body;

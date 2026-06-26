@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -28,6 +28,7 @@ import '../models/listing.dart';
 import '../models/wallet_transaction.dart';
 import '../routes/route_names.dart';
 import '../services/app_launch_service.dart';
+import '../services/app_settings_controller.dart';
 import '../services/service_providers.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -50,12 +51,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: RouteNames.onboarding,
     refreshListenable: refreshListenable,
+    errorBuilder: (context, state) => RouterErrorScreen(error: state.error),
     redirect: (context, state) {
       final authState = ref.read(authStateProvider).valueOrNull;
       final isLoggedIn = authState != null;
       final fullPath = state.fullPath ?? state.matchedLocation;
       final isOnboarding = fullPath == RouteNames.onboarding;
       final isRecovering = ref.read(passwordRecoveryActiveProvider);
+
+      if (isRecovering && fullPath == RouteNames.home) {
+        ref.read(passwordRecoveryActiveProvider.notifier).state = false;
+        return null;
+      }
 
       if (isRecovering && fullPath != RouteNames.resetPassword) {
         return RouteNames.resetPassword;
@@ -239,5 +246,66 @@ class StreamRouterRefresh extends ChangeNotifier {
   void dispose() {
     _subscription.cancel();
     super.dispose();
+  }
+}
+
+class RouterErrorScreen extends ConsumerWidget {
+  const RouterErrorScreen({super.key, this.error});
+
+  final Exception? error;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: settings.t('Back'),
+          onPressed: () => _goHome(context, ref),
+        ),
+        title: Text(settings.t('ProSME')),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, size: 56),
+                  const SizedBox(height: 16),
+                  Text(
+                    settings.t('Something went wrong.'),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    settings.t(
+                      'Return home and try again. If this keeps happening, check your connection and reopen the app.',
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: () => _goHome(context, ref),
+                    icon: const Icon(Icons.home_outlined),
+                    label: Text(settings.t('Go to homepage')),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _goHome(BuildContext context, WidgetRef ref) {
+    ref.read(passwordRecoveryActiveProvider.notifier).state = false;
+    context.go(RouteNames.home);
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationService {
@@ -32,13 +34,33 @@ class NotificationService {
     required String title,
     required String body,
   }) async {
-    const androidDetails = AndroidNotificationDetails(
+    final androidDetails = AndroidNotificationDetails(
       'prosme_channel',
       'Pro SME Notifications',
+      channelDescription:
+          'Alerts for ProSME chats, jobs, bids, and account updates.',
       importance: Importance.max,
       priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      vibrationPattern: Int64List.fromList([0, 250, 120, 250]),
+      ticker: 'ProSME alert',
+      category: AndroidNotificationCategory.message,
     );
-    const details = NotificationDetails(android: androidDetails);
-    await _plugin.show(0, title, body, details);
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+    await _plugin.show(
+      DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title,
+      body,
+      details,
+    );
   }
 }

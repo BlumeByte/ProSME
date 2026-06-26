@@ -6,6 +6,7 @@ import 'app.dart';
 import 'config/supabase_options.dart';
 import 'services/app_launch_service.dart';
 import 'services/app_settings_controller.dart';
+import 'services/analytics_service.dart';
 import 'services/chat_sync_service.dart';
 import 'services/db_service.dart';
 import 'services/notification_service.dart';
@@ -40,6 +41,7 @@ Future<void> main() async {
   await ThemeModeController.init();
   await AppSettingsController.init();
   unawaited(NotificationService().initialize());
+  unawaited(AnalyticsService.trackAppOpen());
   if (shouldUseSupabase()) {
     unawaited(
       ChatSyncService.syncPending(

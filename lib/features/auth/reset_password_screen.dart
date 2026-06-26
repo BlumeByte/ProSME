@@ -34,7 +34,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
     try {
       await ref.read(authServiceProvider).signOut();
     } catch (_) {}
-    if (mounted) context.go(RouteNames.auth);
+    if (mounted) context.go(RouteNames.home);
   }
 
   Future<void> _updatePassword() async {
@@ -98,6 +98,13 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
         appBar: AppBar(
           leading: BackButton(onPressed: _cancelRecovery),
           title: Text(settings.t('Create new password')),
+          actions: [
+            TextButton.icon(
+              onPressed: _cancelRecovery,
+              icon: const Icon(Icons.home_outlined),
+              label: Text(settings.t('Home')),
+            ),
+          ],
         ),
         body: SafeArea(
           child: Center(
@@ -154,6 +161,12 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                       ),
                       icon: Icons.check,
                       onPressed: _loading ? null : _updatePassword,
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: _loading ? null : _cancelRecovery,
+                      icon: const Icon(Icons.home_outlined),
+                      label: Text(settings.t('Back to homepage')),
                     ),
                   ],
                 ),

@@ -212,6 +212,13 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       appBar: AppBar(
         leading: const SafeBackButton(),
         title: Text(settings.t(title)),
+        actions: [
+          TextButton.icon(
+            onPressed: _isLoading ? null : () => context.go(RouteNames.home),
+            icon: const Icon(Icons.home_outlined),
+            label: Text(settings.t('Home')),
+          ),
+        ],
       ),
       body: SafeArea(
         child: ListView(
@@ -344,7 +351,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             const SizedBox(height: 16),
             TextButton(
               onPressed: () => context.go(RouteNames.home),
-              child: Text(settings.t('Back')),
+              child: Text(settings.t('Back to homepage')),
             )
           ],
         ),

@@ -553,12 +553,12 @@ select {
 .site-section {
   width: min(1120px, calc(100% - 36px));
   margin: 0 auto;
-  padding: 34px 0;
+  padding: 46px 0;
 }
 
 .section-head {
   max-width: 680px;
-  margin-bottom: 18px;
+  margin-bottom: 30px;
 }
 
 .section-head h2,
@@ -572,7 +572,7 @@ select {
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 22px;
   perspective: 1100px;
 }
 
@@ -667,7 +667,7 @@ select {
 .sme-info-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 22px;
 }
 
 .sme-info-grid article {
@@ -1172,6 +1172,11 @@ td small {
   display: block;
   color: var(--muted);
   margin-top: 3px;
+}
+
+.error-line {
+  color: #b91c1c !important;
+  overflow-wrap: anywhere;
 }
 
 .row-actions {

@@ -5,8 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/widgets/loading_state.dart';
@@ -520,38 +518,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
-  String _messagesShareText(List<ChatMessage> messages) {
-    return messages
-        .map(
-          (message) =>
-              '${DateFormat('MMM d, h:mm a').format(message.createdAt)}: ${message.threadPreview}',
-        )
-        .join('\n');
-  }
-
-  Future<void> _shareMessages(List<ChatMessage> messages) async {
-    if (messages.isEmpty) return;
-    await Share.share(
-      _messagesShareText(messages),
-      subject: 'Chat conversation from ProSME',
-    );
-  }
-
-  Future<void> _shareBySms(List<ChatMessage> messages) async {
-    if (messages.isEmpty) return;
-    final uri = Uri(
-      scheme: 'sms',
-      queryParameters: {'body': _messagesShareText(messages)},
-    );
-    if (!await launchUrl(uri)) {
-      if (!mounted) return;
-      final settings = ref.read(appSettingsControllerProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(settings.t('Could not open SMS app.'))),
-      );
-    }
-  }
-
   Future<void> _copyMessage(ChatMessage message) async {
     await Clipboard.setData(ClipboardData(text: message.threadPreview));
     if (!mounted) return;
@@ -559,146 +525,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(settings.t('Message copied.'))),
     );
-  }
-
-  void _showShareOptions(List<ChatMessage> messages) {
-    final settings = ref.read(appSettingsControllerProvider);
-    if (messages.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(settings.t('No messages to share yet.'))),
-      );
-      return;
-    }
-
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.ios_share),
-              title: Text(settings.t('Share to phone app')),
-              onTap: () {
-                Navigator.pop(context);
-                _shareMessages(messages);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.sms_outlined),
-              title: Text(settings.t('Send as SMS')),
-              onTap: () {
-                Navigator.pop(context);
-                _shareBySms(messages);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.chat_bubble_outline),
-              title: Text(settings.t('Forward to another chat')),
-              onTap: () {
-                Navigator.pop(context);
-                _chooseForwardThread(messages);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _chooseForwardThread(List<ChatMessage> messages) {
-    final user = ref.read(authStateProvider).valueOrNull;
-    if (user == null) return;
-    final settings = ref.read(appSettingsControllerProvider);
-
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(settings.t('Forward to chat')),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: StreamBuilder<List<ChatThread>>(
-            stream: ref.read(chatServiceProvider).watchThreads(user.id),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const SizedBox(
-                  height: 120,
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              final threads = snapshot.data!
-                  .where((thread) => thread.id != widget.threadId)
-                  .toList(growable: false);
-              if (threads.isEmpty) {
-                return Text(settings.t('No other chats available.'));
-              }
-              return ListView.builder(
-                shrinkWrap: true,
-                itemCount: threads.length,
-                itemBuilder: (context, index) {
-                  final thread = threads[index];
-                  return ListTile(
-                    leading: const Icon(Icons.chat_bubble_outline),
-                    title: Text(_threadTitle(thread, user.id)),
-                    subtitle: Text(
-                      thread.lastMessage.isEmpty
-                          ? settings.t('No messages yet')
-                          : thread.lastMessage,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      await _forwardMessages(thread.id, messages);
-                    },
-                  );
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(settings.t('Cancel')),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _forwardMessages(
-    String targetThreadId,
-    List<ChatMessage> messages,
-  ) async {
-    final user = ref.read(authStateProvider).valueOrNull;
-    if (user == null || messages.isEmpty) return;
-    final settings = ref.read(appSettingsControllerProvider);
-
-    try {
-      await ref.read(chatServiceProvider).sendMessage(
-            ChatMessage(
-              id: _uuid.v4(),
-              threadId: targetThreadId,
-              senderId: user.id,
-              type: MessageType.text,
-              content:
-                  '${settings.t('Forwarded from chat')}:\n${_messagesShareText(messages)}',
-              createdAt: DateTime.now(),
-            ),
-          );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(settings.t('Forwarded to chat.'))),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${settings.t('Could not forward message')}: $error'),
-        ),
-      );
-    }
   }
 
   Future<void> _viewProfile(String userId) async {
@@ -826,8 +652,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   onSelected: (value) {
                     if (value == 'clear_all') {
                       _clearAllMessages();
-                    } else if (value == 'share') {
-                      _showShareOptions(_latestMessages);
                     } else if (value == 'report') {
                       _reportConversation();
                     } else if (value == 'block') {
@@ -835,16 +659,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     }
                   },
                   itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'share',
-                      child: Row(
-                        children: [
-                          const Icon(Icons.ios_share),
-                          const SizedBox(width: 8),
-                          Text(settings.t('Share conversation')),
-                        ],
-                      ),
-                    ),
                     PopupMenuItem(
                       value: 'clear_all',
                       child: Row(
@@ -1147,11 +961,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     icon: const Icon(Icons.receipt_long),
                     tooltip: settings.t('Invoice'),
                   ),
-                  IconButton(
-                    onPressed: () => _showShareOptions(_latestMessages),
-                    icon: const Icon(Icons.ios_share),
-                    tooltip: settings.t('Share chat'),
-                  ),
                   Expanded(
                     child: TextField(
                       controller: _controller,
@@ -1208,14 +1017,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 },
               ),
             ListTile(
-              leading: const Icon(Icons.ios_share),
-              title: Text(settings.t('Share message')),
-              onTap: () {
-                Navigator.pop(context);
-                _showShareOptions([message]);
-              },
-            ),
-            ListTile(
               leading: const Icon(Icons.copy),
               title: Text(settings.t('Copy message')),
               onTap: () {
@@ -1235,13 +1036,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         ),
       ),
     );
-  }
-
-  String _threadTitle(ChatThread thread, String currentUserId) {
-    final isUser = thread.userId == currentUserId;
-    final title = isUser ? thread.artisanName : thread.userName;
-    if (title != null && title.trim().isNotEmpty) return title;
-    return isUser ? 'Artisan chat' : 'Customer chat';
   }
 
   List<ChatMessage> _sortMessages(List<ChatMessage> messages) {

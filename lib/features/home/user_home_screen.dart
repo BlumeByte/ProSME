@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +9,7 @@ import '../../core/widgets/app_scaffold.dart';
 import '../../core/widgets/sme_page_banner.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
+import '../../services/notification_service.dart';
 import '../../services/service_providers.dart';
 import '../chat/chat_list_screen.dart';
 import '../listing/listing_feed_screen.dart';
@@ -22,11 +26,17 @@ class UserHomeScreen extends ConsumerStatefulWidget {
 
 class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
   int _currentIndex = 0;
+  int _bannerIndex = 0;
+  int _lastUnreadChats = 0;
+  bool _seenInitialUnreadChats = false;
+  late final PageController _bannerController;
+  Timer? _bannerTimer;
   late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
+    _bannerController = PageController();
     _pages = [
       ListingFeedScreen(
         onOpenChatTab: () => setState(() => _currentIndex = 2),
@@ -37,6 +47,28 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
       const JobsScreen(showAppBar: false),
       const ProfileScreen(),
     ];
+    _startBannerTimer();
+  }
+
+  @override
+  void dispose() {
+    _bannerTimer?.cancel();
+    _bannerController.dispose();
+    super.dispose();
+  }
+
+  void _startBannerTimer() {
+    _bannerTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (!mounted || !_shouldShowBanner) return;
+      final banners = _buildBanners(ref.read(appSettingsControllerProvider));
+      if (banners.length < 2) return;
+      final next = (_bannerIndex + 1) % banners.length;
+      _bannerController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 
   @override
@@ -45,44 +77,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     final chatService = ref.watch(chatServiceProvider);
     final settings = ref.watch(appSettingsControllerProvider);
     final currentIndex = user == null && _currentIndex > 0 ? 0 : _currentIndex;
-    final banners = [
-      (
-        title: settings.t('Find trusted SME services'),
-        body: settings.t(
-          'Discover artisans, compare service listings, and keep local work easy to follow.',
-        ),
-        image: SmePageBanner.textileImage,
-      ),
-      (
-        title: settings.t('Post clear work requests'),
-        body: settings.t(
-          'SMEs respond faster when your location, budget, photos, and service needs are organized.',
-        ),
-        image: SmePageBanner.workshopImage,
-      ),
-      (
-        title: settings.t('Keep service conversations together'),
-        body: settings.t(
-          'Use chat and alerts to keep requests, bids, and next steps connected to the job.',
-        ),
-        image: SmePageBanner.craftImage,
-      ),
-      (
-        title: settings.t('Track bookings and bids'),
-        body: settings.t(
-          'Customers and artisans can follow accepted work, invoice records, and job history.',
-        ),
-        image: SmePageBanner.workshopImage,
-      ),
-      (
-        title: settings.t('Build SME trust'),
-        body: settings.t(
-          'Profile details, verification, ratings, and notification settings help serious artisans stand out.',
-        ),
-        image: SmePageBanner.textileImage,
-      ),
-    ];
-    final banner = banners[currentIndex];
+    final banners = _buildBanners(settings);
 
     return PopScope(
       canPop: false,
@@ -115,11 +110,13 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
             : null,
         body: Column(
           children: [
-            SmePageBanner(
-              title: banner.title,
-              body: banner.body,
-              imageUrl: banner.image,
-            ),
+            if (_shouldShowBanner)
+              _BannerSlider(
+                controller: _bannerController,
+                banners: banners,
+                currentIndex: _bannerIndex,
+                onPageChanged: (index) => setState(() => _bannerIndex = index),
+              ),
             Expanded(
               child: IndexedStack(index: currentIndex, children: _pages),
             ),
@@ -130,6 +127,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
           builder: (context, snapshot) {
             final unread = (snapshot.data ?? const [])
                 .fold<int>(0, (sum, thread) => sum + thread.unreadCount);
+            _notifyOnUnreadChat(unread, settings);
             return BottomNavigationBar(
               currentIndex: currentIndex,
               onTap: (index) {
@@ -167,6 +165,75 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     );
   }
 
+  bool get _shouldShowBanner {
+    final days = DateTime.now().toUtc().difference(DateTime.utc(2026)).inDays;
+    return (days ~/ 7).isEven;
+  }
+
+  List<({String title, String body, String image})> _buildBanners(
+    AppSettings settings,
+  ) {
+    final banners = [
+      (
+        title: settings.t('Find trusted SME services'),
+        body: settings.t(
+          'Discover artisans, compare service listings, and keep local work easy to follow.',
+        ),
+        image: SmePageBanner.marketImage,
+      ),
+      (
+        title: settings.t('Post clear work requests'),
+        body: settings.t(
+          'SMEs respond faster when your location, budget, photos, and service needs are organized.',
+        ),
+        image: SmePageBanner.workshopImage,
+      ),
+      (
+        title: settings.t('Keep service conversations together'),
+        body: settings.t(
+          'Use chat and alerts to keep requests, bids, and next steps connected to the job.',
+        ),
+        image: SmePageBanner.craftImage,
+      ),
+      (
+        title: settings.t('Track bookings and bids'),
+        body: settings.t(
+          'Customers and artisans can follow accepted work, invoice records, and job history.',
+        ),
+        image: SmePageBanner.recordsImage,
+      ),
+      (
+        title: settings.t('Grow with ProSME promotions'),
+        body: settings.t(
+          'Verified profiles, fresh offers, and seasonal service prompts help serious artisans stand out.',
+        ),
+        image: SmePageBanner.promoImage,
+      ),
+    ];
+    final week =
+        DateTime.now().toUtc().difference(DateTime.utc(2026)).inDays ~/ 7;
+    final shuffled = [...banners]..shuffle(math.Random(week));
+    return shuffled;
+  }
+
+  void _notifyOnUnreadChat(int unread, AppSettings settings) {
+    if (!_seenInitialUnreadChats) {
+      _seenInitialUnreadChats = true;
+      _lastUnreadChats = unread;
+      return;
+    }
+    if (unread <= _lastUnreadChats) {
+      _lastUnreadChats = unread;
+      return;
+    }
+    _lastUnreadChats = unread;
+    if (!settings.phoneNotifications) return;
+    NotificationService().showSimpleNotification(
+      title: settings.t('New chat message'),
+      body: settings.t('Open ProSME to read and reply.'),
+    );
+  }
+
   Future<void> _confirmExitApp() async {
     final settings = ref.read(appSettingsControllerProvider);
     final shouldExit = await showDialog<bool>(
@@ -189,6 +256,68 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     if (shouldExit == true) {
       await SystemNavigator.pop();
     }
+  }
+}
+
+class _BannerSlider extends StatelessWidget {
+  const _BannerSlider({
+    required this.controller,
+    required this.banners,
+    required this.currentIndex,
+    required this.onPageChanged,
+  });
+
+  final PageController controller;
+  final List<({String title, String body, String image})> banners;
+  final int currentIndex;
+  final ValueChanged<int> onPageChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final height = screenWidth < 420 ? 196.0 : 234.0;
+    return SizedBox(
+      height: height,
+      child: Stack(
+        alignment: Alignment.bottomCenter,
+        children: [
+          PageView.builder(
+            controller: controller,
+            onPageChanged: onPageChanged,
+            itemCount: banners.length,
+            itemBuilder: (context, index) {
+              final banner = banners[index];
+              return SmePageBanner(
+                title: banner.title,
+                body: banner.body,
+                imageUrl: banner.image,
+              );
+            },
+          ),
+          Positioned(
+            bottom: 16,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(
+                banners.length,
+                (index) => AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: index == currentIndex ? 18 : 7,
+                  height: 7,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: Colors.white.withValues(
+                      alpha: index == currentIndex ? 0.92 : 0.48,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

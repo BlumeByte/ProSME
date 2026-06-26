@@ -4,6 +4,7 @@ site_url = "https://prosme.blumebyte.com"
 additional_redirect_urls = [
   "com.prosme.app://login-callback",
   "com.prosme.app",
+  "https://prosme.blumebyte.com/login",
   "https://prosme.blumebyte.com/reset-password",
   "https://prosme.vercel.app/",
   "https://prosme.vercel.app/reset-password",
@@ -24,6 +25,18 @@ password_requirements = "lower_upper_letters_digits_symbols"
 [auth.email]
 enable_confirmations = true
 max_frequency = "1m0s"
+
+[auth.email.template.confirmation]
+subject = "Verify your ProSME account"
+content_path = "./templates/confirm-signup.html"
+
+[auth.email.template.recovery]
+subject = "Reset your ProSME password"
+content_path = "./templates/recovery.html"
+
+[auth.email.template.magic_link]
+subject = "Sign in to ProSME"
+content_path = "./templates/magic-link.html"
 
 [auth.mfa]
 max_enrolled_factors = 5

@@ -4,6 +4,8 @@ import './styles.css';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const googleMeasurementId = import.meta.env.VITE_GOOGLE_MEASUREMENT_ID;
+const adsenseClient = import.meta.env.VITE_GOOGLE_ADSENSE_CLIENT;
 const app = document.querySelector('#app');
 
 const emptyData = () => ({
@@ -18,6 +20,8 @@ const emptyData = () => ({
   notifications: [],
   reports: [],
   verificationSubscriptions: [],
+  analyticsEvents: [],
+  emailOutbox: [],
 });
 
 const publicRoutes = new Set([
@@ -106,6 +110,16 @@ const validEmail = (value) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalize(value));
 const authRedirectUrl = (path = '/login') =>
   new URL(path, window.location.origin).toString();
+let lastTrackedPath = '';
+
+const sessionAnalyticsId = (() => {
+  const key = 'prosme_analytics_session_id';
+  const existing = window.sessionStorage.getItem(key);
+  if (existing) return existing;
+  const created = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+  window.sessionStorage.setItem(key, created);
+  return created;
+})();
 const secureRandomIndex = (bound) => {
   if (!Number.isInteger(bound) || bound <= 0) {
     throw new RangeError('bound must be a positive integer');
@@ -292,6 +306,61 @@ const statusBadge = (status) => {
   return `<span class="${map[status] || 'badge'}">${esc(status || 'unknown')}</span>`;
 };
 
+function installGoogleTracking() {
+  if (googleMeasurementId && !document.querySelector('[data-gtag-loader]')) {
+    const loader = document.createElement('script');
+    loader.async = true;
+    loader.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(googleMeasurementId)}`;
+    loader.dataset.gtagLoader = 'true';
+    document.head.appendChild(loader);
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function gtag() {
+      window.dataLayer.push(arguments);
+    };
+    window.gtag('js', new Date());
+    window.gtag('config', googleMeasurementId, {
+      send_page_view: false,
+    });
+  }
+
+  if (adsenseClient && !document.querySelector('[data-adsense-loader]')) {
+    const adsense = document.createElement('script');
+    adsense.async = true;
+    adsense.crossOrigin = 'anonymous';
+    adsense.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(adsenseClient)}`;
+    adsense.dataset.adsenseLoader = 'true';
+    document.head.appendChild(adsense);
+  }
+}
+
+async function trackPublicPageView() {
+  const path = window.location.pathname;
+  if (!publicRoutes.has(path) || path === '/login' || path === '/signup') return;
+  if (lastTrackedPath === path) return;
+  lastTrackedPath = path;
+
+  if (window.gtag && googleMeasurementId) {
+    window.gtag('event', 'page_view', {
+      page_title: document.title,
+      page_location: window.location.href,
+      page_path: path,
+    });
+  }
+
+  if (!hasConfig || !supabase) return;
+  await supabase.from('analytics_events').insert({
+    source: 'web',
+    event_name: 'page_view',
+    path,
+    referrer: document.referrer || '',
+    user_agent: navigator.userAgent,
+    session_id: sessionAnalyticsId,
+    metadata: {
+      title: document.title,
+    },
+  });
+}
+
 function setNotice(message) {
   state.notice = message;
   setTimeout(() => {
@@ -313,6 +382,7 @@ async function safeSelect(name, query) {
 }
 
 async function init() {
+  installGoogleTracking();
   if (!hasConfig) {
     state.loading = false;
     state.error =
@@ -546,6 +616,8 @@ async function refreshData() {
     notifications,
     reports,
     verificationSubscriptions,
+    analyticsEvents,
+    emailOutbox,
   ] = await Promise.all([
     safeSelect(
       'profiles',
@@ -647,6 +719,22 @@ async function refreshData() {
         .order('updated_at', { ascending: false })
         .limit(500),
     ),
+    safeSelect(
+      'analytics_events',
+      supabase
+        .from('analytics_events')
+        .select('id,source,event_name,path,session_id,user_id,created_at')
+        .order('created_at', { ascending: false })
+        .limit(1000),
+    ),
+    safeSelect(
+      'email_outbox',
+      supabase
+        .from('email_outbox')
+        .select('id,to_email,subject,sent_at,attempt_count,last_error,created_at')
+        .order('created_at', { ascending: false })
+        .limit(200),
+    ),
   ]);
 
   state.data = {
@@ -661,6 +749,8 @@ async function refreshData() {
     notifications,
     reports,
     verificationSubscriptions,
+    analyticsEvents,
+    emailOutbox,
   };
 }
 
@@ -1423,6 +1513,15 @@ function dashboardStats() {
     (job) => (job.status || 'active') === 'active',
   );
   const reports = visibleReports();
+  const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  const recentVisits = state.data.analyticsEvents.filter(
+    (event) => new Date(event.created_at).getTime() >= dayAgo,
+  );
+  const visitorCount = new Set(
+    recentVisits.map((event) => event.session_id || event.id),
+  ).size;
+  const pendingEmails = state.data.emailOutbox.filter((item) => !item.sent_at);
+  const failedEmails = pendingEmails.filter((item) => item.last_error);
 
   return [
     ['Total users', profiles.length, `${customers.length} customers`],
@@ -1430,6 +1529,8 @@ function dashboardStats() {
     ['Listings', state.data.listings.length, 'Editable service listings'],
     ['Open jobs', openJobs.length, `${state.data.bids.length} bids`],
     ['Reports', reports.length, `${unread.length} unread admin notices`],
+    ['Visitors 24h', visitorCount, `${recentVisits.length} page views`],
+    ['Email queue', pendingEmails.length, `${failedEmails.length} failed sends`],
     ['Rejected verification', rejected.length, 'Retry lock handled in app'],
   ];
 }
@@ -1507,6 +1608,7 @@ function renderOverview() {
   const stats = dashboardStats();
   const recentNotifications = state.data.notifications.slice(0, 8);
   const pending = pendingVerifications().slice(0, 6);
+  const emailQueue = state.data.emailOutbox.slice(0, 8);
   return `
     <section class="stat-grid">
       ${stats
@@ -1535,6 +1637,29 @@ function renderOverview() {
         </div>
         ${recentNotifications.length ? renderActivityList(recentNotifications) : '<p class="empty">No admin activity yet.</p>'}
       </article>
+    </section>
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Email Delivery</h2>
+        <span class="muted">Resend and auth email health</span>
+      </div>
+      ${
+        emailQueue.length
+          ? `<div class="list">${emailQueue
+              .map(
+                (item) => `
+                  <div class="list-row">
+                    <div>
+                      <strong>${esc(item.subject || 'Email')}</strong>
+                      <small>${esc(item.to_email || 'Profile email')} · ${dateText(item.created_at)}</small>
+                      ${item.last_error ? `<small class="error-line">${esc(item.last_error)}</small>` : ''}
+                    </div>
+                    ${item.sent_at ? statusBadge('completed') : statusBadge(item.last_error ? 'rejected' : 'pending')}
+                  </div>`,
+              )
+              .join('')}</div>`
+          : '<p class="empty">No email delivery records loaded.</p>'
+      }
     </section>
   `;
 }
@@ -2619,8 +2744,8 @@ function renderHome() {
             image: artisanImages.invoices,
           },
           {
-            title: 'Shared account system',
-            body: 'One secure account powers the app and browser experience.',
+            title: 'Connected work history',
+            body: 'Customers and artisans can return to their requests, bids, alerts, invoices, and account records from the same ProSME profile.',
             image: artisanImages.account,
           },
         ]
@@ -2819,7 +2944,7 @@ function renderPolicyPage(type) {
       title: 'Security Policy',
       eyebrow: 'Protected access',
       image: artisanImages.verification,
-      body: 'Passwords are handled through secure account services. Admin operations use protected server functions, and service keys are not exposed in browser code.',
+      body: 'Passwords, recovery links, and verification emails use protected account services. Admin tools run through server functions, and service keys are not exposed in browser code.',
       cards: [
         ['Account protection', 'Email verification, password recovery, and configured sign-in providers protect access to customer, artisan, and admin accounts.'],
         ['Access controls', 'Database access rules restrict private data and limit verification, report, and admin review tools to authorized accounts.'],
@@ -2945,7 +3070,7 @@ function renderPortal() {
           <div>
             <span class="eyebrow">${esc(profile.role || 'customer')} account</span>
             <h1>${esc(profile.full_name || profile.email || 'Your ProSME account')}</h1>
-            <p>Your web and mobile sessions stay connected through one secure account.</p>
+            <p>Review your requests, bids, wallet records, and account alerts in one place.</p>
           </div>
           <div class="row-actions">
             ${roleBadge(profile.role)}
@@ -3036,7 +3161,7 @@ function renderLogin() {
           <input name="password" type="password" autocomplete="current-password" required />
         </label>
         <button class="primary" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Signing in...' : 'Sign in'}</button>
-        <small>Use secure account access. The web dashboard does not store passwords.</small>
+        <small>The web dashboard does not store passwords.</small>
       </form>
     </div>
   `;
@@ -3137,6 +3262,7 @@ function render() {
     app.innerHTML = renderPortal();
   }
   bindEvents();
+  trackPublicPageView().catch(() => {});
 }
 
 function bindEvents() {
