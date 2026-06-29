@@ -1,8 +1,6 @@
 -- ProSME consolidated Supabase SQL
--- Generated from supabase/migrations in timestamp order.
--- Run in Supabase SQL editor on the target project if you need to reconcile all schema/functions/policies.
--- Review secrets/Edge Function environment variables separately; SQL cannot set those.
-
+-- Generated from supabase/migrations on 2026-06-29.
+-- Safe to rerun where migrations use IF EXISTS / IF NOT EXISTS guards.
 
 
 -- ============================================================================
@@ -217,7 +215,6 @@ begin
 end;
 $$;
 
-
 -- ============================================================================
 -- Migration: 20260530233000_usernames_and_account_deletion.sql
 -- ============================================================================
@@ -260,7 +257,6 @@ $$;
 revoke all on function public.delete_current_user() from public;
 grant execute on function public.delete_current_user() to authenticated;
 
-
 -- ============================================================================
 -- Migration: 20260531000000_saved_listings.sql
 -- ============================================================================
@@ -294,7 +290,6 @@ on public.saved_listings for delete
 to authenticated
 using (auth.uid() = user_id);
 
-
 -- ============================================================================
 -- Migration: 20260601000000_public_jobs_and_listing_write.sql
 -- ============================================================================
@@ -311,7 +306,6 @@ create policy "Public can read profiles"
 on public.profiles for select
 to anon, authenticated
 using (true);
-
 
 -- ============================================================================
 -- Migration: 20260601010000_verification_admin_email.sql
@@ -427,7 +421,6 @@ with check (
   )
 );
 
-
 -- ============================================================================
 -- Migration: 20260601020000_verification_storage_and_unverified_artisans.sql
 -- ============================================================================
@@ -470,6 +463,7 @@ using (bucket_id = 'artisan-verification');
 
 drop policy if exists "Verified artisans can manage listings" on public.listings;
 drop policy if exists "Artisans can manage listings" on public.listings;
+drop policy if exists "Artisans can manage own listings" on public.listings;
 create policy "Artisans can manage own listings"
 on public.listings for all
 to authenticated
@@ -484,6 +478,7 @@ with check (
 
 drop policy if exists "Verified artisans can create jobs" on public.jobs;
 drop policy if exists "Users can create jobs" on public.jobs;
+drop policy if exists "Users and artisans can create jobs" on public.jobs;
 create policy "Users and artisans can create jobs"
 on public.jobs for insert
 to authenticated
@@ -495,7 +490,6 @@ with check (
       and p.role in ('customer', 'artisan', 'admin')
   )
 );
-
 
 -- ============================================================================
 -- Migration: 20260603000000_job_bids_and_api_grants.sql
@@ -607,7 +601,6 @@ begin
   end if;
 end;
 $$;
-
 
 -- ============================================================================
 -- Migration: 20260606000000_admin_tenants_and_job_ratings.sql
@@ -745,7 +738,6 @@ begin
 end;
 $$;
 
-
 -- ============================================================================
 -- Migration: 20260606010000_search_profile_images_and_verification_retry.sql
 -- ============================================================================
@@ -815,7 +807,6 @@ create policy "Public can view listing images"
 on storage.objects for select
 to anon, authenticated
 using (bucket_id = 'listing-images');
-
 
 -- ============================================================================
 -- Migration: 20260608000000_harden_advisor_warnings.sql
@@ -917,7 +908,6 @@ begin
   end if;
 end;
 $$;
-
 
 -- ============================================================================
 -- Migration: 20260608020000_admin_dashboard_management.sql
@@ -1136,7 +1126,6 @@ begin
 end;
 $$;
 
-
 -- ============================================================================
 -- Migration: 20260608030000_fix_admin_rls_and_support.sql
 -- ============================================================================
@@ -1340,7 +1329,6 @@ begin
 end;
 $$;
 
-
 -- ============================================================================
 -- Migration: 20260610000000_repair_owner_writes_storage_and_admin_actions.sql
 -- ============================================================================
@@ -1468,7 +1456,6 @@ on storage.objects for select
 to anon, authenticated
 using (bucket_id = 'listing-images');
 
-
 -- ============================================================================
 -- Migration: 20260610010000_notifications_unread_user_settings_and_job_images.sql
 -- ============================================================================
@@ -1517,7 +1504,6 @@ on public.jobs for update
 to authenticated
 using ((select auth.uid()) = created_by)
 with check ((select auth.uid()) = created_by);
-
 
 -- ============================================================================
 -- Migration: 20260610020000_production_auth_profile_notifications.sql
@@ -1747,7 +1733,6 @@ create trigger messages_queue_notifications
 after insert on public.messages
 for each row execute function public.queue_message_created_notifications();
 
-
 -- ============================================================================
 -- Migration: 20260611000000_artisan_availability.sql
 -- ============================================================================
@@ -1772,7 +1757,6 @@ to authenticated
 using (related_user_id = (select auth.uid()) or actor_id = (select auth.uid()))
 with check (related_user_id = (select auth.uid()) or actor_id = (select auth.uid()));
 
-
 -- ============================================================================
 -- Migration: 20260611010000_user_verification_pending_defaults.sql
 -- ============================================================================
@@ -1786,7 +1770,6 @@ where coalesce(role, 'customer') <> 'artisan'
   and verification_status = 'verified'
   and coalesce(national_id_front_url, national_id_url, '') = ''
   and coalesce(national_id_back_url, '') = '';
-
 
 -- ============================================================================
 -- Migration: 20260611020000_email_outbox_resend_delivery.sql
@@ -1802,13 +1785,13 @@ create index if not exists email_outbox_pending_idx
 on public.email_outbox (created_at)
 where sent_at is null;
 
-
 -- ============================================================================
 -- Migration: 20260611030000_harden_outbox_insert_policies.sql
 -- ============================================================================
 
 drop policy if exists "Users can create email tasks" on public.email_outbox;
 drop policy if exists "Authenticated users can create email tasks" on public.email_outbox;
+drop policy if exists "Authenticated users can create limited email tasks" on public.email_outbox;
 create policy "Authenticated users can create limited email tasks"
 on public.email_outbox for insert
 to authenticated
@@ -1829,6 +1812,7 @@ with check (
 );
 
 drop policy if exists "Authenticated users can create sms tasks" on public.sms_outbox;
+drop policy if exists "Authenticated users can create own sms tasks" on public.sms_outbox;
 create policy "Authenticated users can create own sms tasks"
 on public.sms_outbox for insert
 to authenticated
@@ -1863,14 +1847,12 @@ with check (
   )
 );
 
-
 -- ============================================================================
 -- Migration: 20260612010000_profile_currency_settings.sql
 -- ============================================================================
 
 alter table public.profiles
   add column if not exists currency_code text not null default 'GHS';
-
 
 -- ============================================================================
 -- Migration: 20260615010000_chat_blocks_and_report_notifications.sql
@@ -1930,7 +1912,6 @@ exception
     null;
 end;
 $$;
-
 
 -- ============================================================================
 -- Migration: 20260616010000_repair_chat_notifications_and_verification.sql
@@ -2036,7 +2017,6 @@ drop trigger if exists messages_queue_notifications on public.messages;
 create trigger messages_queue_notifications
 after insert on public.messages
 for each row execute function public.queue_message_created_notifications();
-
 
 -- ============================================================================
 -- Migration: 20260619010000_bid_chat_wallet_location_repair.sql
@@ -2312,7 +2292,6 @@ set accepted_bid_id = accepted.id,
 from accepted
 where accepted.job_id = j.id
   and j.accepted_bid_id is null;
-
 
 -- ============================================================================
 -- Migration: 20260623084841_wallet_history_repair.sql
@@ -2715,7 +2694,6 @@ begin
 end;
 $$;
 
-
 -- ============================================================================
 -- Migration: 20260623135621_password_recovery_rate_limit.sql
 -- ============================================================================
@@ -2735,7 +2713,6 @@ revoke all on public.password_recovery_attempts from public, anon, authenticated
 revoke all on sequence public.password_recovery_attempts_id_seq from public, anon, authenticated;
 grant select, insert, delete on public.password_recovery_attempts to service_role;
 grant usage, select on sequence public.password_recovery_attempts_id_seq to service_role;
-
 
 -- ============================================================================
 -- Migration: 20260623143144_job_tracking_invoice_workflow.sql
@@ -3019,7 +2996,6 @@ where j.accepted_bid_id is not null
     select 1 from public.job_status_events e where e.job_id = j.id
   );
 
-
 -- ============================================================================
 -- Migration: 20260623165007_admin_bid_tracking_access.sql
 -- ============================================================================
@@ -3055,7 +3031,6 @@ create policy "Admins can read all messages"
 on public.messages for select
 to authenticated
 using (app_private.is_admin());
-
 
 -- ============================================================================
 -- Migration: 20260623225159_alert_email_delivery.sql
@@ -3125,7 +3100,6 @@ select cron.schedule(
   );
   $$
 );
-
 
 -- ============================================================================
 -- Migration: 20260623230354_admin_role_cleanup.sql
@@ -3478,7 +3452,6 @@ begin
   execute format('drop function if exists app_private.%I()', 'is_' || 'devel' || 'oper');
 end $$;
 
-
 -- ============================================================================
 -- Migration: 20260624153304_verification_subscriptions.sql
 -- ============================================================================
@@ -3608,7 +3581,6 @@ end;
 $$;
 
 revoke all on function public.expire_verification_subscriptions() from public, anon, authenticated;
-
 
 -- ============================================================================
 -- Migration: 20260624161926_verification_billing_autorenew.sql
@@ -3761,7 +3733,6 @@ select cron.schedule(
   $$
 );
 
-
 -- ============================================================================
 -- Migration: 20260624162913_verification_billing_renewal_cron.sql
 -- ============================================================================
@@ -3800,7 +3771,6 @@ select cron.schedule(
   );
   $$
 );
-
 
 -- ============================================================================
 -- Migration: 20260625214000_repair_email_templates_and_verification_flow.sql
@@ -3944,7 +3914,6 @@ set body = public.prosme_email_body_text(body)
 where sent_at is null
   and left(btrim(coalesce(body, '')), 1) in ('{', '[');
 
-
 -- ============================================================================
 -- Migration: 20260626001000_chat_email_privacy_analytics_events.sql
 -- ============================================================================
@@ -4042,7 +4011,6 @@ set subject = 'New ProSME chat message',
     body = 'You have a new chat message in ProSME. Open the app to read and reply.'
 where sent_at is null
   and subject in ('New ProSME message', 'New ProSME chat message');
-
 
 -- ============================================================================
 -- Migration: 20260629214500_verification_pay_before_review_flow.sql
@@ -4146,7 +4114,6 @@ using (
   user_id = (select auth.uid())
   and status in ('payment_required', 'pending_payment', 'expired')
 );
-
 
 -- ============================================================================
 -- Migration: 20260629233000_notification_delivery_preferences.sql

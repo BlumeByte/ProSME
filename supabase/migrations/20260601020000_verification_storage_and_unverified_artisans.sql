@@ -36,6 +36,7 @@ using (bucket_id = 'artisan-verification');
 
 drop policy if exists "Verified artisans can manage listings" on public.listings;
 drop policy if exists "Artisans can manage listings" on public.listings;
+drop policy if exists "Artisans can manage own listings" on public.listings;
 create policy "Artisans can manage own listings"
 on public.listings for all
 to authenticated
@@ -50,6 +51,7 @@ with check (
 
 drop policy if exists "Verified artisans can create jobs" on public.jobs;
 drop policy if exists "Users can create jobs" on public.jobs;
+drop policy if exists "Users and artisans can create jobs" on public.jobs;
 create policy "Users and artisans can create jobs"
 on public.jobs for insert
 to authenticated

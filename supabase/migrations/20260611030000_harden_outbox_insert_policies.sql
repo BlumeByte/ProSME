@@ -1,5 +1,6 @@
 drop policy if exists "Users can create email tasks" on public.email_outbox;
 drop policy if exists "Authenticated users can create email tasks" on public.email_outbox;
+drop policy if exists "Authenticated users can create limited email tasks" on public.email_outbox;
 create policy "Authenticated users can create limited email tasks"
 on public.email_outbox for insert
 to authenticated
@@ -20,6 +21,7 @@ with check (
 );
 
 drop policy if exists "Authenticated users can create sms tasks" on public.sms_outbox;
+drop policy if exists "Authenticated users can create own sms tasks" on public.sms_outbox;
 create policy "Authenticated users can create own sms tasks"
 on public.sms_outbox for insert
 to authenticated
