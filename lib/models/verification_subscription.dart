@@ -42,6 +42,7 @@ class VerificationSubscription {
       status == 'payment_required' ||
       status == 'pending_payment' ||
       status == 'expired';
+  bool get isPaidPendingReview => status == 'paid_pending_review';
 
   factory VerificationSubscription.fromJson(Map<String, dynamic> json) {
     return VerificationSubscription(

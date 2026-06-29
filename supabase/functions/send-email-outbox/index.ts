@@ -36,12 +36,6 @@ const requiredEnv = (key: string) => {
   return value;
 };
 
-const requiredAnyEnv = (keys: string[]) => {
-  const value = firstEnv(keys);
-  if (!value) throw new Error(`${keys.join(' or ')} is not configured`);
-  return value;
-};
-
 const clean = (value: unknown) => String(value ?? '').trim();
 
 const escapeHtml = (value: string) =>
@@ -186,7 +180,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = requiredEnv('SUPABASE_URL');
     const anonKey = requiredEnv('SUPABASE_ANON_KEY');
     const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY');
-    const resendApiKey = requiredAnyEnv(['RESEND_API_KEY', 'ProSME']);
+    const resendApiKey = requiredEnv('RESEND_API_KEY');
     const from =
       firstEnv(['RESEND_FROM_EMAIL', 'PROSME_FROM_EMAIL']) ||
       'ProSME <noreply@prosme.blumebyte.com>';

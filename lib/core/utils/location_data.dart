@@ -1,3 +1,7 @@
+import 'package:country_state_city/country_state_city.dart' as csc;
+
+import 'town_neighborhood_data.dart';
+
 class CountryOption {
   const CountryOption({
     required this.name,
@@ -3395,23 +3399,115 @@ List<CountryOption>? _cachedCountries;
 final _cachedRegionsByCountryCode = <String, CountryOption>{};
 
 CountryOption countryByName(String? name) {
-  return kCountries.firstWhere(
-    (country) => country.name == name,
-    orElse: () => kCountries.first,
+  final value = name?.trim().toLowerCase();
+  if (value == null || value.isEmpty) return kCountries.first;
+  final hydratedCountries = _cachedCountries ?? kCountries;
+  return hydratedCountries.firstWhere(
+    (country) =>
+        country.name.toLowerCase() == value ||
+        country.code.toLowerCase() == value,
+    orElse: () => kCountries.firstWhere(
+      (country) =>
+          country.name.toLowerCase() == value ||
+          country.code.toLowerCase() == value,
+      orElse: () => kCountries.first,
+    ),
   );
 }
 
 Future<List<CountryOption>> loadWorldCountries() async {
+  final cached = _cachedCountries;
+  if (cached != null) return cached;
+  try {
+    final countries = await csc.getAllCountries();
+    final mapped = countries
+        .where((country) => country.name.trim().isNotEmpty)
+        .map(
+          (country) => CountryOption(
+            name: country.name.trim(),
+            code: country.isoCode.trim(),
+            dialCode: _normalizeDialCode(country.phoneCode),
+            regions: const [],
+          ),
+        )
+        .toList(growable: false)
+      ..sort((a, b) => a.name.compareTo(b.name));
+    if (mapped.isNotEmpty) {
+      _cachedCountries = List<CountryOption>.unmodifiable(mapped);
+      return _cachedCountries!;
+    }
+  } catch (_) {
+    // Fall through to the bundled short list if package assets are unavailable.
+  }
   return _cachedCountries ??= List<CountryOption>.unmodifiable(kCountries);
 }
 
 Future<CountryOption> loadCountryRegions(CountryOption country) async {
   final cached = _cachedRegionsByCountryCode[country.code];
   if (cached != null) return cached;
-  final local =
+  try {
+    final states = await csc.getStatesOfCountry(country.code);
+    if (states.isNotEmpty) {
+      final countryCities = await csc.getCountryCities(country.code);
+      final citiesByState = <String, List<csc.City>>{};
+      for (final city in countryCities) {
+        citiesByState.putIfAbsent(city.stateCode, () => []).add(city);
+      }
+      final regions = <RegionOption>[];
+      for (final state in states) {
+        final cities = citiesByState[state.isoCode] ?? const <csc.City>[];
+        regions.add(
+          RegionOption(
+            name: state.name.trim(),
+            code: state.isoCode.trim(),
+            cities: _dedupeCityOptions(
+                cities.where((city) => city.name.trim().isNotEmpty).map(
+                      (city) => CityOption(
+                        name: city.name.trim(),
+                        towns: townsForLocation(
+                          countryCode: country.code,
+                          stateName: state.name,
+                          cityName: city.name,
+                        ),
+                      ),
+                    )),
+          ),
+        );
+      }
+      final hydrated = CountryOption(
+        name: country.name,
+        code: country.code,
+        dialCode: country.dialCode,
+        regions: List<RegionOption>.unmodifiable(
+          regions..sort((a, b) => a.name.compareTo(b.name)),
+        ),
+      );
+      _cachedRegionsByCountryCode[country.code] = hydrated;
+      return hydrated;
+    }
+  } catch (_) {
+    // Fall through to the curated in-app fallback for offline or asset errors.
+  }
+  final fallback =
       country.regions.isNotEmpty ? country : countryByName(country.name);
-  _cachedRegionsByCountryCode[country.code] = local;
-  return local;
+  _cachedRegionsByCountryCode[country.code] = fallback;
+  return fallback;
+}
+
+String _normalizeDialCode(String phoneCode) {
+  final trimmed = phoneCode.trim();
+  if (trimmed.isEmpty) return '';
+  return trimmed.startsWith('+') ? trimmed : '+$trimmed';
+}
+
+List<CityOption> _dedupeCityOptions(Iterable<CityOption> cities) {
+  final byName = <String, CityOption>{};
+  for (final city in cities) {
+    byName.putIfAbsent(city.name.toLowerCase(), () => city);
+  }
+  final sorted = byName.values.toList(growable: false)
+    ..sort((a, b) => a.name.compareTo(b.name));
+  return List<CityOption>.unmodifiable(sorted);
 }
 
 bool isValidPhoneForCountry(String phone, CountryOption country) {

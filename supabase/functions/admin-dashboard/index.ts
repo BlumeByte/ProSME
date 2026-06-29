@@ -54,7 +54,7 @@ const verificationPeriodEnd = (interval: string) => {
   return end.toISOString();
 };
 
-const queueVerificationPayment = async ({
+const approvePaidVerification = async ({
   adminClient,
   userId,
   adminId,
@@ -77,39 +77,39 @@ const queueVerificationPayment = async ({
 
   const { data: subscription, error: subscriptionError } = await adminClient
     .from('verification_subscriptions')
-    .upsert(
-      {
-        user_id: userId,
-        role,
-        plan_interval: 'monthly',
-        status: 'payment_required',
-        amount_usd: verificationAmountUsdFor(role),
-        charge_currency: clean(Deno.env.get('PAYSTACK_CURRENCY')) || 'GHS',
-        charge_amount: 0,
-        admin_approved_by: adminId,
-        admin_approved_at: now,
-        updated_at: now,
-      },
-      { onConflict: 'user_id' },
-    )
-    .select('id')
+    .select('id,status,current_period_end')
+    .eq('user_id', userId)
     .maybeSingle();
   if (subscriptionError) throw new Error(subscriptionError.message);
+  if (!subscription || clean(subscription.status) !== 'paid_pending_review') {
+    throw new Error('Paystack payment must be confirmed before approval.');
+  }
+
+  await adminClient
+    .from('verification_subscriptions')
+    .update({
+      status: 'active',
+      admin_approved_by: adminId,
+      admin_approved_at: now,
+      updated_at: now,
+    })
+    .eq('id', subscription.id);
 
   await adminClient
     .from('profiles')
     .update({
-      verification_status: 'pending',
+      verification_status: 'verified',
       verification_notes: notes,
       verification_reviewed_at: now,
       verification_retry_after: null,
+      verification_expires_at: subscription.current_period_end,
     })
     .eq('id', userId);
 
   await adminClient.from('admin_notifications').insert({
-    type: 'verification_payment_required',
-    title: 'Verification approved, payment required',
-    body: `${role} documents were accepted. Verification badge activates after subscription payment.`,
+    type: 'verification_approved',
+    title: 'Verification approved',
+    body: `${role} documents and payment were approved. The badge is active.`,
     actor_id: adminId,
     related_user_id: userId,
     related_table: 'verification_subscriptions',
@@ -118,8 +118,8 @@ const queueVerificationPayment = async ({
 
   await adminClient.from('email_outbox').insert({
     to_email: null,
-    subject: 'Your ProSME verification was accepted',
-    body: 'Your verification documents were accepted. Open ProSME and pay the verification subscription to activate your badge.',
+    subject: 'Your ProSME verification was approved',
+    body: 'Your payment and documents were approved. Your public verification badge is active.',
     related_user_id: userId,
   });
 };
@@ -592,13 +592,13 @@ Deno.serve(async (req) => {
       const sanitized: Record<string, unknown> = {};
       const requestedVerificationStatus = clean(patch.verification_status);
       if (requestedVerificationStatus === 'verified') {
-        await queueVerificationPayment({
+        await approvePaidVerification({
           adminClient,
           userId: id,
           adminId: user.id,
           notes: clean(patch.verification_notes),
         });
-        return ok({ paymentRequired: true });
+        return ok({ verified: true });
       }
       for (const key of [
         'full_name',
@@ -618,6 +618,27 @@ Deno.serve(async (req) => {
         .update(sanitized)
         .eq('id', id);
       if (error) return fail(error.message);
+      if (requestedVerificationStatus === 'rejected') {
+        await adminClient.from('admin_notifications').insert({
+          type: 'verification_rejected',
+          title: 'Verification rejected',
+          body:
+            clean(patch.verification_notes) ||
+            'Your verification was rejected. Please restart with clearer documents.',
+          actor_id: user.id,
+          related_user_id: id,
+          related_table: 'profiles',
+          related_id: id,
+        });
+        await adminClient.from('email_outbox').insert({
+          to_email: null,
+          subject: 'Your ProSME verification needs attention',
+          body:
+            clean(patch.verification_notes) ||
+            'Your verification was rejected. Please restart with clearer documents.',
+          related_user_id: id,
+        });
+      }
       return ok();
     }
 

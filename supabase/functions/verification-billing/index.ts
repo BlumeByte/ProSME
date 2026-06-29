@@ -202,6 +202,14 @@ const activateSubscription = async ({
   const subscriptionId = clean(subscription.id);
   const userId = clean(subscription.user_id);
   const authorizationPatch = reusableAuthorizationPatch(paymentData);
+  const metadata =
+    paymentData.metadata && typeof paymentData.metadata === 'object'
+      ? (paymentData.metadata as Record<string, unknown>)
+      : {};
+  const isRenewal =
+    clean(metadata.purpose) === 'verification_subscription_renewal' ||
+    clean(subscription.status) === 'active' ||
+    clean(subscription.status) === 'renewal_failed';
 
   await adminClient.from('verification_payments').upsert(
     {
@@ -225,7 +233,7 @@ const activateSubscription = async ({
   await adminClient
     .from('verification_subscriptions')
     .update({
-      status: 'active',
+      status: isRenewal ? 'active' : 'paid_pending_review',
       paystack_transaction_id: clean(paymentData.id),
       current_period_start: now,
       current_period_end: end,
@@ -240,7 +248,7 @@ const activateSubscription = async ({
   await adminClient
     .from('profiles')
     .update({
-      verification_status: 'verified',
+      verification_status: isRenewal ? 'verified' : 'pending',
       verification_expires_at: end,
       verification_reviewed_at: now,
     })
@@ -249,7 +257,9 @@ const activateSubscription = async ({
   await adminClient.from('admin_notifications').insert({
     type: 'verification_payment',
     title: 'Verification payment received',
-    body: `${clean(subscription.role)} verification ${clean(subscription.plan_interval)} payment ${reference} succeeded.`,
+    body: isRenewal
+      ? `${clean(subscription.role)} verification ${clean(subscription.plan_interval)} renewal payment ${reference} succeeded.`
+      : `${clean(subscription.role)} verification ${clean(subscription.plan_interval)} payment ${reference} succeeded. Review the uploaded documents before approving.`,
     related_user_id: userId,
     related_table: 'verification_subscriptions',
     related_id: subscriptionId,
@@ -257,8 +267,12 @@ const activateSubscription = async ({
 
   await adminClient.from('email_outbox').insert({
     to_email: null,
-    subject: 'Your ProSME verification is active',
-    body: `Your verification badge is active until ${new Date(end).toDateString()}.`,
+    subject: isRenewal
+      ? 'Your ProSME verification renewed'
+      : 'Your ProSME verification payment was received',
+    body: isRenewal
+      ? `Your verification badge is active until ${new Date(end).toDateString()}.`
+      : 'Your payment was confirmed. Support will review your uploaded documents and update your verification status.',
     related_user_id: userId,
   });
 

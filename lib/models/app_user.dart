@@ -15,6 +15,12 @@ class AppUser {
     this.isBusy = false,
     this.emailVerified = false,
     this.phoneVerified = false,
+    this.emailNotifications = true,
+    this.phoneNotifications = true,
+    this.blockedEmailNotificationTypes = const <String>{},
+    this.blockedPhoneNotificationTypes = const <String>{},
+    this.appLanguage = 'English',
+    this.currencyCode = 'GHS',
     this.verificationStatus = VerificationStatus.pending,
     required this.createdAt,
   });
@@ -32,6 +38,12 @@ class AppUser {
   final bool isBusy;
   final bool emailVerified;
   final bool phoneVerified;
+  final bool emailNotifications;
+  final bool phoneNotifications;
+  final Set<String> blockedEmailNotificationTypes;
+  final Set<String> blockedPhoneNotificationTypes;
+  final String appLanguage;
+  final String currencyCode;
   final VerificationStatus verificationStatus;
   final DateTime createdAt;
 
@@ -48,6 +60,12 @@ class AppUser {
     bool? isBusy,
     bool? emailVerified,
     bool? phoneVerified,
+    bool? emailNotifications,
+    bool? phoneNotifications,
+    Set<String>? blockedEmailNotificationTypes,
+    Set<String>? blockedPhoneNotificationTypes,
+    String? appLanguage,
+    String? currencyCode,
     VerificationStatus? verificationStatus,
   }) {
     return AppUser(
@@ -64,6 +82,14 @@ class AppUser {
       isBusy: isBusy ?? this.isBusy,
       emailVerified: emailVerified ?? this.emailVerified,
       phoneVerified: phoneVerified ?? this.phoneVerified,
+      emailNotifications: emailNotifications ?? this.emailNotifications,
+      phoneNotifications: phoneNotifications ?? this.phoneNotifications,
+      blockedEmailNotificationTypes:
+          blockedEmailNotificationTypes ?? this.blockedEmailNotificationTypes,
+      blockedPhoneNotificationTypes:
+          blockedPhoneNotificationTypes ?? this.blockedPhoneNotificationTypes,
+      appLanguage: appLanguage ?? this.appLanguage,
+      currencyCode: currencyCode ?? this.currencyCode,
       verificationStatus: verificationStatus ?? this.verificationStatus,
       createdAt: createdAt,
     );
@@ -87,6 +113,18 @@ class AppUser {
       isBusy: (json['isBusy'] as bool?) ?? false,
       emailVerified: (json['emailVerified'] as bool?) ?? false,
       phoneVerified: (json['phoneVerified'] as bool?) ?? false,
+      emailNotifications: (json['emailNotifications'] as bool?) ?? true,
+      phoneNotifications: (json['phoneNotifications'] as bool?) ?? true,
+      blockedEmailNotificationTypes:
+          ((json['blockedEmailNotificationTypes'] as List?) ?? const [])
+              .map((item) => item.toString())
+              .toSet(),
+      blockedPhoneNotificationTypes:
+          ((json['blockedPhoneNotificationTypes'] as List?) ?? const [])
+              .map((item) => item.toString())
+              .toSet(),
+      appLanguage: (json['appLanguage'] as String?) ?? 'English',
+      currencyCode: (json['currencyCode'] as String?) ?? 'GHS',
       verificationStatus: VerificationStatus.values.firstWhere(
         (status) => status.name == json['verificationStatus'],
         orElse: () => VerificationStatus.pending,
@@ -110,6 +148,14 @@ class AppUser {
       'isBusy': isBusy,
       'emailVerified': emailVerified,
       'phoneVerified': phoneVerified,
+      'emailNotifications': emailNotifications,
+      'phoneNotifications': phoneNotifications,
+      'blockedEmailNotificationTypes': blockedEmailNotificationTypes.toList()
+        ..sort(),
+      'blockedPhoneNotificationTypes': blockedPhoneNotificationTypes.toList()
+        ..sort(),
+      'appLanguage': appLanguage,
+      'currencyCode': currencyCode,
       'verificationStatus': verificationStatus.name,
       'createdAt': createdAt.toIso8601String(),
     };

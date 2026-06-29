@@ -124,22 +124,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ref.watch(verificationSubscriptionProvider(user.id));
             final currentSubscription = subscription.valueOrNull;
             final needsPayment = currentSubscription?.needsPayment == true;
-            final active = currentSubscription?.isActive == true;
+            final paidPendingReview =
+                currentSubscription?.isPaidPendingReview == true;
+            final active = currentSubscription?.isActive == true &&
+                user.verificationStatus == VerificationStatus.verified;
             return _SettingsTile(
               icon: active ||
                       user.verificationStatus == VerificationStatus.verified
                   ? Icons.verified
-                  : needsPayment
-                      ? Icons.payments_outlined
-                      : Icons.pending_actions_outlined,
+                  : paidPendingReview
+                      ? Icons.pending_actions_outlined
+                      : needsPayment
+                          ? Icons.payments_outlined
+                          : Icons.pending_actions_outlined,
               title: active ||
                       user.verificationStatus == VerificationStatus.verified
                   ? (user.role == UserRole.artisan
                       ? settings.t('Verified artisan')
                       : settings.t('Verified account'))
-                  : needsPayment
-                      ? settings.t('Verification payment required')
-                      : '${settings.t('Verification')} ${user.verificationStatus.name}',
+                  : paidPendingReview
+                      ? settings.t('Verification pending')
+                      : needsPayment
+                          ? settings.t('Verification payment required')
+                          : '${settings.t('Verification')} ${user.verificationStatus.name}',
               subtitle: active
                   ? [
                       '${settings.t('Badge active until')} ${_dateLabel(currentSubscription!.currentPeriodEnd)}',
@@ -148,20 +155,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ].join(' · ')
                   : needsPayment
                       ? settings.t(
-                          'Admin accepted your documents. Pay to activate or renew your badge.',
+                          'Documents uploaded. Pay to send them to Support for review.',
                         )
-                      : user.verificationStatus == VerificationStatus.verified
+                      : paidPendingReview
                           ? settings.t(
-                              'Your profile shows a public verified checkmark.')
-                          : settings.t(
-                              'Submit or update your ID for Support review.'),
+                              'Payment confirmed. Support is reviewing your documents.',
+                            )
+                          : user.verificationStatus ==
+                                  VerificationStatus.verified
+                              ? settings.t(
+                                  'Your profile shows a public verified checkmark.')
+                              : settings.t(
+                                  'Submit or update your ID for Support review.'),
               trailingText: needsPayment
                   ? settings.t('Pay')
                   : active
                       ? settings.t('Active')
-                      : user.verificationStatus == VerificationStatus.verified
-                          ? null
-                          : settings.t('Upload'),
+                      : paidPendingReview
+                          ? settings.t('Pending')
+                          : user.verificationStatus ==
+                                  VerificationStatus.verified
+                              ? null
+                              : settings.t('Upload'),
               onTap: needsPayment
                   ? () => _showVerificationBillingSheet(
                         context,
@@ -169,14 +184,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         user,
                         currentSubscription,
                       )
-                  : user.verificationStatus == VerificationStatus.verified
-                      ? () => _showVerificationBillingSheet(
-                            context,
-                            ref,
-                            user,
-                            currentSubscription,
-                          )
-                      : () => context.push(RouteNames.artisanVerification),
+                  : paidPendingReview
+                      ? () => context.push(RouteNames.artisanVerification)
+                      : user.verificationStatus == VerificationStatus.verified
+                          ? () => _showVerificationBillingSheet(
+                                context,
+                                ref,
+                                user,
+                                currentSubscription,
+                              )
+                          : () => context.push(RouteNames.artisanVerification),
             );
           },
         ),
@@ -305,6 +322,7 @@ Future<void> _showVerificationBillingSheet(
             await ref.read(paymentServiceProvider).startVerificationCheckout(
                   interval: interval,
                   channel: channel,
+                  currencyCode: settings.currencyCode,
                 );
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -1156,6 +1174,8 @@ Future<void> _showAppSettingsSheet(
   var settings = ref.read(appSettingsControllerProvider);
   var emailNotifications = settings.emailNotifications;
   var phoneNotifications = settings.phoneNotifications;
+  var blockedEmailTypes = settings.blockedEmailNotificationTypes;
+  var blockedPhoneTypes = settings.blockedPhoneNotificationTypes;
   var language = kSupportedAppLanguages.contains(settings.language)
       ? settings.language
       : 'English';
@@ -1232,13 +1252,40 @@ Future<void> _showAppSettingsSheet(
                   title: Text(settings.t('Email notifications')),
                   value: emailNotifications,
                   onChanged: (value) async {
-                    setSheetState(() => emailNotifications = value);
                     await ref
                         .read(appSettingsControllerProvider.notifier)
                         .setEmailNotifications(value);
-                    if (value) await NotificationService().requestPermissions();
+                    settings = ref.read(appSettingsControllerProvider);
+                    setSheetState(() => emailNotifications = value);
                     await _saveRemoteSettings(ref, user);
                   },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  enabled: emailNotifications,
+                  leading: const Icon(Icons.mark_email_unread_outlined),
+                  title: Text(settings.t('Email alert types')),
+                  subtitle: Text(
+                    _blockedNotificationSummary(settings, blockedEmailTypes),
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: !emailNotifications
+                      ? null
+                      : () async {
+                          final selected = await _showNotificationTypeSheet(
+                            context,
+                            settings,
+                            title: settings.t('Email alert types'),
+                            blockedTypes: blockedEmailTypes,
+                          );
+                          if (selected == null) return;
+                          await ref
+                              .read(appSettingsControllerProvider.notifier)
+                              .setBlockedEmailNotificationTypes(selected);
+                          settings = ref.read(appSettingsControllerProvider);
+                          setSheetState(() => blockedEmailTypes = selected);
+                          await _saveRemoteSettings(ref, user);
+                        },
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -1246,13 +1293,41 @@ Future<void> _showAppSettingsSheet(
                   title: Text(settings.t('Phone notifications')),
                   value: phoneNotifications,
                   onChanged: (value) async {
-                    setSheetState(() => phoneNotifications = value);
                     await ref
                         .read(appSettingsControllerProvider.notifier)
                         .setPhoneNotifications(value);
                     if (value) await NotificationService().requestPermissions();
+                    settings = ref.read(appSettingsControllerProvider);
+                    setSheetState(() => phoneNotifications = value);
                     await _saveRemoteSettings(ref, user);
                   },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  enabled: phoneNotifications,
+                  leading: const Icon(Icons.notifications_paused_outlined),
+                  title: Text(settings.t('App alert types')),
+                  subtitle: Text(
+                    _blockedNotificationSummary(settings, blockedPhoneTypes),
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: !phoneNotifications
+                      ? null
+                      : () async {
+                          final selected = await _showNotificationTypeSheet(
+                            context,
+                            settings,
+                            title: settings.t('App alert types'),
+                            blockedTypes: blockedPhoneTypes,
+                          );
+                          if (selected == null) return;
+                          await ref
+                              .read(appSettingsControllerProvider.notifier)
+                              .setBlockedPhoneNotificationTypes(selected);
+                          settings = ref.read(appSettingsControllerProvider);
+                          setSheetState(() => blockedPhoneTypes = selected);
+                          await _saveRemoteSettings(ref, user);
+                        },
                 ),
                 DropdownButtonFormField<String>(
                   initialValue: language,
@@ -1271,10 +1346,11 @@ Future<void> _showAppSettingsSheet(
                       .toList(growable: false),
                   onChanged: (value) async {
                     if (value == null) return;
-                    setSheetState(() => language = value);
                     await ref
                         .read(appSettingsControllerProvider.notifier)
                         .setLanguage(value);
+                    settings = ref.read(appSettingsControllerProvider);
+                    setSheetState(() => language = value);
                     await _saveRemoteSettings(ref, user);
                   },
                 ),
@@ -1312,6 +1388,118 @@ Future<void> _showAppSettingsSheet(
           ),
         ),
       ),
+    ),
+  );
+}
+
+String _notificationTypeLabel(AppSettings settings, String type) {
+  switch (normalizeNotificationType(type)) {
+    case 'all':
+      return settings.t('Block all');
+    case 'chat':
+      return settings.t('Chat messages');
+    case 'bid':
+      return settings.t('Bids');
+    case 'booking':
+      return settings.t('Bookings');
+    case 'job':
+      return settings.t('Jobs');
+    case 'payment':
+      return settings.t('Payments and wallet');
+    case 'verification':
+      return settings.t('Verification');
+    case 'account':
+      return settings.t('Account security');
+    case 'support':
+      return settings.t('Support');
+    default:
+      return settings.t('System updates');
+  }
+}
+
+String _blockedNotificationSummary(AppSettings settings, Set<String> blocked) {
+  if (blocked.contains('all')) return settings.t('Blocked all');
+  if (blocked.isEmpty) return settings.t('Receiving all');
+  final labels = blocked
+      .map((type) => _notificationTypeLabel(settings, type))
+      .toList(growable: false)
+    ..sort();
+  return '${settings.t('Blocked')}: ${labels.join(', ')}';
+}
+
+Future<Set<String>?> _showNotificationTypeSheet(
+  BuildContext context,
+  AppSettings settings, {
+  required String title,
+  required Set<String> blockedTypes,
+}) async {
+  var selected = blockedTypes.map(normalizeNotificationType).toSet();
+  return showModalBottomSheet<Set<String>>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setSheetState) {
+        final allBlocked = selected.contains('all');
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: allBlocked,
+                  title: Text(settings.t('Block all')),
+                  onChanged: (value) {
+                    setSheetState(() {
+                      selected = value == true ? {'all'} : <String>{};
+                    });
+                  },
+                ),
+                const Divider(),
+                ...kNotificationTypeOptions.map(
+                  (type) => CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: allBlocked || selected.contains(type),
+                    enabled: !allBlocked,
+                    title: Text(_notificationTypeLabel(settings, type)),
+                    onChanged: (value) {
+                      setSheetState(() {
+                        final next = {...selected}..remove('all');
+                        if (value == true) {
+                          next.add(type);
+                        } else {
+                          next.remove(type);
+                        }
+                        selected = next;
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () =>
+                          setSheetState(() => selected = <String>{}),
+                      child: Text(settings.t('Allow all')),
+                    ),
+                    const Spacer(),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(selected),
+                      child: Text(settings.t('Save')),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     ),
   );
 }
@@ -1546,6 +1734,10 @@ Future<void> _saveRemoteSettings(WidgetRef ref, AppUser user) async {
     await ref.read(supabaseClientProvider).from('profiles').update({
       'email_notifications': settings.emailNotifications,
       'phone_notifications': settings.phoneNotifications,
+      'blocked_email_notification_types':
+          settings.blockedEmailNotificationTypes.toList()..sort(),
+      'blocked_phone_notification_types':
+          settings.blockedPhoneNotificationTypes.toList()..sort(),
       'app_language': settings.language,
       'currency_code': settings.currencyCode,
     }).eq('id', user.id);

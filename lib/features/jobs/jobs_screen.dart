@@ -27,6 +27,9 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
   String _category = 'All';
   CountryOption? _selectedCountry;
   RegionOption? _selectedRegion;
+  List<CountryOption> _countries = kCountries;
+  bool _loadingCountries = false;
+  bool _loadingRegions = false;
   String _scope = 'open';
   bool _newestFirst = true;
   Set<String> _hiddenJobIds = const {};
@@ -35,6 +38,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
   void initState() {
     super.initState();
     _loadHiddenJobs();
+    _loadCountries();
   }
 
   @override
@@ -51,6 +55,34 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     setState(() {
       _hiddenJobIds =
           (prefs.getStringList('hidden_jobs_${user.id}') ?? const []).toSet();
+    });
+  }
+
+  Future<void> _loadCountries() async {
+    setState(() => _loadingCountries = true);
+    final countries = await loadWorldCountries();
+    if (!mounted) return;
+    setState(() {
+      _countries = countries;
+      _loadingCountries = false;
+    });
+  }
+
+  Future<void> _selectCountry(CountryOption? country) async {
+    setState(() {
+      _selectedCountry = country;
+      _selectedRegion = null;
+      _loadingRegions = country != null;
+    });
+    if (country == null) return;
+    final hydrated = await loadCountryRegions(country);
+    if (!mounted) return;
+    setState(() {
+      _selectedCountry = hydrated;
+      _countries = _countries
+          .map((item) => item.code == hydrated.code ? hydrated : item)
+          .toList(growable: false);
+      _loadingRegions = false;
     });
   }
 
@@ -206,16 +238,16 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                     category: _category,
                     selectedCountry: _selectedCountry,
                     selectedRegion: _selectedRegion,
+                    countries: _countries,
+                    loadingCountries: _loadingCountries,
+                    loadingRegions: _loadingRegions,
                     scope: _scope,
                     newestFirst: _newestFirst,
                     onSearchChanged: (value) =>
                         setState(() => _query = value.trim().toLowerCase()),
                     onCategoryChanged: (value) =>
                         setState(() => _category = value),
-                    onCountryChanged: (value) => setState(() {
-                      _selectedCountry = value;
-                      _selectedRegion = null;
-                    }),
+                    onCountryChanged: _selectCountry,
                     onRegionChanged: (value) =>
                         setState(() => _selectedRegion = value),
                     onScopeChanged: (value) => setState(() => _scope = value),
@@ -351,6 +383,9 @@ class _ArtisanJobFilters extends StatelessWidget {
     required this.category,
     required this.selectedCountry,
     required this.selectedRegion,
+    required this.countries,
+    required this.loadingCountries,
+    required this.loadingRegions,
     required this.scope,
     required this.newestFirst,
     required this.onSearchChanged,
@@ -367,6 +402,9 @@ class _ArtisanJobFilters extends StatelessWidget {
   final String category;
   final CountryOption? selectedCountry;
   final RegionOption? selectedRegion;
+  final List<CountryOption> countries;
+  final bool loadingCountries;
+  final bool loadingRegions;
   final String scope;
   final bool newestFirst;
   final ValueChanged<String> onSearchChanged;
@@ -430,8 +468,19 @@ class _ArtisanJobFilters extends StatelessWidget {
               child: DropdownButtonFormField<CountryOption?>(
                 initialValue: selectedCountry,
                 isExpanded: true,
-                decoration: InputDecoration(labelText: settings.t('Country')),
-                items: <CountryOption?>[null, ...kCountries]
+                decoration: InputDecoration(
+                  labelText: settings.t('Country'),
+                  suffixIcon: loadingCountries
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : null,
+                ),
+                items: <CountryOption?>[null, ...countries]
                     .map(
                       (country) => DropdownMenuItem(
                         value: country,
@@ -450,7 +499,18 @@ class _ArtisanJobFilters extends StatelessWidget {
               child: DropdownButtonFormField<RegionOption?>(
                 initialValue: selectedRegion,
                 isExpanded: true,
-                decoration: InputDecoration(labelText: settings.t('Region')),
+                decoration: InputDecoration(
+                  labelText: settings.t('Region'),
+                  suffixIcon: loadingRegions
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : null,
+                ),
                 items: <RegionOption?>[null, ...regions]
                     .map(
                       (region) => DropdownMenuItem(
@@ -462,7 +522,9 @@ class _ArtisanJobFilters extends StatelessWidget {
                       ),
                     )
                     .toList(growable: false),
-                onChanged: selectedCountry == null ? null : onRegionChanged,
+                onChanged: selectedCountry == null || loadingRegions
+                    ? null
+                    : onRegionChanged,
               ),
             ),
           ],
@@ -490,137 +552,317 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
   final formKey = GlobalKey<FormState>();
   final settings = ref.read(appSettingsControllerProvider);
   final currencyCode = settings.currencyCode;
+  final user = ref.read(authStateProvider).valueOrNull;
+  var countries = await loadWorldCountries();
+  CountryOption? selectedCountry;
+  RegionOption? selectedRegion;
+  CityOption? selectedCity;
+  String? selectedTown;
+  var loadingRegions = false;
+  if (user != null) {
+    for (final country in countries) {
+      if (country.name.toLowerCase() == user.country.toLowerCase() ||
+          country.code.toLowerCase() == user.country.toLowerCase()) {
+        selectedCountry = country;
+        break;
+      }
+    }
+  }
+  if (selectedCountry != null) {
+    final hydrated = await loadCountryRegions(selectedCountry);
+    selectedCountry = hydrated;
+    countries = countries
+        .map((country) => country.code == hydrated.code ? hydrated : country)
+        .toList(growable: false);
+  }
+  if (!context.mounted) return;
 
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (context) {
-      return Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 8,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-        ),
-        child: Form(
-          key: formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        settings.t('Create job'),
-                        style: Theme.of(context).textTheme.titleLarge,
+      return StatefulBuilder(builder: (context, setSheetState) {
+        final regions = selectedCountry?.regions ?? const <RegionOption>[];
+        final cities = selectedRegion?.cities ?? const <CityOption>[];
+        final towns = selectedCity?.towns ?? const <String>[];
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 8,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          ),
+          child: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          settings.t('Create job'),
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
                       ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: titleController,
-                  decoration: InputDecoration(labelText: settings.t('Title')),
-                  validator: (value) => value == null || value.trim().isEmpty
-                      ? settings.t('Title is required')
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: descriptionController,
-                  minLines: 3,
-                  maxLines: 4,
-                  decoration:
-                      InputDecoration(labelText: settings.t('Description')),
-                  validator: (value) => value == null || value.trim().isEmpty
-                      ? settings.t('Description is required')
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: locationController,
-                  decoration:
-                      InputDecoration(labelText: settings.t('Location')),
-                  validator: (value) => value == null || value.trim().isEmpty
-                      ? settings.t('Location is required')
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: budgetController,
-                  decoration: InputDecoration(
-                    labelText: '${settings.t('Budget')} ($currencyCode)',
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
                   ),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  validator: (value) {
-                    final budget = double.tryParse(value ?? '');
-                    if (budget == null || budget <= 0) {
-                      return 'Enter a valid budget';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () async {
-                      if (!formKey.currentState!.validate()) return;
-                      final user = ref.read(authStateProvider).valueOrNull;
-                      if (user == null) return;
-                      try {
-                        await ref.read(jobsRepositoryProvider).createJob(
-                              title: titleController.text.trim(),
-                              description: descriptionController.text.trim(),
-                              location: locationController.text.trim(),
-                              budget: convertToGhs(
-                                double.parse(budgetController.text),
-                                currencyCode,
-                              ),
-                              createdBy: user.id,
-                            );
-                        if (context.mounted) {
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                settings.t('Job created successfully.'),
-                              ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: titleController,
+                    decoration: InputDecoration(labelText: settings.t('Title')),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? settings.t('Title is required')
+                        : null,
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: descriptionController,
+                    minLines: 3,
+                    maxLines: 4,
+                    decoration:
+                        InputDecoration(labelText: settings.t('Description')),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? settings.t('Description is required')
+                        : null,
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<CountryOption>(
+                    initialValue: selectedCountry,
+                    isExpanded: true,
+                    decoration:
+                        InputDecoration(labelText: settings.t('Country')),
+                    items: countries
+                        .map(
+                          (country) => DropdownMenuItem(
+                            value: country,
+                            child: Text(
+                              country.name,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          );
-                        }
-                      } catch (error) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                '${settings.t('Failed to create job')}: $error',
-                              ),
-                            ),
-                          );
-                        }
-                      }
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (country) async {
+                      if (country == null) return;
+                      setSheetState(() {
+                        selectedCountry = country;
+                        selectedRegion = null;
+                        selectedCity = null;
+                        selectedTown = null;
+                        loadingRegions = true;
+                      });
+                      final hydrated = await loadCountryRegions(country);
+                      if (!context.mounted) return;
+                      setSheetState(() {
+                        selectedCountry = hydrated;
+                        countries = countries
+                            .map((item) =>
+                                item.code == hydrated.code ? hydrated : item)
+                            .toList(growable: false);
+                        loadingRegions = false;
+                      });
                     },
-                    child: Text(settings.t('Create job')),
+                    validator: (value) => value == null
+                        ? settings.t('Country is required')
+                        : null,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<RegionOption>(
+                    initialValue: selectedRegion,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: settings.t('Region'),
+                      suffixIcon: loadingRegions
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox.square(
+                                dimension: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : null,
+                    ),
+                    items: regions
+                        .map(
+                          (region) => DropdownMenuItem(
+                            value: region,
+                            child: Text(
+                              region.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: selectedCountry == null || loadingRegions
+                        ? null
+                        : (region) {
+                            setSheetState(() {
+                              selectedRegion = region;
+                              selectedCity = null;
+                              selectedTown = null;
+                            });
+                          },
+                    validator: (value) =>
+                        value == null ? settings.t('Region is required') : null,
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<CityOption>(
+                    initialValue: selectedCity,
+                    isExpanded: true,
+                    decoration: InputDecoration(labelText: settings.t('City')),
+                    items: cities
+                        .map(
+                          (city) => DropdownMenuItem(
+                            value: city,
+                            child: Text(
+                              city.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: selectedRegion == null
+                        ? null
+                        : (city) {
+                            setSheetState(() {
+                              selectedCity = city;
+                              selectedTown = null;
+                            });
+                          },
+                    validator: (value) =>
+                        value == null ? settings.t('City is required') : null,
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedTown,
+                    isExpanded: true,
+                    decoration: InputDecoration(labelText: settings.t('Town')),
+                    items: towns
+                        .map(
+                          (town) => DropdownMenuItem(
+                            value: town,
+                            child: Text(
+                              town == 'Any' ? settings.t('Any town') : town,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: selectedCity == null
+                        ? null
+                        : (town) {
+                            setSheetState(() => selectedTown = town);
+                          },
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: locationController,
+                    decoration: InputDecoration(
+                      labelText: settings.t('Street, area, or landmark'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: budgetController,
+                    decoration: InputDecoration(
+                      labelText: '${settings.t('Budget')} ($currencyCode)',
+                    ),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    validator: (value) {
+                      final budget = double.tryParse(value ?? '');
+                      if (budget == null || budget <= 0) {
+                        return 'Enter a valid budget';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () async {
+                        if (!formKey.currentState!.validate()) return;
+                        if (user == null) return;
+                        final location = _composeJobLocation(
+                          details: locationController.text,
+                          country: selectedCountry,
+                          region: selectedRegion,
+                          city: selectedCity,
+                          town: selectedTown,
+                        );
+                        try {
+                          await ref.read(jobsRepositoryProvider).createJob(
+                                title: titleController.text.trim(),
+                                description: descriptionController.text.trim(),
+                                location: location,
+                                budget: convertToGhs(
+                                  double.parse(budgetController.text),
+                                  currencyCode,
+                                ),
+                                createdBy: user.id,
+                              );
+                          if (context.mounted) {
+                            Navigator.of(context).pop();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  settings.t('Job created successfully.'),
+                                ),
+                              ),
+                            );
+                          }
+                        } catch (error) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '${settings.t('Failed to create job')}: $error',
+                                ),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      child: Text(settings.t('Create job')),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      );
+        );
+      });
     },
   );
   titleController.dispose();
   descriptionController.dispose();
   locationController.dispose();
   budgetController.dispose();
+}
+
+String _composeJobLocation({
+  required String details,
+  required CountryOption? country,
+  required RegionOption? region,
+  required CityOption? city,
+  required String? town,
+}) {
+  final parts = <String>[
+    details.trim(),
+    if (town != null && town != 'Any') town,
+    if (city != null) city.name,
+    if (region != null) region.name,
+    if (country != null) country.name,
+  ].where((part) => part.trim().isNotEmpty).toList(growable: false);
+  return parts.join(', ');
 }

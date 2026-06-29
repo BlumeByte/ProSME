@@ -167,6 +167,9 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     if (!mounted) return;
     setState(() {
       _selectedCountry = hydrated;
+      _countries = _countries
+          .map((item) => item.code == hydrated.code ? hydrated : item)
+          .toList(growable: false);
       _loadingRegions = false;
     });
   }

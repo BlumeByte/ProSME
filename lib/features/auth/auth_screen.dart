@@ -40,6 +40,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (message.contains('invalid login credentials')) {
       return 'Invalid email or password.';
     }
+    if (message.contains('email not confirmed') ||
+        message.contains('email_not_confirmed') ||
+        message.contains('confirm your email')) {
+      return 'Check your email and confirm your account before signing in.';
+    }
     if (message.contains('already registered')) {
       return 'This email is already registered. Please sign in.';
     }
@@ -130,6 +135,106 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
+  Future<void> _showAccountActivationDialog(AuthService authService) async {
+    final settings = ref.read(appSettingsControllerProvider);
+    final codeController = TextEditingController();
+    var resending = false;
+    final code = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(settings.t('Confirm account activation')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                settings.t(
+                  'Enter the 6-digit code sent to your email, or use the confirmation link in the email.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: codeController,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                decoration: InputDecoration(
+                  labelText: settings.t('6-digit code'),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(settings.t('Later')),
+            ),
+            TextButton(
+              onPressed: resending
+                  ? null
+                  : () async {
+                      setDialogState(() => resending = true);
+                      try {
+                        await authService.requestSignupEmailOtp(_email);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                settings.t('Verification code sent.'),
+                              ),
+                            ),
+                          );
+                        }
+                      } catch (error) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                '${settings.t('Could not send code')}: $error',
+                              ),
+                            ),
+                          );
+                        }
+                      } finally {
+                        if (context.mounted) {
+                          setDialogState(() => resending = false);
+                        }
+                      }
+                    },
+              child: Text(settings.t(resending ? 'Sending...' : 'Resend code')),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(codeController.text.trim()),
+              child: Text(settings.t('Verify')),
+            ),
+          ],
+        ),
+      ),
+    );
+    codeController.dispose();
+    if (code == null || code.isEmpty) return;
+    try {
+      final user = await authService.verifySignupEmailOtp(_email, code);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(settings.t('Account activated.'))),
+      );
+      context.go(
+        user.role == UserRole.artisan || _selectedRole == UserRole.artisan
+            ? RouteNames.artisanVerification
+            : _routeForUser(user),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${settings.t('Could not activate account')}: $error'),
+        ),
+      );
+    }
+  }
+
   String? _validateEmailPassword() {
     if (_email.isEmpty || _password.isEmpty) {
       return 'Please enter email and password.';
@@ -169,6 +274,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   Future<void> _signIn(
     Future<AppUser> Function() action, {
     bool forceRoleSelection = false,
+    AuthService? authService,
   }) async {
     setState(() => _isLoading = true);
     try {
@@ -185,6 +291,21 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     } catch (error) {
       if (!mounted) return;
       final settings = ref.read(appSettingsControllerProvider);
+      if (error is PendingEmailVerificationException &&
+          _isCreateAccountMode &&
+          authService != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              settings.t(
+                'Account created. Check your email to verify, then sign in.',
+              ),
+            ),
+          ),
+        );
+        await _showAccountActivationDialog(authService);
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(settings.t(_friendlyError(error)))),
       );
@@ -327,6 +448,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                             username: _username,
                             role: _selectedRole,
                           ),
+                          authService: authService,
                         );
                         return;
                       }

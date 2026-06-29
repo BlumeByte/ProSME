@@ -49,7 +49,10 @@ const escapeHtml = (value: string) =>
 
 const sendEmail = async (to: string, code: string) => {
   const apiKey = requiredEnv('RESEND_API_KEY');
-  const from = env('RESEND_FROM_EMAIL') || 'ProSME <noreply@prosme.blumebyte.com>';
+  const from =
+    env('RESEND_FROM_EMAIL') ||
+    env('PROSME_FROM_EMAIL') ||
+    'ProSME <noreply@prosme.blumebyte.com>';
   const body = `Your ProSME verification code is ${code}. It expires in 10 minutes.`;
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',

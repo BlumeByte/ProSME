@@ -243,27 +243,79 @@ class AdminService {
       'national_id_back_url': nationalIdBackUrl,
       'business_certificate_urls': businessCertificateUrls,
       'verification_submitted_at': DateTime.now().toUtc().toIso8601String(),
+      'verification_notes': null,
+      'verification_retry_after': null,
     }).eq('id', userId);
+
+    final profile = await client
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+    final role = (profile?['role'] ?? UserRole.customer.name).toString() ==
+            UserRole.artisan.name
+        ? UserRole.artisan.name
+        : UserRole.customer.name;
+    await client.from('verification_subscriptions').upsert({
+      'user_id': userId,
+      'role': role,
+      'plan_interval': 'monthly',
+      'status': 'payment_required',
+      'amount_usd': role == UserRole.artisan.name ? 5 : 2,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'user_id');
+
     try {
       await client.from('admin_notifications').insert({
-        'type': 'account_verification',
-        'title': 'New account verification',
+        'type': 'verification_payment_required',
+        'title': 'Verification documents uploaded',
         'body':
-            'An account uploaded national ID documents for review. Phone: $phone',
+            'Documents were uploaded. Payment is required before admin review. Phone: $phone',
         'actor_id': userId,
         'related_user_id': userId,
       });
       await client.from('email_outbox').insert({
-        'to_email': 'blumebyte@gmail.com',
-        'subject': 'New ProSME account verification',
-        'body':
-            'An account uploaded front and back ID documents for verification. Phone: $phone. Review them in the Support dashboard.',
+        'to_email': null,
+        'subject': 'Pay for your ProSME verification',
+        'body': role == UserRole.artisan.name
+            ? 'Your documents were uploaded. Pay the \$5 artisan verification fee so Support can review them.'
+            : 'Your documents were uploaded. Pay the \$2 account verification fee so Support can review them.',
         'related_user_id': userId,
       });
     } catch (_) {
       // The uploaded documents are saved; background alerts can be retried.
     }
     await _flushEmailOutbox(relatedUserId: userId);
+  }
+
+  Future<void> restartArtisanVerification({
+    required String userId,
+    required List<String> documentUrls,
+  }) async {
+    final client = _supabase;
+    if (client == null) return;
+    final paths = documentUrls
+        .map(_artisanVerificationPathFromUrl)
+        .whereType<String>()
+        .toList(growable: false);
+    if (paths.isNotEmpty) {
+      await client.storage.from('artisan-verification').remove(paths);
+    }
+    await client.from('profiles').update({
+      'national_id_url': null,
+      'national_id_front_url': null,
+      'national_id_back_url': null,
+      'business_certificate_urls': <String>[],
+      'verification_status': VerificationStatus.pending.name,
+      'verification_notes': null,
+      'verification_submitted_at': null,
+      'verification_reviewed_at': null,
+      'verification_retry_after': null,
+    }).eq('id', userId);
+    await client
+        .from('verification_subscriptions')
+        .delete()
+        .eq('user_id', userId);
   }
 
   Future<void> reviewArtisan({
@@ -274,11 +326,27 @@ class AdminService {
     final client = _supabase;
     if (client == null) return;
     final status =
-        approved ? VerificationStatus.pending : VerificationStatus.rejected;
+        approved ? VerificationStatus.verified : VerificationStatus.rejected;
+    final now = DateTime.now().toUtc().toIso8601String();
+    if (approved) {
+      final subscription = await client
+          .from('verification_subscriptions')
+          .select('id,status,plan_interval,current_period_end')
+          .eq('user_id', userId)
+          .maybeSingle();
+      if ((subscription?['status'] ?? '').toString() != 'paid_pending_review') {
+        throw StateError('Payment must be confirmed before approval.');
+      }
+      await client.from('verification_subscriptions').update({
+        'status': 'active',
+        'admin_approved_at': now,
+        'updated_at': now,
+      }).eq('user_id', userId);
+    }
     await client.from('profiles').update({
       'verification_status': status.name,
       'verification_notes': notes,
-      'verification_reviewed_at': DateTime.now().toUtc().toIso8601String(),
+      'verification_reviewed_at': now,
       'verification_retry_after': approved
           ? null
           : DateTime.now()
@@ -286,31 +354,21 @@ class AdminService {
               .add(const Duration(days: 30))
               .toIso8601String(),
     }).eq('id', userId);
-    if (approved) {
-      final profile = await client
-          .from('profiles')
-          .select('role')
-          .eq('id', userId)
-          .maybeSingle();
-      final role = (profile?['role'] ?? UserRole.customer.name).toString();
-      final normalizedRole =
-          role == UserRole.artisan.name ? UserRole.artisan.name : 'customer';
-      await client.from('verification_subscriptions').upsert({
-        'user_id': userId,
-        'role': normalizedRole,
-        'plan_interval': 'monthly',
-        'status': 'payment_required',
-        'amount_usd': normalizedRole == UserRole.artisan.name ? 5 : 2,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'user_id');
-    }
+    await client.from('admin_notifications').insert({
+      'type': approved ? 'verification_approved' : 'verification_rejected',
+      'title': approved ? 'Verification approved' : 'Verification rejected',
+      'body': approved
+          ? 'Admin approved a paid verification submission.'
+          : 'Verification was rejected. Notes: $notes',
+      'related_user_id': userId,
+    });
     await client.from('email_outbox').insert({
       'to_email': null,
       'subject': approved
-          ? 'Your ProSME verification was accepted'
+          ? 'Your ProSME verification was approved'
           : 'Your ProSME verification needs attention',
       'body': approved
-          ? 'Your documents were accepted. Pay the verification subscription in ProSME to activate your public checkmark.'
+          ? 'Your verification is approved and your public checkmark is active.'
           : 'Your verification was rejected. Notes: $notes',
       'related_user_id': userId,
     });
@@ -530,6 +588,22 @@ class AdminService {
       return const [];
     }
   }
+}
+
+String? _artisanVerificationPathFromUrl(String url) {
+  final trimmed = url.trim();
+  if (trimmed.isEmpty) return null;
+  const marker = '/storage/v1/object/public/artisan-verification/';
+  final markerIndex = trimmed.indexOf(marker);
+  if (markerIndex >= 0) {
+    return Uri.decodeFull(trimmed.substring(markerIndex + marker.length));
+  }
+  const bucketMarker = 'artisan-verification/';
+  final bucketIndex = trimmed.indexOf(bucketMarker);
+  if (bucketIndex >= 0) {
+    return Uri.decodeFull(trimmed.substring(bucketIndex + bucketMarker.length));
+  }
+  return trimmed.contains('/') ? trimmed : null;
 }
 
 String? _uuidOrNull(String value) {

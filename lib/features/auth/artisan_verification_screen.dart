@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as img;
 
 import '../../config/constants.dart';
+import '../../core/utils/currency.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
@@ -32,6 +33,12 @@ class _ArtisanVerificationScreenState
   bool _isSubmitting = false;
   bool _isLoadingStatus = true;
   bool _hasSubmittedDocuments = false;
+  bool _hasAcceptedFee = false;
+  bool _isPaying = false;
+  String _frontUrl = '';
+  String _backUrl = '';
+  List<String> _certificateUrls = const [];
+  String _verificationNotes = '';
   DateTime? _retryAfter;
 
   @override
@@ -59,7 +66,7 @@ class _ArtisanVerificationScreenState
           .read(supabaseClientProvider)
           .from('profiles')
           .select(
-            'phone,national_id_front_url,national_id_back_url,verification_retry_after',
+            'phone,national_id_front_url,national_id_back_url,business_certificate_urls,verification_notes,verification_retry_after',
           )
           .eq('id', user.id)
           .maybeSingle();
@@ -72,6 +79,14 @@ class _ArtisanVerificationScreenState
         _hasSubmittedDocuments =
             ((row?['national_id_front_url'] ?? '') as String).isNotEmpty ||
                 ((row?['national_id_back_url'] ?? '') as String).isNotEmpty;
+        _frontUrl = (row?['national_id_front_url'] ?? '').toString();
+        _backUrl = (row?['national_id_back_url'] ?? '').toString();
+        _certificateUrls =
+            ((row?['business_certificate_urls'] as List<dynamic>?) ?? const [])
+                .map((value) => value.toString())
+                .where((value) => value.trim().isNotEmpty)
+                .toList(growable: false);
+        _verificationNotes = (row?['verification_notes'] ?? '').toString();
         _retryAfter = DateTime.tryParse(
           (row?['verification_retry_after'] ?? '').toString(),
         );
@@ -242,18 +257,110 @@ class _ArtisanVerificationScreenState
             businessCertificateUrls: certificateUrls,
           );
       if (!mounted) return;
-      setState(() => _hasSubmittedDocuments = true);
-      _showMessage('Verification sent to Support for review.');
-      context.go(
-        user.role == UserRole.artisan
-            ? RouteNames.artisanHome
-            : RouteNames.home,
-      );
+      setState(() {
+        _hasSubmittedDocuments = true;
+        _frontUrl = frontUrl;
+        _backUrl = backUrl;
+        _certificateUrls = certificateUrls;
+      });
+      ref.invalidate(verificationSubscriptionProvider(user.id));
+      _showMessage('Documents uploaded. Continue to Paystack payment.');
+      await _startPayment();
     } catch (error) {
       if (!mounted) return;
       _showMessage(error is StateError
           ? error.message
           : 'Could not submit verification: $error');
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _startPayment() async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null || _isPaying) return;
+    final settings = ref.read(appSettingsControllerProvider);
+    setState(() => _isPaying = true);
+    try {
+      await ref.read(paymentServiceProvider).startVerificationCheckout(
+            interval: 'monthly',
+            currencyCode: settings.currencyCode,
+          );
+      ref.invalidate(verificationSubscriptionProvider(user.id));
+      _showMessage('Complete Paystack payment, then refresh payment status.');
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage('Could not start payment: $error');
+    } finally {
+      if (mounted) setState(() => _isPaying = false);
+    }
+  }
+
+  Future<void> _verifyPayment(String reference) async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null || reference.trim().isEmpty || _isPaying) return;
+    setState(() => _isPaying = true);
+    try {
+      await ref
+          .read(paymentServiceProvider)
+          .verifyVerificationPayment(reference.trim());
+      ref.invalidate(verificationSubscriptionProvider(user.id));
+      _showMessage('Payment confirmed. Support will review your documents.');
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage('Payment is not confirmed yet: $error');
+    } finally {
+      if (mounted) setState(() => _isPaying = false);
+    }
+  }
+
+  Future<void> _restartVerification() async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null || _isSubmitting) return;
+    final settings = ref.read(appSettingsControllerProvider);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(settings.t('Restart verification?')),
+        content: Text(settings.t(
+          'This deletes your uploaded verification documents so you can upload new ones.',
+        )),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(settings.t('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(settings.t('Restart')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _isSubmitting = true);
+    try {
+      await ref.read(adminServiceProvider).restartArtisanVerification(
+        userId: user.id,
+        documentUrls: [_frontUrl, _backUrl, ..._certificateUrls],
+      );
+      if (!mounted) return;
+      setState(() {
+        _frontId = null;
+        _backId = null;
+        _certificates.clear();
+        _hasSubmittedDocuments = false;
+        _hasAcceptedFee = false;
+        _frontUrl = '';
+        _backUrl = '';
+        _certificateUrls = const [];
+        _verificationNotes = '';
+      });
+      ref.invalidate(verificationSubscriptionProvider(user.id));
+      _showMessage('Previous documents deleted. Upload new documents.');
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage('Could not restart verification: $error');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -284,6 +391,8 @@ class _ArtisanVerificationScreenState
         ? null
         : ref.watch(verificationSubscriptionProvider(user.id)).valueOrNull;
     final needsPayment = subscription?.needsPayment == true;
+    final paidPendingReview = subscription?.isPaidPendingReview == true;
+    final pendingReference = subscription?.paystackReference ?? '';
     final retryAfter = _retryAfter;
     final isRetryLocked =
         retryAfter != null && retryAfter.isAfter(DateTime.now());
@@ -315,7 +424,38 @@ class _ArtisanVerificationScreenState
                 icon: Icons.payments_outlined,
                 title: settings.t('Payment required'),
                 message: settings.t(
-                  'Your documents were accepted. Open Profile to pay the verification subscription and activate your badge.',
+                  user?.role == UserRole.artisan
+                      ? 'Your documents are uploaded. Pay the \$5 artisan verification fee so Support can review them.'
+                      : 'Your documents are uploaded. Pay the \$2 account verification fee so Support can review them.',
+                ),
+                actions: [
+                  FilledButton.icon(
+                    onPressed: _isPaying ? null : _startPayment,
+                    icon: const Icon(Icons.payments_outlined),
+                    label:
+                        Text(settings.t(_isPaying ? 'Opening...' : 'Pay now')),
+                  ),
+                  if (pendingReference.trim().isNotEmpty)
+                    TextButton.icon(
+                      onPressed: _isPaying
+                          ? null
+                          : () => _verifyPayment(pendingReference),
+                      icon: const Icon(Icons.refresh),
+                      label: Text(settings.t('Refresh payment status')),
+                    ),
+                  TextButton.icon(
+                    onPressed: _isSubmitting ? null : _restartVerification,
+                    icon: const Icon(Icons.restart_alt),
+                    label: Text(settings.t('Restart verification')),
+                  ),
+                ],
+              )
+            else if (paidPendingReview)
+              _StatusPanel(
+                icon: Icons.pending_actions,
+                title: settings.t('Verification pending'),
+                message: settings.t(
+                  'Payment is confirmed. Uploads are disabled while Support reviews your documents.',
                 ),
               )
             else if (user?.verificationStatus == VerificationStatus.verified)
@@ -335,6 +475,12 @@ class _ArtisanVerificationScreenState
                   'Your documents are with Support. You cannot submit again until review is complete.',
                 ),
               )
+            else if (_verificationNotes.trim().isNotEmpty)
+              _StatusPanel(
+                icon: Icons.info_outline,
+                title: settings.t('Verification update'),
+                message: _verificationNotes,
+              )
             else if (isRetryLocked)
               _StatusPanel(
                 icon: Icons.lock_clock,
@@ -342,7 +488,13 @@ class _ArtisanVerificationScreenState
                 message:
                     '${settings.t('Your documents were not accepted. You can upload again in')} $remainingDays ${settings.t('day(s). Use clear front/back National ID images and valid business certificates where available.')}',
               )
-            else ...[
+            else if (!_hasAcceptedFee) ...[
+              _FeeNotice(
+                role: user?.role ?? UserRole.customer,
+                currencyCode: settings.currencyCode,
+                onContinue: () => setState(() => _hasAcceptedFee = true),
+              ),
+            ] else ...[
               Text(
                 settings.t('Upload verification documents'),
                 style: Theme.of(context).textTheme.titleLarge,
@@ -415,11 +567,13 @@ class _StatusPanel extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.message,
+    this.actions = const [],
   });
 
   final IconData icon;
   final String title;
   final String message;
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
@@ -433,6 +587,72 @@ class _StatusPanel extends StatelessWidget {
             Text(title, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(message, textAlign: TextAlign.center),
+            if (actions.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: actions,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FeeNotice extends ConsumerWidget {
+  const _FeeNotice({
+    required this.role,
+    required this.currencyCode,
+    required this.onContinue,
+  });
+
+  final UserRole role;
+  final String currencyCode;
+  final VoidCallback onContinue;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
+    final monthlyUsd = role == UserRole.artisan
+        ? kVerificationArtisanMonthlyUsd
+        : kVerificationCustomerMonthlyUsd;
+    final amountLabel =
+        formatMoney(monthlyUsd * kUsdToGhsEstimate, currencyCode);
+    final roleLabel =
+        role == UserRole.artisan ? settings.t('artisan') : settings.t('user');
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          children: [
+            Icon(
+              Icons.verified_user_outlined,
+              size: 48,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              settings.t('Verification fee'),
+              style: Theme.of(context).textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              settings.t(
+                'Before uploading documents, please note that verification costs $amountLabel for this $roleLabel account. After upload you will continue to Paystack, and Support will review your documents only after payment succeeds.',
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onContinue,
+              icon: const Icon(Icons.arrow_forward),
+              label: Text(settings.t('Continue')),
+            ),
           ],
         ),
       ),

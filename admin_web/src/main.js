@@ -296,6 +296,7 @@ const statusBadge = (status) => {
     active: 'badge badge-green',
     payment_required: 'badge badge-orange',
     pending_payment: 'badge badge-blue',
+    paid_pending_review: 'badge badge-blue',
     expired: 'badge badge-red',
     renewal_failed: 'badge badge-red',
     cancelled: 'badge badge-red',
@@ -989,7 +990,7 @@ async function setVerification(userId, status) {
         ) || ''
       : window.prompt(
           'Approval notes',
-          'Documents accepted. Payment is required to activate or renew the badge.',
+          'Payment confirmed. Documents accepted and verification approved.',
         ) || '';
   const update = {
     verification_status: status,
@@ -1008,7 +1009,7 @@ async function setVerification(userId, status) {
     userId,
     update,
     status === 'verified'
-      ? 'Documents accepted. Verification payment is now required.'
+      ? 'Verification approved and badge activated.'
       : `Verification ${status}.`,
   );
 }
@@ -1035,7 +1036,7 @@ async function confirmPaystackReference(reference) {
   if (!reference) return;
   await runAction(async () => {
     await billingAction('adminVerifyReference', { reference });
-    setNotice('Paystack payment confirmed and verification activated.');
+    setNotice('Paystack payment confirmed. Document review is now pending.');
     await refreshData();
   });
 }
@@ -1666,10 +1667,15 @@ function renderOverview() {
 
 function pendingVerifications() {
   return state.data.profiles.filter(
-    (profile) =>
-      ['customer', 'artisan'].includes(profile.role) &&
-      profile.verification_status === 'pending' &&
-      (profile.national_id_front_url || profile.national_id_back_url),
+    (profile) => {
+      const subscription = subscriptionForUser(profile.id);
+      return (
+        ['customer', 'artisan'].includes(profile.role) &&
+        profile.verification_status === 'pending' &&
+        subscription?.status === 'paid_pending_review' &&
+        (profile.national_id_front_url || profile.national_id_back_url)
+      );
+    },
   );
 }
 
@@ -1713,6 +1719,7 @@ function controls({ roleFilter = true, statusFilter = true } = {}) {
                 'verified',
                 'payment_required',
                 'pending_payment',
+                'paid_pending_review',
                 'active',
                 'expired',
                 'renewal_failed',

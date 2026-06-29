@@ -50,6 +50,7 @@ class PaymentService {
   Future<VerificationCheckout> startVerificationCheckout({
     required String interval,
     String channel = '',
+    String currencyCode = 'GHS',
   }) async {
     final client = _supabase;
     if (client == null) {
@@ -60,6 +61,7 @@ class PaymentService {
       body: {
         'action': 'initialize',
         'interval': interval,
+        'displayCurrency': currencyCode,
         if (channel.trim().isNotEmpty) 'channel': channel.trim(),
       },
     );

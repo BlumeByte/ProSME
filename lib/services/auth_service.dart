@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../models/app_user.dart';
 import '../routes/route_names.dart';
+import 'app_settings_controller.dart';
 
 final _emailRegex = RegExp(
   r'^(?=.{1,254}$)(?=.{1,64}@)[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
@@ -17,6 +18,14 @@ bool _isValidEmailAddress(String email) =>
     _emailRegex.hasMatch(email) && !email.contains('..');
 bool isStrongPassword(String password) =>
     _strongPasswordRegex.hasMatch(password);
+
+Set<String> _readNotificationTypeSet(Object? value) {
+  if (value is Iterable) {
+    return value.map((item) => normalizeNotificationType('$item')).toSet();
+  }
+  return const <String>{};
+}
+
 String _readableError(Object? error) {
   if (error == null) return 'unknown error';
   if (error is AuthException) return error.message;
@@ -42,6 +51,8 @@ abstract class AuthService {
     String? username,
     UserRole role = UserRole.customer,
   });
+  Future<void> requestSignupEmailOtp(String email);
+  Future<AppUser> verifySignupEmailOtp(String email, String code);
   Future<AppUser> signInWithGoogle();
   Future<void> requestPasswordReset(String email);
   Future<void> requestEmailOtp();
@@ -141,6 +152,19 @@ class MockAuthService implements AuthService {
     _accountsByEmail[normalizedEmail] = _currentUser!;
     _passwordsByEmail[normalizedEmail] = password;
     _emailByUsername[normalizedUsername] = normalizedEmail;
+    _controller.add(_currentUser);
+    return _currentUser!;
+  }
+
+  @override
+  Future<void> requestSignupEmailOtp(String email) async {}
+
+  @override
+  Future<AppUser> verifySignupEmailOtp(String email, String code) async {
+    final account = _accountsByEmail[email.trim().toLowerCase()];
+    if (account == null) throw StateError('Account was not found.');
+    _currentUser = account.copyWith(emailVerified: true);
+    _accountsByEmail[email.trim().toLowerCase()] = _currentUser!;
     _controller.add(_currentUser);
     return _currentUser!;
   }
@@ -404,7 +428,7 @@ class SupabaseAuthService implements AuthService {
       final response = await _supabase
           .from('profiles')
           .select(
-            'id,username,full_name,phone,email,avatar_url,role,verification_status,country,country_code,description,is_busy,email_verified,phone_verified,email_notifications,phone_notifications,app_language,currency_code,username_updated_at,created_at,updated_at',
+            'id,username,full_name,phone,email,avatar_url,role,verification_status,country,country_code,description,is_busy,email_verified,phone_verified,email_notifications,phone_notifications,blocked_email_notification_types,blocked_phone_notification_types,app_language,currency_code,username_updated_at,created_at,updated_at',
           )
           .eq('id', userId)
           .maybeSingle();
@@ -449,6 +473,14 @@ class SupabaseAuthService implements AuthService {
       'email_verified':
           existingProfile?['email_verified'] ?? (user.emailConfirmedAt != null),
       'phone_verified': existingProfile?['phone_verified'] ?? false,
+      'email_notifications': existingProfile?['email_notifications'] ?? true,
+      'phone_notifications': existingProfile?['phone_notifications'] ?? true,
+      'blocked_email_notification_types':
+          existingProfile?['blocked_email_notification_types'] ?? const [],
+      'blocked_phone_notification_types':
+          existingProfile?['blocked_phone_notification_types'] ?? const [],
+      'app_language': existingProfile?['app_language'] ?? 'English',
+      'currency_code': existingProfile?['currency_code'] ?? 'GHS',
       'role': role,
       'verification_status': (existingProfile?['verification_status'] ??
               VerificationStatus.pending.name)
@@ -533,6 +565,23 @@ class SupabaseAuthService implements AuthService {
       phoneVerified: source['phone_verified'] == true ||
           source['phoneVerified'] == true ||
           metadata['phone_verified'] == true,
+      emailNotifications: source['email_notifications'] != false &&
+          source['emailNotifications'] != false,
+      phoneNotifications: source['phone_notifications'] != false &&
+          source['phoneNotifications'] != false,
+      blockedEmailNotificationTypes: _readNotificationTypeSet(
+        source['blocked_email_notification_types'] ??
+            source['blockedEmailNotificationTypes'],
+      ),
+      blockedPhoneNotificationTypes: _readNotificationTypeSet(
+        source['blocked_phone_notification_types'] ??
+            source['blockedPhoneNotificationTypes'],
+      ),
+      appLanguage:
+          (source['app_language'] ?? source['appLanguage'] ?? 'English')
+              .toString(),
+      currencyCode: (source['currency_code'] ?? source['currencyCode'] ?? 'GHS')
+          .toString(),
       verificationStatus: VerificationStatus.values.firstWhere(
         (status) =>
             status.name ==
@@ -673,7 +722,7 @@ class SupabaseAuthService implements AuthService {
     final response = await _supabase.auth.signUp(
       email: email.trim(),
       password: password,
-      emailRedirectTo: kIsWeb ? null : kEmailVerificationRedirectUrl,
+      emailRedirectTo: _emailVerificationRedirectTo,
       data: {
         'full_name': normalizedUsername,
         'username': normalizedUsername,
@@ -690,6 +739,46 @@ class SupabaseAuthService implements AuthService {
       throw StateError(
         'Sign-up completed but no active session was returned. Please sign in.',
       );
+    }
+    return _resolveUser(user);
+  }
+
+  String get _emailVerificationRedirectTo => kIsWeb
+      ? Uri.base.resolve(RouteNames.auth).toString()
+      : kEmailVerificationRedirectUrl;
+
+  @override
+  Future<void> requestSignupEmailOtp(String email) async {
+    final normalized = email.trim().toLowerCase();
+    if (!_isValidEmailAddress(normalized)) {
+      throw StateError('Enter a valid email address.');
+    }
+    await _supabase.auth.resend(
+      email: normalized,
+      type: OtpType.signup,
+      emailRedirectTo: _emailVerificationRedirectTo,
+    );
+  }
+
+  @override
+  Future<AppUser> verifySignupEmailOtp(String email, String code) async {
+    final normalized = email.trim().toLowerCase();
+    final token = code.trim().replaceAll(RegExp(r'\s+'), '');
+    if (!_isValidEmailAddress(normalized)) {
+      throw StateError('Enter a valid email address.');
+    }
+    if (!RegExp(r'^\d{6}$').hasMatch(token)) {
+      throw StateError('Enter the 6-digit code.');
+    }
+    final response = await _supabase.auth.verifyOTP(
+      email: normalized,
+      token: token,
+      type: OtpType.signup,
+      redirectTo: _emailVerificationRedirectTo,
+    );
+    final user = response.user ?? _supabase.auth.currentUser;
+    if (user == null) {
+      throw StateError('Email verified, but no active session was returned.');
     }
     return _resolveUser(user);
   }

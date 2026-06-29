@@ -12,6 +12,22 @@ const _currencyCodeKey = 'settings_currency_code';
 const _currencyRateKeyPrefix = 'settings_currency_rate_';
 const _emailNotificationsKey = 'settings_email_notifications';
 const _phoneNotificationsKey = 'settings_phone_notifications';
+const _blockedEmailNotificationTypesKey =
+    'settings_blocked_email_notification_types';
+const _blockedPhoneNotificationTypesKey =
+    'settings_blocked_phone_notification_types';
+
+const kNotificationTypeOptions = [
+  'chat',
+  'bid',
+  'booking',
+  'job',
+  'payment',
+  'verification',
+  'account',
+  'support',
+  'system',
+];
 
 const kSupportedAppLanguages = [
   'English',
@@ -32,16 +48,28 @@ class AppSettings {
     this.currencyCode = 'GHS',
     this.emailNotifications = true,
     this.phoneNotifications = true,
+    this.blockedEmailNotificationTypes = const <String>{},
+    this.blockedPhoneNotificationTypes = const <String>{},
   });
 
   final String language;
   final String currencyCode;
   final bool emailNotifications;
   final bool phoneNotifications;
+  final Set<String> blockedEmailNotificationTypes;
+  final Set<String> blockedPhoneNotificationTypes;
 
   String t(String text) {
     if (language == 'English') return text;
-    return _translations[language]?[text] ?? text;
+    final translations = _translations[language];
+    if (translations == null) return text;
+    final exact = translations[text];
+    if (exact != null) return exact;
+    final normalizedText = _translationKey(text);
+    for (final entry in translations.entries) {
+      if (_translationKey(entry.key) == normalizedText) return entry.value;
+    }
+    return text;
   }
 
   AppSettings copyWith({
@@ -49,14 +77,69 @@ class AppSettings {
     String? currencyCode,
     bool? emailNotifications,
     bool? phoneNotifications,
+    Set<String>? blockedEmailNotificationTypes,
+    Set<String>? blockedPhoneNotificationTypes,
   }) {
     return AppSettings(
       language: language ?? this.language,
       currencyCode: currencyCode ?? this.currencyCode,
       emailNotifications: emailNotifications ?? this.emailNotifications,
       phoneNotifications: phoneNotifications ?? this.phoneNotifications,
+      blockedEmailNotificationTypes:
+          blockedEmailNotificationTypes ?? this.blockedEmailNotificationTypes,
+      blockedPhoneNotificationTypes:
+          blockedPhoneNotificationTypes ?? this.blockedPhoneNotificationTypes,
     );
   }
+
+  bool allowsEmailNotificationType(String type) =>
+      emailNotifications &&
+      !_matchesBlockedType(blockedEmailNotificationTypes, type);
+
+  bool allowsPhoneNotificationType(String type) =>
+      phoneNotifications &&
+      !_matchesBlockedType(blockedPhoneNotificationTypes, type);
+}
+
+String _translationKey(String value) =>
+    value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
+String normalizeNotificationType(String type) {
+  final normalized = type
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+      .replaceAll(RegExp(r'_+'), '_')
+      .replaceAll(RegExp(r'^_|_$'), '');
+  if (normalized.contains('chat') || normalized.contains('message')) {
+    return 'chat';
+  }
+  if (normalized.contains('bid')) return 'bid';
+  if (normalized.contains('booking')) return 'booking';
+  if (normalized.contains('job') || normalized.contains('work')) return 'job';
+  if (normalized.contains('payment') ||
+      normalized.contains('wallet') ||
+      normalized.contains('invoice') ||
+      normalized.contains('billing')) {
+    return 'payment';
+  }
+  if (normalized.contains('verification') || normalized.contains('verify')) {
+    return 'verification';
+  }
+  if (normalized.contains('support') || normalized.contains('report')) {
+    return 'support';
+  }
+  if (normalized.contains('account') ||
+      normalized.contains('password') ||
+      normalized.contains('profile')) {
+    return 'account';
+  }
+  return normalized.isEmpty ? 'system' : normalized;
+}
+
+bool _matchesBlockedType(Set<String> blockedTypes, String type) {
+  if (blockedTypes.contains('all')) return true;
+  return blockedTypes.contains(normalizeNotificationType(type));
 }
 
 const _translations = <String, Map<String, String>>{
@@ -1931,6 +2014,18 @@ class AppSettingsController extends StateNotifier<AppSettings> {
       currencyCode: prefs.getString(_currencyCodeKey) ?? 'GHS',
       emailNotifications: prefs.getBool(_emailNotificationsKey) ?? true,
       phoneNotifications: prefs.getBool(_phoneNotificationsKey) ?? true,
+      blockedEmailNotificationTypes: (prefs.getStringList(
+                _blockedEmailNotificationTypesKey,
+              ) ??
+              const <String>[])
+          .map(normalizeNotificationType)
+          .toSet(),
+      blockedPhoneNotificationTypes: (prefs.getStringList(
+                _blockedPhoneNotificationTypesKey,
+              ) ??
+              const <String>[])
+          .map(normalizeNotificationType)
+          .toSet(),
     );
     final cachedRate = prefs
         .getDouble('$_currencyRateKeyPrefix${_initialSettings.currencyCode}');
@@ -1994,5 +2089,62 @@ class AppSettingsController extends StateNotifier<AppSettings> {
     state = state.copyWith(phoneNotifications: enabled);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_phoneNotificationsKey, enabled);
+  }
+
+  Future<void> applyRemoteProfileSettings({
+    required String language,
+    required String currencyCode,
+    required bool emailNotifications,
+    required bool phoneNotifications,
+    required Set<String> blockedEmailNotificationTypes,
+    required Set<String> blockedPhoneNotificationTypes,
+  }) async {
+    final normalizedLanguage =
+        kSupportedAppLanguages.contains(language) ? language : 'English';
+    final normalizedEmailTypes =
+        blockedEmailNotificationTypes.map(normalizeNotificationType).toSet();
+    final normalizedPhoneTypes =
+        blockedPhoneNotificationTypes.map(normalizeNotificationType).toSet();
+    state = state.copyWith(
+      language: normalizedLanguage,
+      currencyCode: currencyCode.trim().isEmpty ? 'GHS' : currencyCode.trim(),
+      emailNotifications: emailNotifications,
+      phoneNotifications: phoneNotifications,
+      blockedEmailNotificationTypes: normalizedEmailTypes,
+      blockedPhoneNotificationTypes: normalizedPhoneTypes,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_languageKey, state.language);
+    await prefs.setString(_currencyCodeKey, state.currencyCode);
+    await prefs.setBool(_emailNotificationsKey, state.emailNotifications);
+    await prefs.setBool(_phoneNotificationsKey, state.phoneNotifications);
+    await prefs.setStringList(
+      _blockedEmailNotificationTypesKey,
+      normalizedEmailTypes.toList()..sort(),
+    );
+    await prefs.setStringList(
+      _blockedPhoneNotificationTypesKey,
+      normalizedPhoneTypes.toList()..sort(),
+    );
+  }
+
+  Future<void> setBlockedEmailNotificationTypes(Set<String> types) async {
+    final normalized = types.map(normalizeNotificationType).toSet();
+    state = state.copyWith(blockedEmailNotificationTypes: normalized);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _blockedEmailNotificationTypesKey,
+      normalized.toList()..sort(),
+    );
+  }
+
+  Future<void> setBlockedPhoneNotificationTypes(Set<String> types) async {
+    final normalized = types.map(normalizeNotificationType).toSet();
+    state = state.copyWith(blockedPhoneNotificationTypes: normalized);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _blockedPhoneNotificationTypesKey,
+      normalized.toList()..sort(),
+    );
   }
 }
