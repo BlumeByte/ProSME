@@ -32,6 +32,12 @@ class PlatformModuleCounts {
     required this.tenants,
     required this.listings,
     required this.jobs,
+    required this.openJobs,
+    required this.acceptedJobs,
+    required this.startPendingJobs,
+    required this.inProgressJobs,
+    required this.completionPendingJobs,
+    required this.completedJobs,
     required this.bids,
     required this.threads,
     required this.messages,
@@ -44,6 +50,12 @@ class PlatformModuleCounts {
   final int tenants;
   final int listings;
   final int jobs;
+  final int openJobs;
+  final int acceptedJobs;
+  final int startPendingJobs;
+  final int inProgressJobs;
+  final int completionPendingJobs;
+  final int completedJobs;
   final int bids;
   final int threads;
   final int messages;
@@ -184,6 +196,12 @@ class AdminService {
         tenants: 0,
         listings: 0,
         jobs: 0,
+        openJobs: 0,
+        acceptedJobs: 0,
+        startPendingJobs: 0,
+        inProgressJobs: 0,
+        completionPendingJobs: 0,
+        completedJobs: 0,
         bids: 0,
         threads: 0,
         messages: 0,
@@ -195,7 +213,7 @@ class AdminService {
 
     final accounts = await fetchAccounts();
     final listingRows = await _supabase.from('listings').select('id');
-    final jobRows = await _supabase.from('jobs').select('id');
+    final jobRows = await _supabase.from('jobs').select('id,work_status');
     final bidRows = await _supabase.from('job_bids').select('id');
     final threadRows = await _supabase.from('threads').select('id');
     final messageRows = await _supabase.from('messages').select('id');
@@ -203,11 +221,23 @@ class AdminService {
         await _supabase.from('admin_notifications').select('id');
     final reportRows = await _supabase.from('reports').select('id');
     final walletRows = await _supabase.from('wallet_transactions').select('id');
+    final jobs = (jobRows as List<dynamic>)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
+    int countJobs(String status) => jobs
+        .where((job) => (job['work_status'] ?? 'open').toString() == status)
+        .length;
     return PlatformModuleCounts(
       accounts: accounts.length,
       tenants: accounts.map((account) => account.tenantId).toSet().length,
       listings: (listingRows as List<dynamic>).length,
-      jobs: (jobRows as List<dynamic>).length,
+      jobs: jobs.length,
+      openJobs: countJobs('open'),
+      acceptedJobs: countJobs('accepted'),
+      startPendingJobs: countJobs('start_pending'),
+      inProgressJobs: countJobs('in_progress'),
+      completionPendingJobs: countJobs('completion_pending'),
+      completedJobs: countJobs('completed'),
       bids: (bidRows as List<dynamic>).length,
       threads: (threadRows as List<dynamic>).length,
       messages: (messageRows as List<dynamic>).length,
@@ -278,7 +308,7 @@ class AdminService {
         'to_email': null,
         'subject': 'Pay for your ProSME verification',
         'body': role == UserRole.artisan.name
-            ? 'Your documents were uploaded. Pay the \$5 artisan verification fee so Support can review them.'
+            ? 'Your documents were uploaded. Pay the \$3 artisan verification fee so Support can review them.'
             : 'Your documents were uploaded. Pay the \$2 account verification fee so Support can review them.',
         'related_user_id': userId,
       });

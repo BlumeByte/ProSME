@@ -43,6 +43,8 @@ class _ArtisanDashboardScreenState
     final bidsAsync = user == null
         ? const AsyncValue<List<JobBid>>.data(<JobBid>[])
         : ref.watch(artisanBidsProvider(user.id));
+    final bids = bidsAsync.valueOrNull ?? const <JobBid>[];
+    final bidJobIds = bids.map((bid) => bid.jobId).toSet();
     final listingsAsync = ref.watch(listingServiceProvider).watchListings();
     final status = user?.verificationStatus ?? VerificationStatus.pending;
     final isVerified = status == VerificationStatus.verified;
@@ -70,34 +72,14 @@ class _ArtisanDashboardScreenState
             final myListings = (snapshot.data ?? const [])
                 .where((listing) => listing.artisanId == user?.id)
                 .toList(growable: false);
-            return jobsAsync.when(
-              loading: () => _StatRow(
-                listings: myListings.length,
-                bids: bidsAsync.valueOrNull?.length ?? 0,
-                won: _wonBidCount(bidsAsync.valueOrNull ?? const []),
-                onOpenListings: widget.onOpenListings,
-                onOpenRequests: widget.onOpenJobs,
-                onOpenPending: widget.onOpenChats,
-                settings: settings,
-              ),
-              error: (_, __) => _StatRow(
-                listings: myListings.length,
-                bids: bidsAsync.valueOrNull?.length ?? 0,
-                won: _wonBidCount(bidsAsync.valueOrNull ?? const []),
-                onOpenListings: widget.onOpenListings,
-                onOpenRequests: widget.onOpenJobs,
-                onOpenPending: widget.onOpenChats,
-                settings: settings,
-              ),
-              data: (jobs) => _StatRow(
-                listings: myListings.length,
-                bids: bidsAsync.valueOrNull?.length ?? 0,
-                won: _wonBidCount(bidsAsync.valueOrNull ?? const []),
-                onOpenListings: widget.onOpenListings,
-                onOpenRequests: widget.onOpenJobs,
-                onOpenPending: widget.onOpenChats,
-                settings: settings,
-              ),
+            return _StatRow(
+              listings: myListings.length,
+              bids: bids.length,
+              won: _wonBidCount(bids),
+              onOpenListings: widget.onOpenListings,
+              onOpenRequests: widget.onOpenJobs,
+              onOpenPending: widget.onOpenChats,
+              settings: settings,
             );
           },
         ),
@@ -108,9 +90,8 @@ class _ArtisanDashboardScreenState
               isVerified ? Icons.verified : Icons.verified_outlined,
               color: isVerified ? Colors.green : Colors.orange,
             ),
-            title:
-                Text(settings.t(
-                    isVerified ? 'Verified artisan' : 'Verification needed')),
+            title: Text(settings
+                .t(isVerified ? 'Verified artisan' : 'Verification needed')),
             subtitle: Text(
               settings.t(isVerified
                   ? 'Customers can see your verified badge.'
@@ -184,8 +165,12 @@ class _ArtisanDashboardScreenState
           error: (error, _) =>
               Text('${settings.t('Could not load requests')}: $error'),
           data: (jobs) {
-            _notifyOnNewJob(jobs);
-            if (jobs.isEmpty) {
+            final openRequests = jobs
+                .where((job) =>
+                    job.workStatus == 'open' && job.createdBy != user?.id)
+                .toList(growable: false);
+            _notifyOnNewJob(openRequests);
+            if (openRequests.isEmpty) {
               return Card(
                 child: ListTile(
                   leading: const Icon(Icons.inbox_outlined),
@@ -195,25 +180,32 @@ class _ArtisanDashboardScreenState
                 ),
               );
             }
-            final preview = jobs.take(3).toList(growable: false);
+            final preview = openRequests.take(3).toList(growable: false);
             return Column(
               children: [
                 ...preview.map(
-                  (job) => Card(
-                    child: ListTile(
-                      title: Text(job.title),
-                      subtitle: Text(
-                        '${job.location} - ${formatMoney(job.budget, currencyCode)}',
-                      ),
-                      trailing: FilledButton(
-                        onPressed: () =>
+                  (job) {
+                    final hasBid = bidJobIds.contains(job.id);
+                    final shownAmount = job.acceptedAmount ?? job.budget;
+                    final amountLabel = job.acceptedAmount == null
+                        ? settings.t('Budget')
+                        : settings.t('Accepted amount');
+                    return Card(
+                      child: ListTile(
+                        title: Text(job.title),
+                        subtitle: Text(
+                          '${job.location} - $amountLabel: ${formatMoney(shownAmount, currencyCode)}',
+                        ),
+                        trailing: FilledButton(
+                          onPressed: () =>
+                              context.push('${RouteNames.jobDetail}/${job.id}'),
+                          child: Text(settings.t(hasBid ? 'Edit bid' : 'Bid')),
+                        ),
+                        onTap: () =>
                             context.push('${RouteNames.jobDetail}/${job.id}'),
-                        child: Text(settings.t('Bid')),
                       ),
-                      onTap: () =>
-                          context.push('${RouteNames.jobDetail}/${job.id}'),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ],
             );

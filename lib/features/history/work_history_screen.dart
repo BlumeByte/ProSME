@@ -163,6 +163,9 @@ class _BidHistoryList extends ConsumerWidget {
         }
         final item = visibleItems[index - 1];
         final accepted = item.status == 'accepted';
+        final amountLabel = accepted
+            ? settings.t('Accepted bid amount')
+            : settings.t('Bid amount');
         return Card(
           child: ListTile(
             leading: Icon(
@@ -171,7 +174,7 @@ class _BidHistoryList extends ConsumerWidget {
             ),
             title: Text(item.jobTitle),
             subtitle: Text(
-              '${item.artisanName}\n${DateFormat('MMM d, y h:mm a').format(item.createdAt)}',
+              '${item.artisanName}\n$amountLabel\n${DateFormat('MMM d, y h:mm a').format(item.createdAt)}',
             ),
             isThreeLine: true,
             trailing: Column(
@@ -210,12 +213,13 @@ class _RequestHistoryList extends ConsumerWidget {
       itemBuilder: (context, index) {
         final item = items[index];
         final amount = item.acceptedAmount ?? item.budget;
+        final hasAcceptedAmount = item.acceptedAmount != null;
         return Card(
           child: ListTile(
             leading: const Icon(Icons.work_history_outlined),
             title: Text(item.title),
             subtitle: Text(
-              '${item.location}\n${DateFormat('MMM d, y h:mm a').format(item.createdAt)}',
+              '${item.location}\n${settings.t(hasAcceptedAmount ? 'Accepted amount' : 'Budget')}\n${DateFormat('MMM d, y h:mm a').format(item.createdAt)}',
             ),
             isThreeLine: true,
             trailing: Column(

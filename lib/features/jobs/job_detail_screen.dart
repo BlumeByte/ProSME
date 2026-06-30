@@ -67,6 +67,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
           final existingBid = isArtisan && user != null
               ? bids.where((bid) => bid.artisanId == user.id).firstOrNull
               : null;
+          final jobLocked = _isJobLocked(job, acceptedBid);
           if (existingBid != null &&
               _amountController.text.isEmpty &&
               _messageController.text.isEmpty) {
@@ -99,7 +100,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
               if (acceptedBid != null &&
                   user != null &&
                   (isOwner || acceptedBid.artisanId == user.id)) ...[
-                _JobTrackingPanel(job: job),
+                _JobTrackingPanel(job: job, acceptedBid: acceptedBid),
                 const SizedBox(height: 16),
               ],
               if (user == null)
@@ -108,11 +109,19 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                   child: Text(settings.t('Sign in to bid or chat')),
                 )
               else if (isOwner) ...[
-                _EditJobCard(job: job, currencyCode: currencyCode),
+                if (jobLocked)
+                  _LockedJobCard(settings: settings)
+                else
+                  _EditJobCard(job: job, currencyCode: currencyCode),
                 const SizedBox(height: 12),
                 _BidsForOwner(job: job, currencyCode: currencyCode),
-              ] else if (isArtisan &&
-                  (acceptedBid == null || acceptedBid.artisanId == user.id))
+              ] else if (isArtisan && acceptedBid?.artisanId == user.id)
+                _AcceptedBidPanel(
+                  job: job,
+                  bid: acceptedBid!,
+                  currencyCode: currencyCode,
+                )
+              else if (isArtisan && acceptedBid == null)
                 _BidForm(
                   formKey: _formKey,
                   amountController: _amountController,
@@ -209,6 +218,8 @@ class _JobSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final acceptedAmount = job.acceptedAmount;
+    final hasAcceptedAmount = acceptedAmount != null && _isJobLocked(job, null);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -231,9 +242,21 @@ class _JobSummary extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              '${formatMoney(job.budget, currencyCode)} ${settings.t('budget')}',
-              style: Theme.of(context).textTheme.titleMedium,
+              hasAcceptedAmount
+                  ? '${formatMoney(acceptedAmount, currencyCode)} ${settings.t('accepted amount')}'
+                  : '${formatMoney(job.budget, currencyCode)} ${settings.t('budget')}',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight:
+                        hasAcceptedAmount ? FontWeight.w700 : FontWeight.w500,
+                  ),
             ),
+            if (hasAcceptedAmount) ...[
+              const SizedBox(height: 4),
+              Text(
+                '${settings.t('Original budget')}: ${formatMoney(job.budget, currencyCode)}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 16),
             Text(job.description),
             if (job.images.isNotEmpty) ...[
@@ -257,17 +280,25 @@ class _JobSummary extends StatelessWidget {
 }
 
 class _JobTrackingPanel extends ConsumerWidget {
-  const _JobTrackingPanel({required this.job});
+  const _JobTrackingPanel({required this.job, required this.acceptedBid});
 
   final JobFeedItem job;
+  final JobBid acceptedBid;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(appSettingsControllerProvider);
+    final user = ref.watch(authStateProvider).valueOrNull;
     final eventsAsync = ref.watch(jobProgressProvider(job.id));
     final status = job.workStatus;
-    final canStart = status == 'accepted';
-    final canComplete = status == 'accepted' || status == 'in_progress';
+    final isOwner = user?.id == job.createdBy;
+    final isAcceptedArtisan = user?.id == acceptedBid.artisanId;
+    final canRequestStart = isAcceptedArtisan && status == 'accepted';
+    final canConfirmStart = isOwner && status == 'start_pending';
+    final canUpdateEta = (isOwner || isAcceptedArtisan) &&
+        (status == 'accepted' || status == 'in_progress');
+    final canRequestCompletion = isAcceptedArtisan && status == 'in_progress';
+    final canConfirmCompletion = isOwner && status == 'completion_pending';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -287,6 +318,17 @@ class _JobTrackingPanel extends ConsumerWidget {
                 Chip(label: Text(settings.t(_statusLabel(status)))),
               ],
             ),
+            if (status == 'start_pending' ||
+                status == 'completion_pending') ...[
+              const SizedBox(height: 8),
+              Text(
+                settings.t(
+                  status == 'start_pending'
+                      ? 'Waiting for customer to confirm work has started.'
+                      : 'Waiting for customer to confirm the work is completed.',
+                ),
+              ),
+            ],
             if (job.etaAt != null) ...[
               const SizedBox(height: 8),
               Text(
@@ -298,17 +340,32 @@ class _JobTrackingPanel extends ConsumerWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                if (canStart)
+                if (canRequestStart)
+                  FilledButton.icon(
+                    onPressed: () => _updateProgress(
+                      context,
+                      ref,
+                      status: 'start_pending',
+                      confirmTitle: 'Request start confirmation',
+                      successMessage:
+                          'Start confirmation sent to the customer.',
+                    ),
+                    icon: const Icon(Icons.play_arrow),
+                    label: Text(settings.t('Start work')),
+                  ),
+                if (canConfirmStart)
                   FilledButton.icon(
                     onPressed: () => _updateProgress(
                       context,
                       ref,
                       status: 'in_progress',
+                      confirmTitle: 'Confirm work started',
+                      successMessage: 'Work start confirmed.',
                     ),
-                    icon: const Icon(Icons.play_arrow),
-                    label: Text(settings.t('Start work')),
+                    icon: const Icon(Icons.verified_outlined),
+                    label: Text(settings.t('Confirm work started')),
                   ),
-                if (canComplete)
+                if (canUpdateEta)
                   OutlinedButton.icon(
                     onPressed: () => _updateProgress(
                       context,
@@ -319,15 +376,31 @@ class _JobTrackingPanel extends ConsumerWidget {
                     icon: const Icon(Icons.schedule),
                     label: Text(settings.t('Update ETA')),
                   ),
-                if (canComplete)
+                if (canRequestCompletion)
+                  FilledButton.tonalIcon(
+                    onPressed: () => _updateProgress(
+                      context,
+                      ref,
+                      status: 'completion_pending',
+                      confirmTitle: 'Request completion confirmation',
+                      successMessage:
+                          'Completion confirmation sent to the customer.',
+                    ),
+                    icon: const Icon(Icons.task_alt),
+                    label: Text(settings.t('Request completion')),
+                  ),
+                if (canConfirmCompletion)
                   FilledButton.tonalIcon(
                     onPressed: () => _updateProgress(
                       context,
                       ref,
                       status: 'completed',
+                      confirmTitle: 'Confirm completion',
+                      successMessage:
+                          'Work completed. You can now rate the artisan.',
                     ),
                     icon: const Icon(Icons.task_alt),
-                    label: Text(settings.t('Mark completed')),
+                    label: Text(settings.t('Confirm completion')),
                   ),
               ],
             ),
@@ -378,6 +451,8 @@ class _JobTrackingPanel extends ConsumerWidget {
     WidgetRef ref, {
     required String status,
     bool etaOnly = false,
+    String? confirmTitle,
+    String? successMessage,
   }) async {
     final settings = ref.read(appSettingsControllerProvider);
     DateTime? eta = job.etaAt;
@@ -387,7 +462,9 @@ class _JobTrackingPanel extends ConsumerWidget {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text(
-            settings.t(etaOnly ? 'Update ETA' : _statusLabel(status)),
+            settings.t(
+              etaOnly ? 'Update ETA' : confirmTitle ?? _statusLabel(status),
+            ),
           ),
           content: SingleChildScrollView(
             child: Column(
@@ -447,7 +524,11 @@ class _JobTrackingPanel extends ConsumerWidget {
       ref.invalidate(jobsStreamProvider);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(settings.t('Job progress updated.'))),
+        SnackBar(
+          content: Text(
+            settings.t(successMessage ?? 'Job progress updated.'),
+          ),
+        ),
       );
     } catch (error) {
       if (!context.mounted) return;
@@ -489,8 +570,12 @@ String _dateTimeLabel(BuildContext context, DateTime value) {
 
 String _statusLabel(String status) {
   switch (status) {
+    case 'start_pending':
+      return 'Start pending';
     case 'in_progress':
       return 'In progress';
+    case 'completion_pending':
+      return 'Completion pending';
     case 'completed':
       return 'Completed';
     case 'cancelled':
@@ -504,8 +589,12 @@ String _statusLabel(String status) {
 
 IconData _statusIcon(String status) {
   switch (status) {
+    case 'start_pending':
+      return Icons.pending_actions_outlined;
     case 'in_progress':
       return Icons.handyman_outlined;
+    case 'completion_pending':
+      return Icons.fact_check_outlined;
     case 'completed':
       return Icons.task_alt;
     case 'cancelled':
@@ -514,6 +603,115 @@ IconData _statusIcon(String status) {
       return Icons.handshake_outlined;
     default:
       return Icons.radio_button_checked;
+  }
+}
+
+bool _isJobLocked(JobFeedItem job, JobBid? acceptedBid) {
+  return acceptedBid != null ||
+      job.acceptedAmount != null ||
+      job.workStatus != 'open' ||
+      job.status == 'active' ||
+      job.status == 'completed';
+}
+
+class _LockedJobCard extends StatelessWidget {
+  const _LockedJobCard({required this.settings});
+
+  final AppSettings settings;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.lock_outline),
+        title: Text(settings.t('Request locked')),
+        subtitle: Text(
+          settings.t('Accepted work can no longer be edited or deleted.'),
+        ),
+      ),
+    );
+  }
+}
+
+class _AcceptedBidPanel extends ConsumerWidget {
+  const _AcceptedBidPanel({
+    required this.job,
+    required this.bid,
+    required this.currencyCode,
+  });
+
+  final JobFeedItem job;
+  final JobBid bid;
+  final String currencyCode;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.handshake_outlined),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    settings.t('Accepted bid'),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                Chip(label: Text(settings.t('Locked'))),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '${settings.t('Accepted amount')}: ${formatMoney(bid.amount, currencyCode)}',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            if (bid.message.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(bid.message),
+            ],
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _openAcceptedChat(context, ref),
+                icon: const Icon(Icons.chat_bubble_outline),
+                label: Text(settings.t('Chat')),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openAcceptedChat(BuildContext context, WidgetRef ref) async {
+    try {
+      final thread = await ref.read(chatServiceProvider).createOrOpenThread(
+            userId: job.createdBy,
+            artisanId: bid.artisanId,
+          );
+      if (context.mounted) {
+        context.push('${RouteNames.chatThread}/${thread.id}');
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${ref.read(appSettingsControllerProvider).t('Could not open chat')}: $error',
+            ),
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -894,13 +1092,15 @@ class _BidTile extends ConsumerWidget {
               children: [
                 CircleAvatar(
                   radius: 22,
-                  backgroundImage:
+                  foregroundImage:
                       (bid.artisanAvatarUrl?.trim().isNotEmpty ?? false)
                           ? NetworkImage(bid.artisanAvatarUrl!)
                           : null,
-                  child: (bid.artisanAvatarUrl?.trim().isNotEmpty ?? false)
-                      ? null
-                      : const Icon(Icons.person_outline),
+                  onForegroundImageError:
+                      (bid.artisanAvatarUrl?.trim().isNotEmpty ?? false)
+                          ? (_, __) {}
+                          : null,
+                  child: const Icon(Icons.person_outline),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -935,6 +1135,16 @@ class _BidTile extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 10),
+            if (bid.status == 'accepted') ...[
+              Row(
+                children: [
+                  const Icon(Icons.check_circle_outline, size: 18),
+                  const SizedBox(width: 6),
+                  Text(settings.t('Accepted bid amount')),
+                ],
+              ),
+              const SizedBox(height: 4),
+            ],
             Text(
               formatMoney(bid.amount, currencyCode),
               style: Theme.of(context).textTheme.titleMedium?.copyWith(

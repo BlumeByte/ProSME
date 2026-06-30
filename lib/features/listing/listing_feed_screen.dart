@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/utils/currency.dart';
 import '../../core/utils/location_data.dart';
 import '../../core/utils/service_categories.dart';
+import '../../core/utils/town_neighborhood_data.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/location_lookup_service.dart';
@@ -146,12 +147,15 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
 
   Future<void> _loadCountries() async {
     setState(() => _loadingCountries = true);
-    final countries = await loadWorldCountries();
-    if (!mounted) return;
-    setState(() {
-      _countries = countries;
-      _loadingCountries = false;
-    });
+    try {
+      final countries = await loadWorldCountries();
+      if (!mounted) return;
+      setState(() => _countries = countries);
+    } catch (_) {
+      // Keep the curated in-app country fallback if the package asset fails.
+    } finally {
+      if (mounted) setState(() => _loadingCountries = false);
+    }
   }
 
   Future<void> _selectCountry(CountryOption? country) async {
@@ -163,15 +167,20 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     });
     if (country == null) return;
     setState(() => _loadingRegions = true);
-    final hydrated = await loadCountryRegions(country);
-    if (!mounted) return;
-    setState(() {
-      _selectedCountry = hydrated;
-      _countries = _countries
-          .map((item) => item.code == hydrated.code ? hydrated : item)
-          .toList(growable: false);
-      _loadingRegions = false;
-    });
+    try {
+      final hydrated = await loadCountryRegions(country);
+      if (!mounted) return;
+      setState(() {
+        _selectedCountry = hydrated;
+        _countries = _countries
+            .map((item) => item.code == hydrated.code ? hydrated : item)
+            .toList(growable: false);
+      });
+    } catch (_) {
+      // Region/city/town typing remains available when hydration fails.
+    } finally {
+      if (mounted) setState(() => _loadingRegions = false);
+    }
   }
 
   Future<void> _saveRecentSearch() async {
@@ -190,6 +199,12 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('recent_searches', next);
     if (mounted) setState(() => _recentSearches = next);
+  }
+
+  Future<void> _clearRecentSearches() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('recent_searches');
+    if (mounted) setState(() => _recentSearches = const []);
   }
 
   Future<void> _usePhoneLocation() async {
@@ -352,13 +367,21 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     final settings = ref.watch(appSettingsControllerProvider);
     final currencyCode = settings.currencyCode;
     final scheme = Theme.of(context).colorScheme;
-    if (!_appliedUserCountry && user != null) {
-      _appliedUserCountry = true;
-      final country = _countries.firstWhere(
-        (item) => item.name == user.country,
-        orElse: () => countryByName(user.country),
-      );
-      if (country.name == user.country) unawaited(_selectCountry(country));
+    if (!_appliedUserCountry && user != null && !_loadingCountries) {
+      final userCountry = user.country.trim().toLowerCase();
+      if (userCountry.isNotEmpty) {
+        _appliedUserCountry = true;
+        final country = _countries.firstWhere(
+          (item) =>
+              item.name.toLowerCase() == userCountry ||
+              item.code.toLowerCase() == userCountry,
+          orElse: () => countryByName(user.country),
+        );
+        if (country.name.toLowerCase() == userCountry ||
+            country.code.toLowerCase() == userCountry) {
+          unawaited(_selectCountry(country));
+        }
+      }
     }
 
     return StreamBuilder<List<Listing>>(
@@ -524,6 +547,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   _RecentSearches(
                     searches: _recentSearches,
                     settings: settings,
+                    onClear: _clearRecentSearches,
                     onTap: (value) {
                       _serviceController.text = value;
                       _applySearch();
@@ -603,6 +627,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               _RecentSearches(
                 searches: _recentSearches,
                 settings: settings,
+                onClear: _clearRecentSearches,
                 onTap: (value) {
                   _serviceController.text = value;
                   _applySearch();
@@ -904,6 +929,12 @@ class _SearchControls extends StatelessWidget {
                           ],
                           labelFor: (region) =>
                               region?.name ?? settings.t('Any'),
+                          customOptionForQuery: selectedCountry == null
+                              ? null
+                              : (value) => RegionOption(
+                                    name: value,
+                                    cities: const [],
+                                  ),
                           settings: settings,
                         );
                         if (selected != null) onRegionChanged(selected.value);
@@ -925,6 +956,16 @@ class _SearchControls extends StatelessWidget {
                     title: settings.t('City'),
                     options: <CityOption?>[null, ...cities],
                     labelFor: (city) => city?.name ?? settings.t('Any'),
+                    customOptionForQuery: selectedCountry == null
+                        ? null
+                        : (value) => CityOption(
+                              name: value,
+                              towns: townsForLocation(
+                                countryCode: selectedCountry!.code,
+                                stateName: selectedRegion?.name ?? '',
+                                cityName: value,
+                              ),
+                            ),
                     settings: settings,
                   );
                   if (selected != null) onCityChanged(selected.value);
@@ -942,6 +983,8 @@ class _SearchControls extends StatelessWidget {
                     title: settings.t('Town'),
                     options: <String?>[null, ...towns],
                     labelFor: (town) => town ?? settings.t('Any'),
+                    customOptionForQuery:
+                        selectedCountry == null ? null : (value) => value,
                     settings: settings,
                   );
                   if (selected != null) onTownChanged(selected.value);
@@ -971,11 +1014,13 @@ class _RecentSearches extends StatelessWidget {
   const _RecentSearches({
     required this.searches,
     required this.onTap,
+    required this.onClear,
     required this.settings,
   });
 
   final List<String> searches;
   final ValueChanged<String> onTap;
+  final VoidCallback onClear;
   final AppSettings settings;
 
   @override
@@ -983,8 +1028,21 @@ class _RecentSearches extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(settings.t('Recent searches'),
-            style: Theme.of(context).textTheme.titleMedium),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                settings.t('Recent searches'),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: onClear,
+              icon: const Icon(Icons.clear_all, size: 18),
+              label: Text(settings.t('Clear all')),
+            ),
+          ],
+        ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -1052,6 +1110,7 @@ Future<_PickerResult<T>?> _pickOption<T>(
   required List<T> options,
   required String Function(T option) labelFor,
   required AppSettings settings,
+  T Function(String query)? customOptionForQuery,
 }) {
   String query = '';
   return showModalBottomSheet<_PickerResult<T>>(
@@ -1074,6 +1133,15 @@ Future<_PickerResult<T>?> _pickOption<T>(
                             .toLowerCase()
                             .contains(query.toLowerCase()))
                         .toList(growable: false);
+                final normalizedQuery = query.toLowerCase();
+                final hasExactMatch = normalizedQuery.isEmpty ||
+                    filtered.any(
+                      (option) =>
+                          labelFor(option).toLowerCase() == normalizedQuery,
+                    );
+                final hasCustomOption =
+                    customOptionForQuery != null && !hasExactMatch;
+                final customOffset = hasCustomOption ? 1 : 0;
                 return Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -1109,9 +1177,19 @@ Future<_PickerResult<T>?> _pickOption<T>(
                     Flexible(
                       child: ListView.builder(
                         shrinkWrap: true,
-                        itemCount: filtered.length,
+                        itemCount: filtered.length + customOffset,
                         itemBuilder: (context, index) {
-                          final option = filtered[index];
+                          if (hasCustomOption && index == 0) {
+                            final option = customOptionForQuery(query);
+                            return ListTile(
+                              leading:
+                                  const Icon(Icons.add_location_alt_outlined),
+                              title: Text('${settings.t('Use')} "$query"'),
+                              onTap: () => Navigator.of(context)
+                                  .pop(_PickerResult(option)),
+                            );
+                          }
+                          final option = filtered[index - customOffset];
                           return ListTile(
                             title: Text(labelFor(option)),
                             onTap: () => Navigator.of(context)
@@ -1173,12 +1251,16 @@ class _OpenJobsPreview extends ConsumerWidget {
         }
         return Column(
           children: filtered.take(8).map((job) {
+            final shownAmount = job.acceptedAmount ?? job.budget;
+            final amountLabel = job.acceptedAmount == null
+                ? settings.t('Budget')
+                : settings.t('Accepted amount');
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
               child: ListTile(
                 title: Text(job.title),
                 subtitle: Text(
-                  '${job.location} - ${formatMoney(job.budget, currencyCode)}',
+                  '${job.location} - $amountLabel: ${formatMoney(shownAmount, currencyCode)}',
                 ),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: userId == null
@@ -1229,17 +1311,16 @@ class _ProfessionalCard extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundImage: (pro.avatarUrl?.isNotEmpty ?? false)
+                    foregroundImage: (pro.avatarUrl?.isNotEmpty ?? false)
                         ? NetworkImage(pro.avatarUrl!)
                         : null,
-                    child: (pro.avatarUrl?.isNotEmpty ?? false)
-                        ? null
-                        : Text(
-                            (pro.name.trim().isNotEmpty
-                                    ? pro.name.trim()[0]
-                                    : 'P')
-                                .toUpperCase(),
-                          ),
+                    onForegroundImageError: (pro.avatarUrl?.isNotEmpty ?? false)
+                        ? (_, __) {}
+                        : null,
+                    child: Text(
+                      (pro.name.trim().isNotEmpty ? pro.name.trim()[0] : 'P')
+                          .toUpperCase(),
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(

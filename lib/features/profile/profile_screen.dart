@@ -323,6 +323,7 @@ Future<void> _showVerificationBillingSheet(
                   interval: interval,
                   channel: channel,
                   currencyCode: settings.currencyCode,
+                  country: user.country,
                 );
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -444,6 +445,7 @@ Future<void> _showVerificationBillingSheet(
                       role: role,
                       interval: 'monthly',
                       currencyCode: settings.currencyCode,
+                      country: user.country,
                     )),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: busy ? null : () => startPayment('monthly'),
@@ -456,6 +458,7 @@ Future<void> _showVerificationBillingSheet(
                       role: role,
                       interval: 'yearly',
                       currencyCode: settings.currencyCode,
+                      country: user.country,
                     )),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: busy ? null : () => startPayment('yearly'),
@@ -1433,14 +1436,30 @@ Future<Set<String>?> _showNotificationTypeSheet(
   required String title,
   required Set<String> blockedTypes,
 }) async {
-  var selected = blockedTypes.map(normalizeNotificationType).toSet();
+  Set<String> allowedTypesFromBlocked(Set<String> blocked) {
+    final normalized = blocked.map(normalizeNotificationType).toSet();
+    if (normalized.contains('all')) return <String>{};
+    return kNotificationTypeOptions
+        .where((type) => !normalized.contains(type))
+        .toSet();
+  }
+
+  Set<String> blockedTypesFromAllowed(Set<String> allowed) {
+    if (allowed.length == kNotificationTypeOptions.length) return <String>{};
+    if (allowed.isEmpty) return {'all'};
+    return kNotificationTypeOptions
+        .where((type) => !allowed.contains(type))
+        .toSet();
+  }
+
+  var selected = allowedTypesFromBlocked(blockedTypes);
   return showModalBottomSheet<Set<String>>(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
     builder: (context) => StatefulBuilder(
       builder: (context, setSheetState) {
-        final allBlocked = selected.contains('all');
+        final allAllowed = selected.length == kNotificationTypeOptions.length;
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
@@ -1452,11 +1471,13 @@ Future<Set<String>?> _showNotificationTypeSheet(
                 const SizedBox(height: 12),
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
-                  value: allBlocked,
-                  title: Text(settings.t('Block all')),
+                  value: allAllowed,
+                  title: Text(settings.t('Allow all')),
                   onChanged: (value) {
                     setSheetState(() {
-                      selected = value == true ? {'all'} : <String>{};
+                      selected = value == true
+                          ? kNotificationTypeOptions.toSet()
+                          : <String>{};
                     });
                   },
                 ),
@@ -1464,12 +1485,11 @@ Future<Set<String>?> _showNotificationTypeSheet(
                 ...kNotificationTypeOptions.map(
                   (type) => CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
-                    value: allBlocked || selected.contains(type),
-                    enabled: !allBlocked,
+                    value: selected.contains(type),
                     title: Text(_notificationTypeLabel(settings, type)),
                     onChanged: (value) {
                       setSheetState(() {
-                        final next = {...selected}..remove('all');
+                        final next = {...selected};
                         if (value == true) {
                           next.add(type);
                         } else {
@@ -1486,11 +1506,12 @@ Future<Set<String>?> _showNotificationTypeSheet(
                     TextButton(
                       onPressed: () =>
                           setSheetState(() => selected = <String>{}),
-                      child: Text(settings.t('Allow all')),
+                      child: Text(settings.t('Block all')),
                     ),
                     const Spacer(),
                     FilledButton(
-                      onPressed: () => Navigator.of(context).pop(selected),
+                      onPressed: () => Navigator.of(context)
+                          .pop(blockedTypesFromAllowed(selected)),
                       child: Text(settings.t('Save')),
                     ),
                   ],

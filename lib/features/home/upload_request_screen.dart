@@ -244,21 +244,34 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
         Text(settings.t('My uploaded requests'),
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
-        if (jobsAsync.hasError)
+        if (jobsAsync.isLoading && jobs.isEmpty)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (jobsAsync.hasError)
           Text(settings.t(
               'Could not load uploads. Please check your connection and try again.'))
         else if (myUploads.isEmpty)
           Text(settings.t('No uploads yet.'))
         else
           ...myUploads.map(
-            (job) => Card(
-              child: ListTile(
-                title: Text(job.title),
-                subtitle: Text(
-                  '${job.location} - ${formatMoney(job.budget, currencyCode)}',
+            (job) {
+              final shownAmount = job.acceptedAmount ?? job.budget;
+              final amountLabel = job.acceptedAmount == null
+                  ? settings.t('Budget')
+                  : settings.t('Accepted amount');
+              return Card(
+                child: ListTile(
+                  title: Text(job.title),
+                  subtitle: Text(
+                    '${job.location} - $amountLabel: ${formatMoney(shownAmount, currencyCode)}',
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
       ],
     );

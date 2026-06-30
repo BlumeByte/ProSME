@@ -35,6 +35,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
   String _scope = 'open';
   bool _newestFirst = true;
   Set<String> _hiddenJobIds = const {};
+  String? _hiddenJobsUserId;
 
   @override
   void initState() {
@@ -62,12 +63,15 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
 
   Future<void> _loadCountries() async {
     setState(() => _loadingCountries = true);
-    final countries = await loadWorldCountries();
-    if (!mounted) return;
-    setState(() {
-      _countries = countries;
-      _loadingCountries = false;
-    });
+    try {
+      final countries = await loadWorldCountries();
+      if (!mounted) return;
+      setState(() => _countries = countries);
+    } catch (_) {
+      // Keep the curated in-app country fallback if the package asset fails.
+    } finally {
+      if (mounted) setState(() => _loadingCountries = false);
+    }
   }
 
   Future<void> _selectCountry(CountryOption? country) async {
@@ -77,15 +81,20 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
       _loadingRegions = country != null;
     });
     if (country == null) return;
-    final hydrated = await loadCountryRegions(country);
-    if (!mounted) return;
-    setState(() {
-      _selectedCountry = hydrated;
-      _countries = _countries
-          .map((item) => item.code == hydrated.code ? hydrated : item)
-          .toList(growable: false);
-      _loadingRegions = false;
-    });
+    try {
+      final hydrated = await loadCountryRegions(country);
+      if (!mounted) return;
+      setState(() {
+        _selectedCountry = hydrated;
+        _countries = _countries
+            .map((item) => item.code == hydrated.code ? hydrated : item)
+            .toList(growable: false);
+      });
+    } catch (_) {
+      // Region/city typing remains available when hydration fails.
+    } finally {
+      if (mounted) setState(() => _loadingRegions = false);
+    }
   }
 
   Future<void> _hideJob(String jobId, {bool showNotice = true}) async {
@@ -168,7 +177,13 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     final settings = ref.watch(appSettingsControllerProvider);
     final currencyCode = settings.currencyCode;
     if (user == null) {
+      _hiddenJobsUserId = null;
       return Center(child: Text(settings.t('Please sign in to view jobs.')));
+    }
+    if (_hiddenJobsUserId != user.id) {
+      _hiddenJobsUserId = user.id;
+      _hiddenJobIds = const {};
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadHiddenJobs());
     }
 
     final canCreateJob =
@@ -226,6 +241,51 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
               ),
             );
           }
+          if (visibleJobs.isEmpty) {
+            return RefreshIndicator(
+              onRefresh: () async => ref.invalidate(jobsStreamProvider),
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  if (isArtisan) ...[
+                    _ArtisanJobFilters(
+                      searchController: _searchController,
+                      query: _query,
+                      category: _category,
+                      selectedCountry: _selectedCountry,
+                      selectedRegion: _selectedRegion,
+                      countries: _countries,
+                      loadingCountries: _loadingCountries,
+                      loadingRegions: _loadingRegions,
+                      scope: _scope,
+                      newestFirst: _newestFirst,
+                      onSearchChanged: (value) =>
+                          setState(() => _query = value.trim().toLowerCase()),
+                      onCategoryChanged: (value) =>
+                          setState(() => _category = value),
+                      onCountryChanged: _selectCountry,
+                      onRegionChanged: (value) =>
+                          setState(() => _selectedRegion = value),
+                      onScopeChanged: (value) => setState(() => _scope = value),
+                      onSortChanged: () =>
+                          setState(() => _newestFirst = !_newestFirst),
+                      settings: settings,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 48),
+                      child: Text(
+                        settings.t('No matching jobs found.'),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(jobsStreamProvider),
             child: ListView.separated(
@@ -260,6 +320,10 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                 }
                 final job = visibleJobs[index - (isArtisan ? 1 : 0)];
                 final hasBid = bidJobIds.contains(job.id);
+                final shownAmount = job.acceptedAmount ?? job.budget;
+                final amountLabel = job.acceptedAmount == null
+                    ? settings.t('Budget')
+                    : settings.t('Accepted amount');
                 final canTrack = job.workStatus != 'open' &&
                     (job.createdBy == user.id ||
                         acceptedJobIds.contains(job.id));
@@ -267,7 +331,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                   child: ListTile(
                     title: Text(job.title),
                     subtitle: Text(
-                      '${job.location} - ${formatMoney(job.budget, currencyCode)}\n${settings.t(_jobStatusText(job.workStatus))} - ${_formatDateTime(job.createdAt)}',
+                      '${job.location} - $amountLabel: ${formatMoney(shownAmount, currencyCode)}\n${settings.t(_jobStatusText(job.workStatus))} - ${_formatDateTime(job.createdAt)}',
                     ),
                     isThreeLine: true,
                     trailing: FilledButton(
@@ -367,8 +431,12 @@ String _jobStatusText(String status) {
   switch (status) {
     case 'accepted':
       return 'Accepted';
+    case 'start_pending':
+      return 'Start pending';
     case 'in_progress':
       return 'In progress';
+    case 'completion_pending':
+      return 'Completion pending';
     case 'completed':
       return 'Completed';
     case 'cancelled':

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/widgets/app_scaffold.dart';
+import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 import '../chat/chat_list_screen.dart';
@@ -43,12 +45,13 @@ class _ArtisanHomeScreenState extends ConsumerState<ArtisanHomeScreen> {
     final user = ref.watch(authStateProvider).valueOrNull;
     final chatService = ref.watch(chatServiceProvider);
     final settings = ref.watch(appSettingsControllerProvider);
+    final currentIndex = user == null && _currentIndex > 0 ? 0 : _currentIndex;
 
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        if (_currentIndex != 0) {
+        if (currentIndex != 0) {
           setState(() => _currentIndex = 0);
           return;
         }
@@ -63,15 +66,21 @@ class _ArtisanHomeScreenState extends ConsumerState<ArtisanHomeScreen> {
             tooltip: settings.t('Search requests'),
           ),
         ],
-        body: IndexedStack(index: _currentIndex, children: _pages),
+        body: IndexedStack(index: currentIndex, children: _pages),
         bottomNavigationBar: StreamBuilder(
           stream: user == null ? null : chatService.watchThreads(user.id),
           builder: (context, snapshot) {
             final unread = (snapshot.data ?? const [])
                 .fold<int>(0, (sum, thread) => sum + thread.unreadCount);
             return BottomNavigationBar(
-              currentIndex: _currentIndex,
-              onTap: (index) => setState(() => _currentIndex = index),
+              currentIndex: currentIndex,
+              onTap: (index) {
+                if (user == null && index > 0) {
+                  context.go(RouteNames.auth);
+                  return;
+                }
+                setState(() => _currentIndex = index);
+              },
               type: BottomNavigationBarType.fixed,
               items: [
                 BottomNavigationBarItem(

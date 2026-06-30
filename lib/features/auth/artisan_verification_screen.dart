@@ -11,6 +11,7 @@ import '../../core/utils/currency.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
+import '../../services/payment_service.dart';
 import '../../services/service_providers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -285,6 +286,7 @@ class _ArtisanVerificationScreenState
       await ref.read(paymentServiceProvider).startVerificationCheckout(
             interval: 'monthly',
             currencyCode: settings.currencyCode,
+            country: user.country,
           );
       ref.invalidate(verificationSubscriptionProvider(user.id));
       _showMessage('Complete Paystack payment, then refresh payment status.');
@@ -425,7 +427,7 @@ class _ArtisanVerificationScreenState
                 title: settings.t('Payment required'),
                 message: settings.t(
                   user?.role == UserRole.artisan
-                      ? 'Your documents are uploaded. Pay the \$5 artisan verification fee so Support can review them.'
+                      ? 'Your documents are uploaded. Pay the \$3 artisan verification fee so Support can review them.'
                       : 'Your documents are uploaded. Pay the \$2 account verification fee so Support can review them.',
                 ),
                 actions: [
@@ -492,6 +494,7 @@ class _ArtisanVerificationScreenState
               _FeeNotice(
                 role: user?.role ?? UserRole.customer,
                 currencyCode: settings.currencyCode,
+                country: user?.country ?? '',
                 onContinue: () => setState(() => _hasAcceptedFee = true),
               ),
             ] else ...[
@@ -607,11 +610,13 @@ class _FeeNotice extends ConsumerWidget {
   const _FeeNotice({
     required this.role,
     required this.currencyCode,
+    required this.country,
     required this.onContinue,
   });
 
   final UserRole role;
   final String currencyCode;
+  final String country;
   final VoidCallback onContinue;
 
   @override
@@ -620,8 +625,14 @@ class _FeeNotice extends ConsumerWidget {
     final monthlyUsd = role == UserRole.artisan
         ? kVerificationArtisanMonthlyUsd
         : kVerificationCustomerMonthlyUsd;
-    final amountLabel =
-        formatMoney(monthlyUsd * kUsdToGhsEstimate, currencyCode);
+    final taxRate = verificationTaxRateForCountry(country);
+    final amountLabel = formatMoney(
+      monthlyUsd * (1 + taxRate) * kUsdToGhsEstimate,
+      currencyCode,
+    );
+    final taxLabel = taxRate > 0
+        ? ' ${settings.t('including tax')} ${(taxRate * 100).toStringAsFixed(1)}%'
+        : '';
     final roleLabel =
         role == UserRole.artisan ? settings.t('artisan') : settings.t('user');
     return Card(
@@ -643,7 +654,7 @@ class _FeeNotice extends ConsumerWidget {
             const SizedBox(height: 8),
             Text(
               settings.t(
-                'Before uploading documents, please note that verification costs $amountLabel for this $roleLabel account. After upload you will continue to Paystack, and Support will review your documents only after payment succeeds.',
+                'Before uploading documents, please note that verification costs $amountLabel$taxLabel for this $roleLabel account. After upload you will continue to Paystack, and Support will review your documents only after payment succeeds.',
               ),
               textAlign: TextAlign.center,
             ),

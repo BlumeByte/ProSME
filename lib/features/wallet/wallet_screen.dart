@@ -344,6 +344,7 @@ class _WalletTransactionCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
+                const SizedBox(width: 8),
                 Text(
                   formatMoney(item.amount, currencyCode),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -353,6 +354,7 @@ class _WalletTransactionCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
+            Text(settings.t('Accepted bid amount')),
             Text(item.invoiceNumber),
             if (item.jobLocation.isNotEmpty) Text(item.jobLocation),
             if (parties.replaceAll(' - ', '').trim().isNotEmpty) Text(parties),

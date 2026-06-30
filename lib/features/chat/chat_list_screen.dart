@@ -139,12 +139,14 @@ class ChatListScreen extends ConsumerWidget {
                       tooltip: settings.t('Delete chat'),
                     ),
                     CircleAvatar(
-                      backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+                      foregroundImage: (photoUrl != null && photoUrl.isNotEmpty)
                           ? NetworkImage(photoUrl)
                           : null,
-                      child: (photoUrl == null || photoUrl.isEmpty)
-                          ? const Icon(Icons.person)
-                          : null,
+                      onForegroundImageError:
+                          (photoUrl != null && photoUrl.isNotEmpty)
+                              ? (_, __) {}
+                              : null,
+                      child: const Icon(Icons.person),
                     ),
                   ],
                 ),

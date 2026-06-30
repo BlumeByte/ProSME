@@ -59,7 +59,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     _bannerTimer = Timer.periodic(const Duration(seconds: 6), (_) {
       if (!mounted || !_shouldShowBanner) return;
       final banners = _buildBanners(ref.read(appSettingsControllerProvider));
-      if (banners.length < 2) return;
+      if (banners.length < 2 || !_bannerController.hasClients) return;
       final next = (_bannerIndex + 1) % banners.length;
       _bannerController.animateToPage(
         next,

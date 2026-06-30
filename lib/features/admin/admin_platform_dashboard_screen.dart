@@ -34,47 +34,67 @@ class _AdminPlatformDashboardScreenState
       const _TenantsPanel(),
       const _ModulesPanel(),
     ];
-    return Scaffold(
-      appBar: AppBar(title: Text(settings.t('Support Dashboard'))),
-      body: Row(
-        children: [
-          NavigationRail(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: (index) {
-              setState(() => _selectedIndex = index);
-            },
-            labelType: NavigationRailLabelType.all,
-            destinations: [
-              NavigationRailDestination(
-                icon: const Icon(Icons.monitor_heart_outlined),
-                label: Text(settings.t('Overview')),
-              ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.report_gmailerrorred_outlined),
-                label: Text(settings.t('Reports')),
-              ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.people_alt_outlined),
-                label: Text(settings.t('Accounts')),
-              ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.account_balance_wallet_outlined),
-                label: Text(settings.t('Wallet')),
-              ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.business_outlined),
-                label: Text(settings.t('Tenants')),
-              ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.extension_outlined),
-                label: Text(settings.t('Modules')),
-              ),
-            ],
-          ),
-          const VerticalDivider(width: 1),
-          Expanded(child: sections[_selectedIndex]),
-        ],
+    final destinations = [
+      NavigationDestination(
+        icon: const Icon(Icons.monitor_heart_outlined),
+        label: settings.t('Overview'),
       ),
+      NavigationDestination(
+        icon: const Icon(Icons.report_gmailerrorred_outlined),
+        label: settings.t('Reports'),
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.people_alt_outlined),
+        label: settings.t('Accounts'),
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.account_balance_wallet_outlined),
+        label: settings.t('Wallet'),
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.business_outlined),
+        label: settings.t('Tenants'),
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.extension_outlined),
+        label: settings.t('Modules'),
+      ),
+    ];
+    final useBottomNav = MediaQuery.sizeOf(context).width < 720;
+    return Scaffold(
+      appBar: AppBar(title: Text(settings.t('Admin Dashboard'))),
+      body: useBottomNav
+          ? sections[_selectedIndex]
+          : Row(
+              children: [
+                NavigationRail(
+                  selectedIndex: _selectedIndex,
+                  onDestinationSelected: (index) {
+                    setState(() => _selectedIndex = index);
+                  },
+                  labelType: NavigationRailLabelType.all,
+                  destinations: destinations
+                      .map(
+                        (destination) => NavigationRailDestination(
+                          icon: destination.icon,
+                          label: Text(destination.label),
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+                const VerticalDivider(width: 1),
+                Expanded(child: sections[_selectedIndex]),
+              ],
+            ),
+      bottomNavigationBar: useBottomNav
+          ? NavigationBar(
+              selectedIndex: _selectedIndex,
+              onDestinationSelected: (index) {
+                setState(() => _selectedIndex = index);
+              },
+              destinations: destinations,
+            )
+          : null,
     );
   }
 }
@@ -140,6 +160,8 @@ class _AdminOverview extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 16),
+            _JobProgressHealth(counts: counts),
+            const SizedBox(height: 16),
             const _WalletFlowPreview(),
             const SizedBox(height: 16),
             const _RecentReportsPreview(),
@@ -199,6 +221,136 @@ class _WalletFlowPreview extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _JobProgressHealth extends ConsumerWidget {
+  const _JobProgressHealth({required this.counts});
+
+  final PlatformModuleCounts counts;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
+    final activeJobs = counts.acceptedJobs +
+        counts.startPendingJobs +
+        counts.inProgressJobs +
+        counts.completionPendingJobs;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.route_outlined),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    settings.t('Job progress health'),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                Chip(
+                  label: Text(
+                    '${settings.t('Active')}: $activeJobs',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _ProgressMetric(
+                  label: settings.t('Open'),
+                  value: counts.openJobs,
+                  icon: Icons.radio_button_checked,
+                ),
+                _ProgressMetric(
+                  label: settings.t('Accepted'),
+                  value: counts.acceptedJobs,
+                  icon: Icons.handshake_outlined,
+                ),
+                _ProgressMetric(
+                  label: settings.t('Start pending'),
+                  value: counts.startPendingJobs,
+                  icon: Icons.pending_actions_outlined,
+                ),
+                _ProgressMetric(
+                  label: settings.t('In progress'),
+                  value: counts.inProgressJobs,
+                  icon: Icons.handyman_outlined,
+                ),
+                _ProgressMetric(
+                  label: settings.t('Completion pending'),
+                  value: counts.completionPendingJobs,
+                  icon: Icons.fact_check_outlined,
+                ),
+                _ProgressMetric(
+                  label: settings.t('Completed'),
+                  value: counts.completedJobs,
+                  icon: Icons.task_alt,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProgressMetric extends StatelessWidget {
+  const _ProgressMetric({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final int value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 170,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(icon, color: scheme.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      value.toString(),
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

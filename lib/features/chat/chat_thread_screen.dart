@@ -565,11 +565,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             children: [
               CircleAvatar(
                 radius: 40,
-                backgroundImage:
+                foregroundImage:
                     avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-                child: avatarUrl.isEmpty
-                    ? const Icon(Icons.person, size: 40)
-                    : null,
+                onForegroundImageError:
+                    avatarUrl.isNotEmpty ? (_, __) {} : null,
+                child: const Icon(Icons.person, size: 40),
               ),
               const SizedBox(height: 16),
               Row(

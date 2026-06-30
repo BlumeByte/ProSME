@@ -74,15 +74,17 @@ class ArtisanProfileScreen extends ConsumerWidget {
                     children: [
                       CircleAvatar(
                         radius: 42,
-                        backgroundImage: avatarUrl?.trim().isNotEmpty == true
+                        foregroundImage: avatarUrl?.trim().isNotEmpty == true
                             ? NetworkImage(avatarUrl!)
                             : null,
-                        child: avatarUrl?.trim().isNotEmpty == true
-                            ? null
-                            : Text(
-                                name.isEmpty ? 'P' : name[0].toUpperCase(),
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
+                        onForegroundImageError:
+                            avatarUrl?.trim().isNotEmpty == true
+                                ? (_, __) {}
+                                : null,
+                        child: Text(
+                          name.isEmpty ? 'P' : name[0].toUpperCase(),
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Row(

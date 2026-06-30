@@ -48,7 +48,7 @@ class _AiSupportScreenState extends ConsumerState<AiSupportScreen> {
       category: 'Tracking',
       question: 'How do I update job progress or ETA?',
       answer:
-          'Open the accepted job and use Job tracking. The customer or accepted artisan can set an ETA, start work, add progress notes, and mark the job completed.',
+          'Open the accepted job and use Job tracking. The accepted artisan requests work start and completion, then the customer confirms each step. After completion is confirmed, the customer can rate or comment on the work.',
       keywords: 'timeline eta progress started completed status schedule',
     ),
     _FaqItem(

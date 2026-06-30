@@ -42,7 +42,7 @@ const numberOrZero = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const verificationAmountUsdFor = (role: string) => (role === 'artisan' ? 5 : 2);
+const verificationAmountUsdFor = (role: string) => (role === 'artisan' ? 3 : 2);
 
 const verificationPeriodEnd = (interval: string) => {
   const end = new Date();

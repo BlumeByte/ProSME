@@ -51,6 +51,7 @@ class PaymentService {
     required String interval,
     String channel = '',
     String currencyCode = 'GHS',
+    String country = '',
   }) async {
     final client = _supabase;
     if (client == null) {
@@ -62,6 +63,7 @@ class PaymentService {
         'action': 'initialize',
         'interval': interval,
         'displayCurrency': currencyCode,
+        if (country.trim().isNotEmpty) 'displayCountry': country.trim(),
         if (channel.trim().isNotEmpty) 'channel': channel.trim(),
       },
     );
@@ -119,13 +121,44 @@ class PaymentService {
     required String role,
     required String interval,
     required String currencyCode,
+    String country = '',
   }) {
     final monthlyUsd = role == UserRole.artisan.name
         ? kVerificationArtisanMonthlyUsd
         : kVerificationCustomerMonthlyUsd;
-    final amountUsd = interval == 'yearly' ? monthlyUsd * 12 : monthlyUsd;
+    final baseUsd = interval == 'yearly' ? monthlyUsd * 12 : monthlyUsd;
+    final taxRate = verificationTaxRateForCountry(country);
+    final amountUsd = baseUsd * (1 + taxRate);
     final amountGhs = amountUsd * kUsdToGhsEstimate;
-    return '${formatMoney(amountGhs, currencyCode)} / ${interval == 'yearly' ? 'year' : 'month'}';
+    final period = interval == 'yearly' ? 'year' : 'month';
+    final taxLabel =
+        taxRate > 0 ? ' incl. ${(taxRate * 100).toStringAsFixed(1)}% tax' : '';
+    return '${formatMoney(amountGhs, currencyCode)} / $period$taxLabel';
+  }
+}
+
+double verificationTaxRateForCountry(String country) {
+  final normalized = country.trim().toLowerCase();
+  switch (normalized) {
+    case 'ghana':
+    case 'gh':
+      return 0.20;
+    case 'kenya':
+    case 'ke':
+      return 0.16;
+    case 'nigeria':
+    case 'ng':
+      return 0.075;
+    case 'south africa':
+    case 'za':
+      return 0.15;
+    case 'united kingdom':
+    case 'great britain':
+    case 'gb':
+    case 'uk':
+      return 0.20;
+    default:
+      return 0;
   }
 }
 

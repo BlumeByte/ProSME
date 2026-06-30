@@ -21,6 +21,7 @@ class JobFeedItem {
     this.locationLng,
     this.locationSource = 'typed',
     this.workStatus = 'open',
+    this.acceptedAmount,
     this.etaAt,
     this.startedAt,
     this.completedAt,
@@ -39,6 +40,7 @@ class JobFeedItem {
   final double? locationLng;
   final String locationSource;
   final String workStatus;
+  final double? acceptedAmount;
   final DateTime? etaAt;
   final DateTime? startedAt;
   final DateTime? completedAt;
@@ -533,6 +535,7 @@ class SupabaseJobsRepository implements JobsRepository {
           ((row['accepted_bid_id'] ?? '').toString().isEmpty
               ? 'open'
               : (row['status'] == 'completed' ? 'completed' : 'accepted')),
+      acceptedAmount: (row['accepted_amount'] as num?)?.toDouble(),
       etaAt: DateTime.tryParse((row['eta_at'] ?? '').toString()),
       startedAt: DateTime.tryParse((row['started_at'] ?? '').toString()),
       completedAt: DateTime.tryParse((row['completed_at'] ?? '').toString()),
@@ -675,6 +678,7 @@ class MockJobsRepository implements JobsRepository {
       locationLng: locationLng,
       locationSource: locationSource,
       workStatus: 'open',
+      acceptedAmount: null,
     );
     _jobs.insert(0, job);
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
@@ -722,6 +726,7 @@ class MockJobsRepository implements JobsRepository {
       locationLng: locationLng,
       locationSource: locationSource,
       workStatus: current.workStatus,
+      acceptedAmount: current.acceptedAmount,
       etaAt: current.etaAt,
       startedAt: current.startedAt,
       completedAt: current.completedAt,
@@ -793,7 +798,11 @@ class MockJobsRepository implements JobsRepository {
       final jobIndex = _jobs.indexWhere((job) => job.id == bid.jobId);
       if (jobIndex != -1) {
         final job = _jobs[jobIndex];
-        _jobs[jobIndex] = _copyJobWithProgress(job, status: 'accepted');
+        _jobs[jobIndex] = _copyJobWithProgress(
+          job,
+          status: 'accepted',
+          acceptedAmount: bid.amount,
+        );
       }
       final event = JobProgressEvent(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -880,6 +889,7 @@ JobFeedItem _copyJobWithProgress(
   JobFeedItem job, {
   required String status,
   DateTime? etaAt,
+  double? acceptedAmount,
 }) {
   final now = DateTime.now();
   return JobFeedItem(
@@ -896,6 +906,7 @@ JobFeedItem _copyJobWithProgress(
     locationLng: job.locationLng,
     locationSource: job.locationSource,
     workStatus: status,
+    acceptedAmount: acceptedAmount ?? job.acceptedAmount,
     etaAt: etaAt ?? job.etaAt,
     startedAt: status == 'in_progress' ? job.startedAt ?? now : job.startedAt,
     completedAt:

@@ -119,14 +119,15 @@ class ListingDetailScreen extends ConsumerWidget {
               Card(
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundImage:
+                    foregroundImage:
                         listingData.artisanPhotoUrl?.trim().isNotEmpty == true
                             ? NetworkImage(listingData.artisanPhotoUrl!)
                             : null,
-                    child:
+                    onForegroundImageError:
                         listingData.artisanPhotoUrl?.trim().isNotEmpty == true
-                            ? null
-                            : const Icon(Icons.person_outline),
+                            ? (_, __) {}
+                            : null,
+                    child: const Icon(Icons.person_outline),
                   ),
                   title: Row(
                     children: [

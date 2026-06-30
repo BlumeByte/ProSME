@@ -28,10 +28,31 @@ const validChannels = new Set([
   'ussd',
   'qr',
 ]);
+const supportedPaystackCurrencies = new Set(['GHS', 'NGN', 'USD', 'ZAR', 'KES']);
 
-const amountUsdFor = (role: string, interval: string) => {
-  const monthly = role === 'artisan' ? 5 : 2;
+const baseAmountUsdFor = (role: string, interval: string) => {
+  const monthly = role === 'artisan' ? 3 : 2;
   return interval === 'yearly' ? monthly * 12 : monthly;
+};
+
+const taxRateForCountry = (country: string) => {
+  const normalized = lower(country);
+  const override =
+    Number(Deno.env.get(`VERIFICATION_TAX_RATE_${normalized.toUpperCase()}`)) ||
+    Number(Deno.env.get('VERIFICATION_TAX_RATE') || '0');
+  if (override > 0) return override;
+  if (['ghana', 'gh'].includes(normalized)) return 0.2;
+  if (['kenya', 'ke'].includes(normalized)) return 0.16;
+  if (['nigeria', 'ng'].includes(normalized)) return 0.075;
+  if (['south africa', 'za'].includes(normalized)) return 0.15;
+  if (['united kingdom', 'great britain', 'gb', 'uk'].includes(normalized))
+    return 0.2;
+  return 0;
+};
+
+const amountUsdFor = (role: string, interval: string, country = '') => {
+  const base = baseAmountUsdFor(role, interval);
+  return Number((base * (1 + taxRateForCountry(country))).toFixed(2));
 };
 
 const periodEnd = (interval: string) => {
@@ -47,11 +68,47 @@ const periodEnd = (interval: string) => {
 
 const chargeAmount = (amountUsd: number, currency: string) => {
   if (currency === 'USD') return Math.round(amountUsd * 100);
-  const usdToGhs = Number(Deno.env.get('USD_TO_GHS_RATE') || '15.5');
+  const usdToGhs = Number(Deno.env.get('USD_TO_GHS_RATE') || '11.289456');
   if (currency === 'GHS') return Math.round(amountUsd * usdToGhs * 100);
-  const rate = Number(Deno.env.get(`USD_TO_${currency}_RATE`) || '0');
+  const fallbackRates: Record<string, number> = {
+    KES: 129.44391,
+    NGN: 1376.622776,
+    ZAR: 16.421509,
+    EUR: 0.875977,
+    GBP: 0.755108,
+  };
+  const rate =
+    Number(Deno.env.get(`USD_TO_${currency}_RATE`) || '0') ||
+    fallbackRates[currency] ||
+    0;
   if (rate > 0) return Math.round(amountUsd * rate * 100);
   return Math.round(amountUsd * usdToGhs * 100);
+};
+
+const chargeCurrencyFor = (profile: Record<string, unknown>) => {
+  const configured = clean(Deno.env.get('PAYSTACK_CURRENCY')).toUpperCase();
+  if (configured) return configured;
+  const profileCurrency = clean(profile.currency_code).toUpperCase();
+  return supportedPaystackCurrencies.has(profileCurrency)
+    ? profileCurrency
+    : 'GHS';
+};
+
+const countryForCurrency = (currency: string) => {
+  switch (clean(currency).toUpperCase()) {
+    case 'GHS':
+      return 'GH';
+    case 'KES':
+      return 'KE';
+    case 'NGN':
+      return 'NG';
+    case 'ZAR':
+      return 'ZA';
+    case 'GBP':
+      return 'GB';
+    default:
+      return '';
+  }
 };
 
 const hex = (buffer: ArrayBuffer) =>
@@ -358,7 +415,11 @@ const renewDueSubscriptions = async ({
         Deno.env.get('PAYSTACK_CURRENCY') ||
         'GHS',
     ).toUpperCase();
-    const amountUsd = amountUsdFor(role, interval);
+    const amountUsd = amountUsdFor(
+      role,
+      interval,
+      countryForCurrency(currency),
+    );
     const amount = chargeAmount(amountUsd, currency);
     const reference = `prosme_renew_${clean(subscription.user_id).replaceAll('-', '').slice(0, 12)}_${Date.now()}`;
     const email = clean(subscription.paystack_email);
@@ -476,7 +537,7 @@ const backfillVerifiedSubscriptions = async (
   end.setUTCFullYear(end.getUTCFullYear() + 1);
   const { data: profiles, error } = await adminClient
     .from('profiles')
-    .select('id,role,verification_status')
+    .select('id,role,country,verification_status')
     .in('role', ['customer', 'artisan'])
     .eq('verification_status', 'verified');
   if (error) throw new Error(error.message);
@@ -490,7 +551,11 @@ const backfillVerifiedSubscriptions = async (
     if (existingError) throw new Error(existingError.message);
     if (existing) continue;
     const role = clean(profile.role) === 'artisan' ? 'artisan' : 'customer';
-    const amountUsd = amountUsdFor(role, 'yearly');
+    const amountUsd = amountUsdFor(
+      role,
+      'yearly',
+      clean(profile.country),
+    );
     const { error: insertError } = await adminClient
       .from('verification_subscriptions')
       .insert({
@@ -625,7 +690,7 @@ Deno.serve(async (req) => {
 
     const { data: profile, error: profileError } = await adminClient
       .from('profiles')
-      .select('id,email,role,verification_status')
+      .select('id,email,role,country,currency_code,verification_status')
       .eq('id', user.id)
       .maybeSingle();
     if (profileError) throw new Error(profileError.message);
@@ -674,10 +739,12 @@ Deno.serve(async (req) => {
     }
     const interval = lower(body.interval) === 'yearly' ? 'yearly' : 'monthly';
     const requestedChannel = lower(body.channel);
-    const amountUsd = amountUsdFor(role, interval);
-    const chargeCurrency = clean(
-      Deno.env.get('PAYSTACK_CURRENCY') || 'GHS',
-    ).toUpperCase();
+    const amountUsd = amountUsdFor(
+      role,
+      interval,
+      clean(profile.country || body.displayCountry),
+    );
+    const chargeCurrency = chargeCurrencyFor(profile);
     const amount = chargeAmount(amountUsd, chargeCurrency);
     const reference = `prosme_ver_${user.id.replaceAll('-', '').slice(0, 12)}_${Date.now()}`;
     const callbackUrl = clean(
