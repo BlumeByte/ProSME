@@ -1077,18 +1077,22 @@ class _BidTile extends ConsumerWidget {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SegmentedButton<int>(
-                  segments: const [
-                    ButtonSegment(value: 1, label: Text('1')),
-                    ButtonSegment(value: 2, label: Text('2')),
-                    ButtonSegment(value: 3, label: Text('3')),
-                    ButtonSegment(value: 4, label: Text('4')),
-                    ButtonSegment(value: 5, label: Text('5')),
-                  ],
-                  selected: {stars},
-                  onSelectionChanged: (selection) {
-                    setDialogState(() => stars = selection.first);
-                  },
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: List.generate(5, (index) {
+                    final value = index + 1;
+                    return ChoiceChip(
+                      label: Text('$value'),
+                      selected: stars == value,
+                      avatar: stars == value
+                          ? const Icon(Icons.check, size: 18)
+                          : null,
+                      onSelected: (_) {
+                        setDialogState(() => stars = value);
+                      },
+                    );
+                  }),
                 ),
                 const SizedBox(height: 12),
                 TextField(

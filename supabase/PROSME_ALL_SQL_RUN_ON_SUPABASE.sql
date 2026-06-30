@@ -3933,6 +3933,17 @@ create table if not exists public.analytics_events (
   created_at timestamptz not null default timezone('utc', now())
 );
 
+alter table public.analytics_events
+  add column if not exists source text not null default 'web',
+  add column if not exists event_name text not null default 'page_view',
+  add column if not exists path text,
+  add column if not exists referrer text,
+  add column if not exists user_agent text,
+  add column if not exists session_id text,
+  add column if not exists user_id uuid references public.profiles(id) on delete set null,
+  add column if not exists metadata jsonb not null default '{}'::jsonb,
+  add column if not exists created_at timestamptz not null default timezone('utc', now());
+
 alter table public.analytics_events enable row level security;
 
 grant insert on public.analytics_events to anon, authenticated;

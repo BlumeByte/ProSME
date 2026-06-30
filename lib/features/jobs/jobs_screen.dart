@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -558,12 +560,17 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
   RegionOption? selectedRegion;
   CityOption? selectedCity;
   String? selectedTown;
+  var countryText = '';
+  var regionText = '';
+  var cityText = '';
+  var townText = '';
   var loadingRegions = false;
   if (user != null) {
     for (final country in countries) {
       if (country.name.toLowerCase() == user.country.toLowerCase() ||
           country.code.toLowerCase() == user.country.toLowerCase()) {
         selectedCountry = country;
+        countryText = country.name;
         break;
       }
     }
@@ -586,6 +593,31 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
         final regions = selectedCountry?.regions ?? const <RegionOption>[];
         final cities = selectedRegion?.cities ?? const <CityOption>[];
         final towns = selectedCity?.towns ?? const <String>[];
+        Future<void> selectCountryName(String value) async {
+          countryText = value.trim();
+          final country = _bestCountryMatch(countries, countryText);
+          setSheetState(() {
+            selectedCountry = country;
+            selectedRegion = null;
+            selectedCity = null;
+            selectedTown = null;
+            regionText = '';
+            cityText = '';
+            townText = '';
+            loadingRegions = country != null;
+          });
+          if (country == null) return;
+          final hydrated = await loadCountryRegions(country);
+          if (!context.mounted) return;
+          setSheetState(() {
+            selectedCountry = hydrated;
+            countries = countries
+                .map((item) => item.code == hydrated.code ? hydrated : item)
+                .toList(growable: false);
+            loadingRegions = false;
+          });
+        }
+
         return Padding(
           padding: EdgeInsets.only(
             left: 16,
@@ -634,134 +666,107 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
                         : null,
                   ),
                   const SizedBox(height: 8),
-                  DropdownButtonFormField<CountryOption>(
-                    initialValue: selectedCountry,
-                    isExpanded: true,
-                    decoration:
-                        InputDecoration(labelText: settings.t('Country')),
-                    items: countries
-                        .map(
-                          (country) => DropdownMenuItem(
-                            value: country,
-                            child: Text(
-                              country.name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: (country) async {
-                      if (country == null) return;
-                      setSheetState(() {
-                        selectedCountry = country;
-                        selectedRegion = null;
-                        selectedCity = null;
-                        selectedTown = null;
-                        loadingRegions = true;
-                      });
-                      final hydrated = await loadCountryRegions(country);
-                      if (!context.mounted) return;
-                      setSheetState(() {
-                        selectedCountry = hydrated;
-                        countries = countries
-                            .map((item) =>
-                                item.code == hydrated.code ? hydrated : item)
-                            .toList(growable: false);
-                        loadingRegions = false;
-                      });
+                  _LocationAutocompleteField(
+                    label: settings.t('Country'),
+                    initialValue: countryText,
+                    options: countries.map((country) => country.name),
+                    onChanged: (value) {
+                      countryText = value.trim();
+                      final match = _exactCountryMatch(countries, countryText);
+                      if (match == null || match == selectedCountry) return;
+                      unawaited(selectCountryName(match.name));
                     },
-                    validator: (value) => value == null
+                    onSelected: (value) => unawaited(selectCountryName(value)),
+                    validator: (value) => value == null || value.trim().isEmpty
                         ? settings.t('Country is required')
                         : null,
                   ),
                   const SizedBox(height: 8),
-                  DropdownButtonFormField<RegionOption>(
-                    initialValue: selectedRegion,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: settings.t('Region'),
-                      suffixIcon: loadingRegions
-                          ? const Padding(
-                              padding: EdgeInsets.all(12),
-                              child: SizedBox.square(
-                                dimension: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                            )
-                          : null,
-                    ),
-                    items: regions
-                        .map(
-                          (region) => DropdownMenuItem(
-                            value: region,
-                            child: Text(
-                              region.name,
-                              overflow: TextOverflow.ellipsis,
+                  _LocationAutocompleteField(
+                    label: settings.t('Region'),
+                    initialValue: regionText,
+                    options: regions.map((region) => region.name),
+                    enabled: !loadingRegions,
+                    suffixIcon: loadingRegions
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             ),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: selectedCountry == null || loadingRegions
-                        ? null
-                        : (region) {
-                            setSheetState(() {
-                              selectedRegion = region;
-                              selectedCity = null;
-                              selectedTown = null;
-                            });
-                          },
-                    validator: (value) =>
-                        value == null ? settings.t('Region is required') : null,
+                          )
+                        : null,
+                    onChanged: (value) {
+                      regionText = value.trim();
+                      final match = _exactRegionMatch(regions, regionText);
+                      if (match == null || match == selectedRegion) return;
+                      setSheetState(() {
+                        selectedRegion = match;
+                        selectedCity = null;
+                        selectedTown = null;
+                        cityText = '';
+                        townText = '';
+                      });
+                    },
+                    onSelected: (value) {
+                      final region = _bestRegionMatch(regions, value);
+                      setSheetState(() {
+                        regionText = value.trim();
+                        selectedRegion = region;
+                        selectedCity = null;
+                        selectedTown = null;
+                        cityText = '';
+                        townText = '';
+                      });
+                    },
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? settings.t('Region is required')
+                        : null,
                   ),
                   const SizedBox(height: 8),
-                  DropdownButtonFormField<CityOption>(
-                    initialValue: selectedCity,
-                    isExpanded: true,
-                    decoration: InputDecoration(labelText: settings.t('City')),
-                    items: cities
-                        .map(
-                          (city) => DropdownMenuItem(
-                            value: city,
-                            child: Text(
-                              city.name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: selectedRegion == null
-                        ? null
-                        : (city) {
-                            setSheetState(() {
-                              selectedCity = city;
-                              selectedTown = null;
-                            });
-                          },
-                    validator: (value) =>
-                        value == null ? settings.t('City is required') : null,
+                  _LocationAutocompleteField(
+                    label: settings.t('City'),
+                    initialValue: cityText,
+                    options: cities.map((city) => city.name),
+                    onChanged: (value) {
+                      cityText = value.trim();
+                      final match = _exactCityMatch(cities, cityText);
+                      if (match == null || match == selectedCity) return;
+                      setSheetState(() {
+                        selectedCity = match;
+                        selectedTown = null;
+                        townText = '';
+                      });
+                    },
+                    onSelected: (value) {
+                      final city = _bestCityMatch(cities, value);
+                      setSheetState(() {
+                        cityText = value.trim();
+                        selectedCity = city;
+                        selectedTown = null;
+                        townText = '';
+                      });
+                    },
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? settings.t('City is required')
+                        : null,
                   ),
                   const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedTown,
-                    isExpanded: true,
-                    decoration: InputDecoration(labelText: settings.t('Town')),
-                    items: towns
-                        .map(
-                          (town) => DropdownMenuItem(
-                            value: town,
-                            child: Text(
-                              town == 'Any' ? settings.t('Any town') : town,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: selectedCity == null
-                        ? null
-                        : (town) {
-                            setSheetState(() => selectedTown = town);
-                          },
+                  _LocationAutocompleteField(
+                    label: settings.t('Town'),
+                    initialValue: townText,
+                    options: towns.where((town) => town != 'Any'),
+                    onChanged: (value) {
+                      townText = value.trim();
+                      selectedTown = townText.isEmpty ? null : townText;
+                    },
+                    onSelected: (value) {
+                      setSheetState(() {
+                        townText = value.trim();
+                        selectedTown = townText.isEmpty ? null : townText;
+                      });
+                    },
+                    helperText: settings.t('Optional'),
                   ),
                   const SizedBox(height: 8),
                   TextFormField(
@@ -795,10 +800,10 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
                         if (user == null) return;
                         final location = _composeJobLocation(
                           details: locationController.text,
-                          country: selectedCountry,
-                          region: selectedRegion,
-                          city: selectedCity,
-                          town: selectedTown,
+                          country: countryText,
+                          region: regionText,
+                          city: cityText,
+                          town: selectedTown ?? townText,
                         );
                         try {
                           await ref.read(jobsRepositoryProvider).createJob(
@@ -852,17 +857,158 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
 
 String _composeJobLocation({
   required String details,
-  required CountryOption? country,
-  required RegionOption? region,
-  required CityOption? city,
+  required String country,
+  required String region,
+  required String city,
   required String? town,
 }) {
   final parts = <String>[
     details.trim(),
     if (town != null && town != 'Any') town,
-    if (city != null) city.name,
-    if (region != null) region.name,
-    if (country != null) country.name,
+    city,
+    region,
+    country,
   ].where((part) => part.trim().isNotEmpty).toList(growable: false);
   return parts.join(', ');
+}
+
+class _LocationAutocompleteField extends StatelessWidget {
+  const _LocationAutocompleteField({
+    required this.label,
+    required this.options,
+    required this.onChanged,
+    required this.onSelected,
+    this.initialValue = '',
+    this.validator,
+    this.enabled = true,
+    this.suffixIcon,
+    this.helperText,
+  });
+
+  final String label;
+  final String initialValue;
+  final Iterable<String> options;
+  final ValueChanged<String> onChanged;
+  final ValueChanged<String> onSelected;
+  final FormFieldValidator<String>? validator;
+  final bool enabled;
+  final Widget? suffixIcon;
+  final String? helperText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Autocomplete<String>(
+      key: ValueKey('$label|$initialValue|${options.length}|$enabled'),
+      initialValue: TextEditingValue(text: initialValue),
+      optionsBuilder: (value) {
+        final query = value.text.trim().toLowerCase();
+        final cleaned = options
+            .where((option) => option.trim().isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+        if (query.isEmpty) return cleaned.take(12);
+        return cleaned
+            .where((option) => option.toLowerCase().contains(query))
+            .take(12);
+      },
+      onSelected: onSelected,
+      fieldViewBuilder: (
+        context,
+        controller,
+        focusNode,
+        onFieldSubmitted,
+      ) {
+        return TextFormField(
+          controller: controller,
+          focusNode: focusNode,
+          enabled: enabled,
+          decoration: InputDecoration(
+            labelText: label,
+            helperText: helperText,
+            suffixIcon: suffixIcon,
+          ),
+          textInputAction: TextInputAction.next,
+          onChanged: onChanged,
+          validator: validator,
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 240, maxWidth: 420),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final option = options.elementAt(index);
+                  return ListTile(
+                    dense: true,
+                    title: Text(option, overflow: TextOverflow.ellipsis),
+                    onTap: () => onSelected(option),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+CountryOption? _exactCountryMatch(
+  Iterable<CountryOption> countries,
+  String value,
+) {
+  final normalized = value.trim().toLowerCase();
+  if (normalized.isEmpty) return null;
+  for (final country in countries) {
+    if (country.name.toLowerCase() == normalized ||
+        country.code.toLowerCase() == normalized) {
+      return country;
+    }
+  }
+  return null;
+}
+
+CountryOption? _bestCountryMatch(
+  Iterable<CountryOption> countries,
+  String value,
+) {
+  return _exactCountryMatch(countries, value);
+}
+
+RegionOption? _exactRegionMatch(Iterable<RegionOption> regions, String value) {
+  final normalized = value.trim().toLowerCase();
+  if (normalized.isEmpty) return null;
+  for (final region in regions) {
+    if (region.name.toLowerCase() == normalized ||
+        region.code?.toLowerCase() == normalized) {
+      return region;
+    }
+  }
+  return null;
+}
+
+RegionOption? _bestRegionMatch(Iterable<RegionOption> regions, String value) {
+  return _exactRegionMatch(regions, value);
+}
+
+CityOption? _exactCityMatch(Iterable<CityOption> cities, String value) {
+  final normalized = value.trim().toLowerCase();
+  if (normalized.isEmpty) return null;
+  for (final city in cities) {
+    if (city.name.toLowerCase() == normalized) return city;
+  }
+  return null;
+}
+
+CityOption? _bestCityMatch(Iterable<CityOption> cities, String value) {
+  return _exactCityMatch(cities, value);
 }

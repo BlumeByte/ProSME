@@ -15,7 +15,6 @@ import '../chat/chat_list_screen.dart';
 import '../listing/listing_feed_screen.dart';
 import '../jobs/jobs_screen.dart';
 import '../profile/profile_screen.dart';
-import 'upload_request_screen.dart';
 
 class UserHomeScreen extends ConsumerStatefulWidget {
   const UserHomeScreen({super.key});
@@ -39,10 +38,9 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     _bannerController = PageController();
     _pages = [
       ListingFeedScreen(
-        onOpenChatTab: () => setState(() => _currentIndex = 2),
-        onOpenUploadTab: () => setState(() => _currentIndex = 1),
+        onOpenChatTab: () => setState(() => _currentIndex = 1),
+        onOpenUploadTab: () => setState(() => _currentIndex = 2),
       ),
-      const UploadRequestScreen(),
       const ChatListScreen(),
       const JobsScreen(showAppBar: false),
       const ProfileScreen(),
@@ -101,7 +99,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
                       context.go(RouteNames.auth);
                       return;
                     }
-                    setState(() => _currentIndex = 4);
+                    setState(() => _currentIndex = 3);
                   },
                   icon: const Icon(Icons.person_outline),
                   tooltip: settings.t('Profile'),
@@ -141,9 +139,6 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
               items: [
                 BottomNavigationBarItem(
                     icon: const Icon(Icons.home), label: settings.t('Home')),
-                BottomNavigationBarItem(
-                    icon: const Icon(Icons.upload_outlined),
-                    label: settings.t('Upload')),
                 BottomNavigationBarItem(
                   icon: _NavIconWithBadge(
                     icon: Icons.chat_bubble_outline,
