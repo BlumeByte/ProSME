@@ -28,12 +28,50 @@ bool _matchesLocation(String target, String query) {
   return tokens.any((token) => fuzzyContains(target, token));
 }
 
+enum _ArtisanUpdateSort { newest, priceLow, priceHigh, rating, category }
+
+List<Listing> _sortedArtisanUpdates(
+  List<Listing> listings,
+  _ArtisanUpdateSort sort,
+) {
+  final sorted = List<Listing>.from(listings);
+  switch (sort) {
+    case _ArtisanUpdateSort.newest:
+      sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      break;
+    case _ArtisanUpdateSort.priceLow:
+      sorted.sort((a, b) => a.priceMin.compareTo(b.priceMin));
+      break;
+    case _ArtisanUpdateSort.priceHigh:
+      sorted.sort((a, b) => b.priceMax.compareTo(a.priceMax));
+      break;
+    case _ArtisanUpdateSort.rating:
+      sorted.sort((a, b) {
+        final rating = b.ratingAverage.compareTo(a.ratingAverage);
+        return rating == 0 ? b.ratingCount.compareTo(a.ratingCount) : rating;
+      });
+      break;
+    case _ArtisanUpdateSort.category:
+      sorted.sort((a, b) {
+        final category = normalizeServiceCategory(a.category)
+            .compareTo(normalizeServiceCategory(b.category));
+        return category == 0 ? b.createdAt.compareTo(a.createdAt) : category;
+      });
+      break;
+  }
+  return sorted;
+}
+
 class ListingFeedScreen extends ConsumerStatefulWidget {
   const ListingFeedScreen(
-      {super.key, this.onOpenChatTab, this.onOpenUploadTab});
+      {super.key,
+      this.onOpenChatTab,
+      this.onOpenUploadTab,
+      this.onLeaveHomeContent});
 
   final VoidCallback? onOpenChatTab;
   final VoidCallback? onOpenUploadTab;
+  final VoidCallback? onLeaveHomeContent;
 
   @override
   ConsumerState<ListingFeedScreen> createState() => _ListingFeedScreenState();
@@ -313,6 +351,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             artisanId: pro.artisanId,
           );
       if (mounted) {
+        widget.onLeaveHomeContent?.call();
         context.push('${RouteNames.chatThread}/${thread.id}');
       }
     } catch (_) {
@@ -347,6 +386,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     }
     if (!await _confirmUnverified(pro)) return;
     if (mounted) {
+      widget.onLeaveHomeContent?.call();
       context.push('${RouteNames.listingDetail}/${pro.listingId}');
     }
   }
@@ -567,6 +607,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   locationQuery: _locationQuery,
                   currencyCode: currencyCode,
                   settings: settings,
+                  onLeaveHomeContent: widget.onLeaveHomeContent,
                 ),
                 const SizedBox(height: 18),
                 Text(
@@ -582,9 +623,12 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                         pro: pro,
                         currencyCode: currencyCode,
                         settings: settings,
-                        onOpenProfile: () => context.push(
-                          '${RouteNames.artisanProfile}/${pro.artisanId}',
-                        ),
+                        onOpenProfile: () {
+                          widget.onLeaveHomeContent?.call();
+                          context.push(
+                            '${RouteNames.artisanProfile}/${pro.artisanId}',
+                          );
+                        },
                         onChat: () => _startChat(pro),
                         onBook: () => _bookProfessional(pro),
                       )),
@@ -712,17 +756,36 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               userId: user?.id,
               currencyCode: currencyCode,
               settings: settings,
+              onLeaveHomeContent: widget.onLeaveHomeContent,
             ),
             const SizedBox(height: 20),
-            Text(
-              settings.t('Latest Artisan Updates'),
-              style: Theme.of(context).textTheme.titleLarge,
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    settings.t('Latest Artisan Updates'),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                if (listings.isNotEmpty)
+                  TextButton(
+                    onPressed: () => _showAllArtisanUpdates(
+                      listings: listings,
+                      settings: settings,
+                      userId: user?.id,
+                    ),
+                    child: Text(settings.t('View All')),
+                  ),
+              ],
             ),
             const SizedBox(height: 8),
             if (listings.isEmpty)
               Text(settings.t('No artisan updates yet.'))
             else
-              ...listings.take(3).map(
+              ..._sortedArtisanUpdates(
+                listings,
+                _ArtisanUpdateSort.newest,
+              ).take(3).map(
                     (listing) => Card(
                       margin: const EdgeInsets.only(bottom: 10),
                       child: ListTile(
@@ -734,9 +797,12 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                         trailing: const Icon(Icons.chevron_right),
                         onTap: user == null
                             ? () => context.go(RouteNames.auth)
-                            : () => context.push(
+                            : () {
+                                widget.onLeaveHomeContent?.call();
+                                context.push(
                                   '${RouteNames.listingDetail}/${listing.id}',
-                                ),
+                                );
+                              },
                       ),
                     ),
                   ),
@@ -776,9 +842,12 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                       pro: pro,
                       currencyCode: currencyCode,
                       settings: settings,
-                      onOpenProfile: () => context.push(
-                        '${RouteNames.artisanProfile}/${pro.artisanId}',
-                      ),
+                      onOpenProfile: () {
+                        widget.onLeaveHomeContent?.call();
+                        context.push(
+                          '${RouteNames.artisanProfile}/${pro.artisanId}',
+                        );
+                      },
                       onChat: () => _startChat(pro),
                       onBook: () => _bookProfessional(pro),
                     ),
@@ -805,6 +874,134 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     NotificationService().showSimpleNotification(
       title: settings.t('New listing'),
       body: latest.title,
+    );
+  }
+
+  void _showAllArtisanUpdates({
+    required List<Listing> listings,
+    required AppSettings settings,
+    required String? userId,
+  }) {
+    widget.onLeaveHomeContent?.call();
+    final homeContext = context;
+    var sort = _ArtisanUpdateSort.newest;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final sorted = _sortedArtisanUpdates(listings, sort);
+          return SafeArea(
+            child: SizedBox(
+              height: MediaQuery.sizeOf(context).height * 0.86,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            settings.t('Latest Artisan Updates'),
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close),
+                          tooltip: settings.t('Close'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: DropdownButtonFormField<_ArtisanUpdateSort>(
+                      initialValue: sort,
+                      decoration: InputDecoration(
+                        labelText: settings.t('Sort'),
+                        prefixIcon: const Icon(Icons.sort),
+                      ),
+                      items: [
+                        DropdownMenuItem(
+                          value: _ArtisanUpdateSort.newest,
+                          child: Text(settings.t('Newest first')),
+                        ),
+                        DropdownMenuItem(
+                          value: _ArtisanUpdateSort.priceLow,
+                          child: Text(settings.t('Lowest price')),
+                        ),
+                        DropdownMenuItem(
+                          value: _ArtisanUpdateSort.priceHigh,
+                          child: Text(settings.t('Highest price')),
+                        ),
+                        DropdownMenuItem(
+                          value: _ArtisanUpdateSort.rating,
+                          child: Text(settings.t('Highest rated')),
+                        ),
+                        DropdownMenuItem(
+                          value: _ArtisanUpdateSort.category,
+                          child: Text(settings.t('Category')),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setSheetState(() => sort = value);
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      itemCount: sorted.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final listing = sorted[index];
+                        return Card(
+                          child: ListTile(
+                            leading: listing.images.isEmpty
+                                ? const Icon(Icons.campaign_outlined)
+                                : ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      listing.images.first,
+                                      width: 52,
+                                      height: 52,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => const Icon(
+                                        Icons.campaign_outlined,
+                                      ),
+                                    ),
+                                  ),
+                            title: Text(listing.title),
+                            subtitle: Text(
+                              '${normalizeServiceCategory(listing.category)} - ${listing.location}\n${formatMoney(listing.priceMin, settings.currencyCode)} - ${listing.ratingAverage.toStringAsFixed(1)}/5',
+                            ),
+                            isThreeLine: true,
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: userId == null
+                                ? () {
+                                    Navigator.of(context).pop();
+                                    homeContext.go(RouteNames.auth);
+                                  }
+                                : () {
+                                    Navigator.of(context).pop();
+                                    homeContext.push(
+                                      '${RouteNames.listingDetail}/${listing.id}',
+                                    );
+                                  },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -1216,6 +1413,7 @@ class _OpenJobsPreview extends ConsumerWidget {
     required this.settings,
     this.query = '',
     this.locationQuery = '',
+    this.onLeaveHomeContent,
   });
 
   final String? userId;
@@ -1223,6 +1421,7 @@ class _OpenJobsPreview extends ConsumerWidget {
   final AppSettings settings;
   final String query;
   final String locationQuery;
+  final VoidCallback? onLeaveHomeContent;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1265,7 +1464,10 @@ class _OpenJobsPreview extends ConsumerWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: userId == null
                     ? () => context.go(RouteNames.auth)
-                    : () => context.push('${RouteNames.jobDetail}/${job.id}'),
+                    : () {
+                        onLeaveHomeContent?.call();
+                        context.push('${RouteNames.jobDetail}/${job.id}');
+                      },
               ),
             );
           }).toList(growable: false),

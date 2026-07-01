@@ -26,8 +26,10 @@ class UserHomeScreen extends ConsumerStatefulWidget {
 class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
   int _currentIndex = 0;
   int _bannerIndex = 0;
+  final int _bannerSeed = DateTime.now().microsecondsSinceEpoch;
   int _lastUnreadChats = 0;
   bool _seenInitialUnreadChats = false;
+  bool _showOpeningBanner = true;
   late final PageController _bannerController;
   Timer? _bannerTimer;
   late final List<Widget> _pages;
@@ -38,8 +40,9 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     _bannerController = PageController();
     _pages = [
       ListingFeedScreen(
-        onOpenChatTab: () => setState(() => _currentIndex = 1),
-        onOpenUploadTab: () => setState(() => _currentIndex = 2),
+        onOpenChatTab: () => _openTab(1),
+        onOpenUploadTab: () => _openTab(2),
+        onLeaveHomeContent: _hideOpeningBanner,
       ),
       const ChatListScreen(),
       const JobsScreen(showAppBar: false),
@@ -99,7 +102,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
                       context.go(RouteNames.auth);
                       return;
                     }
-                    setState(() => _currentIndex = 3);
+                    _openTab(3);
                   },
                   icon: const Icon(Icons.person_outline),
                   tooltip: settings.t('Profile'),
@@ -133,7 +136,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
                   context.go(RouteNames.auth);
                   return;
                 }
-                setState(() => _currentIndex = index);
+                _openTab(index);
               },
               type: BottomNavigationBarType.fixed,
               items: [
@@ -160,9 +163,18 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     );
   }
 
-  bool get _shouldShowBanner {
-    final days = DateTime.now().toUtc().difference(DateTime.utc(2026)).inDays;
-    return (days ~/ 7).isEven;
+  bool get _shouldShowBanner => _showOpeningBanner && _currentIndex == 0;
+
+  void _openTab(int index) {
+    setState(() {
+      if (index != 0) _showOpeningBanner = false;
+      _currentIndex = index;
+    });
+  }
+
+  void _hideOpeningBanner() {
+    if (!_showOpeningBanner) return;
+    setState(() => _showOpeningBanner = false);
   }
 
   List<({String title, String body, String image})> _buildBanners(
@@ -204,10 +216,29 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
         ),
         image: SmePageBanner.promoImage,
       ),
+      (
+        title: settings.t('Small businesses move communities'),
+        body: settings.t(
+          'Every booking supports local skills, steady income, and better services close to home.',
+        ),
+        image: SmePageBanner.cafeImage,
+      ),
+      (
+        title: settings.t('Turn skills into repeat work'),
+        body: settings.t(
+          'Clear profiles, fair pricing, and timely updates help SMEs earn trust one job at a time.',
+        ),
+        image: SmePageBanner.makerImage,
+      ),
+      (
+        title: settings.t('Hire local, work smarter'),
+        body: settings.t(
+          'Find nearby professionals, compare updates, and keep service decisions organized.',
+        ),
+        image: SmePageBanner.serviceImage,
+      ),
     ];
-    final week =
-        DateTime.now().toUtc().difference(DateTime.utc(2026)).inDays ~/ 7;
-    final shuffled = [...banners]..shuffle(math.Random(week));
+    final shuffled = [...banners]..shuffle(math.Random(_bannerSeed));
     return shuffled;
   }
 
