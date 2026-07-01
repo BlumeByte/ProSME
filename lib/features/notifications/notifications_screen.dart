@@ -95,7 +95,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '${settings.t('Could not delete notification')}: $error',
+              settings.t('Could not delete notification. Please try again.'),
             ),
           ),
         );

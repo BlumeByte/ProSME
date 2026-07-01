@@ -423,7 +423,9 @@ Future<void> _openListingSheet(
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  '${settings.t('Could not upload listing image')}: $error',
+                                  settings.t(
+                                    'Could not upload listing image. Please try again.',
+                                  ),
                                 ),
                               ),
                             );
@@ -477,8 +479,12 @@ Future<void> _openListingSheet(
                               SnackBar(
                                 content: Text(
                                   existing == null
-                                      ? '${settings.t('Could not create listing')}: $error'
-                                      : '${settings.t('Could not save listing')}: $error',
+                                      ? settings.t(
+                                          'Could not create listing. Please try again.',
+                                        )
+                                      : settings.t(
+                                          'Could not save listing. Please try again.',
+                                        ),
                                 ),
                               ),
                             );
@@ -547,7 +553,9 @@ Future<void> _deleteListing(
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${settings.t('Could not delete listing')}: $error'),
+          content: Text(
+            settings.t('Could not delete listing. Please try again.'),
+          ),
         ),
       );
     }

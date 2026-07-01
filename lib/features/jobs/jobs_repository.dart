@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
+import '../../services/db_service.dart';
 import '../../services/service_providers.dart';
 
 class JobFeedItem {
@@ -179,27 +181,35 @@ abstract class JobsRepository {
 }
 
 class SupabaseJobsRepository implements JobsRepository {
-  SupabaseJobsRepository(this._client);
+  SupabaseJobsRepository(this._client, [this._localDb]);
 
   final SupabaseClient _client;
+  final LocalDbService? _localDb;
 
   @override
   Stream<List<JobFeedItem>> watchJobs() async* {
-    var lastGood = const <JobFeedItem>[];
+    var lastGood = await _loadCachedJobs();
+    if (lastGood.isNotEmpty) yield lastGood;
     while (true) {
       try {
+        await _syncPendingJobCreates();
         final rows = await _client
             .from('jobs')
             .select()
             .neq('status', 'cancelled')
             .order('created_at', ascending: false);
-        lastGood = rows
-            .map((row) => _mapJob(Map<String, dynamic>.from(row as Map)))
+        final remoteRows = rows
+            .map((row) => Map<String, dynamic>.from(row as Map))
             .toList(growable: false);
+        await _localDb?.cacheJobRows(remoteRows);
+        lastGood = await _mergePendingJobs(
+          remoteRows.map(_mapJob).toList(growable: false),
+        );
         yield lastGood;
       } catch (error, stackTrace) {
         debugPrint('Failed to refresh jobs: $error');
         debugPrintStack(stackTrace: stackTrace);
+        lastGood = await _loadCachedJobs();
         yield lastGood;
       }
       await Future<void>.delayed(const Duration(seconds: 12));
@@ -387,23 +397,49 @@ class SupabaseJobsRepository implements JobsRepository {
     double? locationLng,
     String locationSource = 'typed',
   }) async {
-    final row = await _client
-        .from('jobs')
-        .insert({
-          'title': title,
-          'description': description,
-          'location': location,
-          'budget': budget,
-          'created_by': createdBy,
-          'images': images,
-          'location_lat': locationLat,
-          'location_lng': locationLng,
-          'location_source': locationSource,
-        })
-        .select()
-        .single();
-
-    return _mapJob(row);
+    final jobId = const Uuid().v4();
+    final createdAt = DateTime.now().toUtc();
+    final payload = {
+      'id': jobId,
+      'title': title,
+      'description': description,
+      'location': location,
+      'budget': budget,
+      'created_by': createdBy,
+      'images': images,
+      'location_lat': locationLat,
+      'location_lng': locationLng,
+      'location_source': locationSource,
+    };
+    try {
+      final row = await _client.from('jobs').insert(payload).select().single();
+      final mapped = Map<String, dynamic>.from(row as Map);
+      await _localDb?.upsertCachedJobRow(mapped);
+      return _mapJob(mapped);
+    } catch (error, stackTrace) {
+      debugPrint(
+          'Job insert response failed, checking for created row: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      final recovered = await _findLatestMatchingJob(
+        createdBy: createdBy,
+        title: title,
+        description: description,
+        location: location,
+      );
+      if (recovered != null) return recovered;
+      if (error is PostgrestException || _localDb == null) rethrow;
+      final localRow = {
+        ...payload,
+        'created_at': createdAt.toIso8601String(),
+        'status': 'open',
+        'work_status': 'open',
+        'images': images,
+        'local_pending': true,
+      };
+      await _localDb.upsertCachedJobRow(localRow);
+      await _localDb.addPendingJobCreate(localRow);
+      return _mapJob(localRow);
+    }
   }
 
   @override
@@ -433,13 +469,90 @@ class SupabaseJobsRepository implements JobsRepository {
         .eq('id', jobId)
         .select()
         .single();
-
-    return _mapJob(row);
+    final mapped = Map<String, dynamic>.from(row as Map);
+    await _localDb?.upsertCachedJobRow(mapped);
+    return _mapJob(mapped);
   }
 
   @override
   Future<void> deleteJob(String jobId) async {
     await _client.from('jobs').delete().eq('id', jobId);
+    await _localDb?.removeCachedJobRow(jobId);
+  }
+
+  Future<JobFeedItem?> _findLatestMatchingJob({
+    required String createdBy,
+    required String title,
+    required String description,
+    required String location,
+  }) async {
+    try {
+      final rows = await _client
+          .from('jobs')
+          .select()
+          .eq('created_by', createdBy)
+          .eq('title', title)
+          .eq('description', description)
+          .eq('location', location)
+          .order('created_at', ascending: false)
+          .limit(1);
+      if (rows.isEmpty) return null;
+      final row = Map<String, dynamic>.from(rows.first as Map);
+      await _localDb?.upsertCachedJobRow(row);
+      return _mapJob(row);
+    } catch (error, stackTrace) {
+      debugPrint('Failed to recover created job: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      return null;
+    }
+  }
+
+  Future<List<JobFeedItem>> _loadCachedJobs() async {
+    final rows = await _localDb?.loadCachedJobRows() ?? const [];
+    return _mergePendingJobs(rows.map(_mapJob).toList(growable: false));
+  }
+
+  Future<List<JobFeedItem>> _mergePendingJobs(List<JobFeedItem> jobs) async {
+    final pendingRows = await _localDb?.loadPendingJobCreates() ?? const [];
+    if (pendingRows.isEmpty) return jobs;
+    final byId = {for (final job in jobs) job.id: job};
+    for (final row in pendingRows) {
+      final job = _mapJob(row);
+      byId[job.id] = job;
+    }
+    final merged = byId.values.toList(growable: false)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return merged;
+  }
+
+  Future<void> _syncPendingJobCreates() async {
+    final pendingRows = await _localDb?.loadPendingJobCreates() ?? const [];
+    for (final row in pendingRows) {
+      final jobId = (row['id'] ?? '').toString();
+      if (jobId.isEmpty) continue;
+      final payload = Map<String, dynamic>.from(row)..remove('local_pending');
+      try {
+        final inserted =
+            await _client.from('jobs').insert(payload).select().single();
+        final insertedRow = Map<String, dynamic>.from(inserted as Map);
+        await _localDb?.upsertCachedJobRow(insertedRow);
+        await _localDb?.removePendingJobCreate(jobId);
+      } catch (error, stackTrace) {
+        try {
+          final existing =
+              await _client.from('jobs').select().eq('id', jobId).maybeSingle();
+          if (existing != null) {
+            await _localDb?.upsertCachedJobRow(
+              Map<String, dynamic>.from(existing as Map),
+            );
+            await _localDb?.removePendingJobCreate(jobId);
+            continue;
+          }
+        } catch (_) {}
+        debugPrint('Pending job sync failed: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+    }
   }
 
   @override
@@ -918,7 +1031,10 @@ final jobsRepositoryProvider = Provider<JobsRepository>((ref) {
   if (!shouldUseSupabase()) {
     return MockJobsRepository();
   }
-  return SupabaseJobsRepository(ref.watch(supabaseClientProvider));
+  return SupabaseJobsRepository(
+    ref.watch(supabaseClientProvider),
+    ref.watch(localDbProvider),
+  );
 });
 
 final jobsStreamProvider = StreamProvider<List<JobFeedItem>>((ref) {

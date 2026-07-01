@@ -64,6 +64,14 @@ class _SavedBody extends ConsumerWidget {
         return FutureBuilder<List<Listing>>(
           future: listingService.fetchListings(),
           builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return EmptyState(
+                title: settings.t('Could not load saved listings'),
+                subtitle: settings.t(
+                  'Please check your connection and try again.',
+                ),
+              );
+            }
             if (!snapshot.hasData) {
               return LoadingState(
                 label: settings.t('Loading saved listings...'),

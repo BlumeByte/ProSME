@@ -110,8 +110,9 @@ class _AdminOverview extends ConsumerWidget {
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _ErrorPanel(
-            message:
-                '${settings.t('Could not load platform modules')}: ${snapshot.error}',
+            message: settings.t(
+              'Could not load platform modules. Please try again.',
+            ),
           );
         }
         if (!snapshot.hasData) {
@@ -392,8 +393,7 @@ class _AdminWalletPanelState extends ConsumerState<_AdminWalletPanel> {
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _ErrorPanel(
-            message:
-                '${settings.t('Could not load wallet.')}: ${snapshot.error}',
+            message: settings.t('Could not load wallet. Please try again.'),
           );
         }
         if (!snapshot.hasData) {
@@ -587,8 +587,7 @@ class _ReportsPanel extends ConsumerWidget {
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _ErrorPanel(
-            message:
-                '${settings.t('Could not load reports')}: ${snapshot.error}',
+            message: settings.t('Could not load reports. Please try again.'),
           );
         }
         if (!snapshot.hasData) {
@@ -712,8 +711,7 @@ class _AccountsPanel extends ConsumerWidget {
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _ErrorPanel(
-            message:
-                '${settings.t('Could not load accounts')}: ${snapshot.error}',
+            message: settings.t('Could not load accounts. Please try again.'),
           );
         }
         if (!snapshot.hasData) {
@@ -831,8 +829,7 @@ class _TenantsPanel extends ConsumerWidget {
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _ErrorPanel(
-            message:
-                '${settings.t('Could not load tenants')}: ${snapshot.error}',
+            message: settings.t('Could not load tenants. Please try again.'),
           );
         }
         if (!snapshot.hasData) {
@@ -880,8 +877,7 @@ class _ModulesPanel extends ConsumerWidget {
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _ErrorPanel(
-            message:
-                '${settings.t('Could not load modules')}: ${snapshot.error}',
+            message: settings.t('Could not load modules. Please try again.'),
           );
         }
         if (!snapshot.hasData) {

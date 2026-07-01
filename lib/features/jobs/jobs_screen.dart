@@ -164,8 +164,9 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text('${settings.t('Could not delete job request')}: $error'),
+          content: Text(
+            settings.t('Could not delete job request. Please try again.'),
+          ),
         ),
       );
     }
@@ -214,11 +215,13 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
           : null,
       body: jobsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(
+        error: (_, __) => Center(
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              '${settings.t('Could not load jobs')}: $error',
+              settings.t(
+                'Could not load jobs. Please check your connection and try again.',
+              ),
               textAlign: TextAlign.center,
             ),
           ),

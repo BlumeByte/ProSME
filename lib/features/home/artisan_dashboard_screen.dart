@@ -162,8 +162,11 @@ class _ArtisanDashboardScreenState
               child: CircularProgressIndicator(),
             ),
           ),
-          error: (error, _) =>
-              Text('${settings.t('Could not load requests')}: $error'),
+          error: (_, __) => Text(
+            settings.t(
+              'Could not load requests. Please check your connection and try again.',
+            ),
+          ),
           data: (jobs) {
             final openRequests = jobs
                 .where((job) =>

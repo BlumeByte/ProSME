@@ -66,7 +66,9 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${settings.t('Could not create report')}: $error'),
+            content: Text(
+              settings.t('Could not create report. Please try again.'),
+            ),
           ),
         );
       }

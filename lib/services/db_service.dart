@@ -62,6 +62,11 @@ class LocalDbService {
   static final LocalDbService instance = LocalDbService._();
 
   static const _listingsKey = 'local_cache_listings';
+  static const _jobsKey = 'local_cache_jobs';
+  static const _pendingJobCreatesKey = 'local_cache_pending_job_creates';
+  static const _savedListingIdsPrefix = 'local_cache_saved_listing_ids_';
+  static const _pendingSavedListingActionsKey =
+      'local_cache_pending_saved_listing_actions';
   static const _threadsKey = 'local_cache_chat_threads';
   static const _messagesKey = 'local_cache_chat_messages';
   static const _hiddenThreadsKey = 'local_cache_hidden_chat_threads';
@@ -97,6 +102,139 @@ class LocalDbService {
     return rows
         .map((row) => Listing.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList(growable: false);
+  }
+
+  Future<void> cacheJobRows(List<Map<String, dynamic>> jobs) async {
+    final prefs = await _store;
+    await prefs.setString(_jobsKey, jsonEncode(jobs));
+  }
+
+  Future<List<Map<String, dynamic>>> loadCachedJobRows() async {
+    final prefs = await _store;
+    final raw = prefs.getString(_jobsKey);
+    if (raw == null || raw.isEmpty) return const [];
+    final rows = jsonDecode(raw) as List<dynamic>;
+    return rows
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
+  }
+
+  Future<void> upsertCachedJobRow(Map<String, dynamic> job) async {
+    final jobs = await loadCachedJobRows();
+    final id = (job['id'] ?? '').toString();
+    final next = <Map<String, dynamic>>[];
+    var inserted = false;
+    for (final row in jobs) {
+      if ((row['id'] ?? '').toString() == id) {
+        next.add(job);
+        inserted = true;
+      } else {
+        next.add(row);
+      }
+    }
+    if (!inserted) next.insert(0, job);
+    await cacheJobRows(_sortJobRows(next));
+  }
+
+  Future<void> removeCachedJobRow(String jobId) async {
+    final jobs = await loadCachedJobRows();
+    await cacheJobRows(
+      jobs.where((row) => (row['id'] ?? '').toString() != jobId).toList(),
+    );
+  }
+
+  Future<void> addPendingJobCreate(Map<String, dynamic> job) async {
+    final pending = await loadPendingJobCreates();
+    final id = (job['id'] ?? '').toString();
+    pending.removeWhere((row) => (row['id'] ?? '').toString() == id);
+    pending.add(job);
+    await _savePendingJobCreates(pending);
+  }
+
+  Future<List<Map<String, dynamic>>> loadPendingJobCreates() async {
+    final prefs = await _store;
+    final raw = prefs.getString(_pendingJobCreatesKey);
+    if (raw == null || raw.isEmpty) return <Map<String, dynamic>>[];
+    final rows = jsonDecode(raw) as List<dynamic>;
+    return rows
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .where((row) => (row['id'] ?? '').toString().isNotEmpty)
+        .toList();
+  }
+
+  Future<void> removePendingJobCreate(String jobId) async {
+    final pending = await loadPendingJobCreates();
+    pending.removeWhere((row) => (row['id'] ?? '').toString() == jobId);
+    await _savePendingJobCreates(pending);
+  }
+
+  Future<void> cacheSavedListingIds(String userId, List<String> ids) async {
+    final prefs = await _store;
+    await prefs.setStringList(
+      '$_savedListingIdsPrefix$userId',
+      ids.toSet().toList(growable: false)..sort(),
+    );
+  }
+
+  Future<List<String>> loadCachedSavedListingIds(String userId) async {
+    final prefs = await _store;
+    return prefs.getStringList('$_savedListingIdsPrefix$userId') ?? const [];
+  }
+
+  Future<void> addCachedSavedListingId(String userId, String listingId) async {
+    final ids = (await loadCachedSavedListingIds(userId)).toSet()
+      ..add(listingId);
+    await cacheSavedListingIds(userId, ids.toList(growable: false));
+  }
+
+  Future<void> removeCachedSavedListingId(
+    String userId,
+    String listingId,
+  ) async {
+    final ids = (await loadCachedSavedListingIds(userId)).toSet()
+      ..remove(listingId);
+    await cacheSavedListingIds(userId, ids.toList(growable: false));
+  }
+
+  Future<void> addPendingSavedListingAction({
+    required String userId,
+    required String listingId,
+    required String action,
+  }) async {
+    final pending = await loadPendingSavedListingActions();
+    pending.removeWhere(
+      (row) =>
+          row['user_id'] == userId &&
+          row['listing_id'] == listingId &&
+          row['action'] != action,
+    );
+    final id = '$userId:$listingId:$action';
+    pending.removeWhere((row) => row['id'] == id);
+    pending.add({
+      'id': id,
+      'user_id': userId,
+      'listing_id': listingId,
+      'action': action,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
+    await _savePendingSavedListingActions(pending);
+  }
+
+  Future<List<Map<String, dynamic>>> loadPendingSavedListingActions() async {
+    final prefs = await _store;
+    final raw = prefs.getString(_pendingSavedListingActionsKey);
+    if (raw == null || raw.isEmpty) return <Map<String, dynamic>>[];
+    final rows = jsonDecode(raw) as List<dynamic>;
+    return rows
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .where((row) => (row['id'] ?? '').toString().isNotEmpty)
+        .toList();
+  }
+
+  Future<void> removePendingSavedListingAction(String id) async {
+    final pending = await loadPendingSavedListingActions();
+    pending.removeWhere((row) => row['id'] == id);
+    await _savePendingSavedListingActions(pending);
   }
 
   Stream<List<ChatThread>> watchThreads(String userId) async* {
@@ -436,6 +574,30 @@ class LocalDbService {
       _pendingChatKey,
       jsonEncode(actions.map((action) => action.toJson()).toList()),
     );
+  }
+
+  Future<void> _savePendingJobCreates(List<Map<String, dynamic>> jobs) async {
+    final prefs = await _store;
+    await prefs.setString(_pendingJobCreatesKey, jsonEncode(jobs));
+  }
+
+  Future<void> _savePendingSavedListingActions(
+    List<Map<String, dynamic>> actions,
+  ) async {
+    final prefs = await _store;
+    await prefs.setString(_pendingSavedListingActionsKey, jsonEncode(actions));
+  }
+
+  List<Map<String, dynamic>> _sortJobRows(List<Map<String, dynamic>> jobs) {
+    final next = List<Map<String, dynamic>>.from(jobs);
+    next.sort((a, b) {
+      final aDate = DateTime.tryParse((a['created_at'] ?? '').toString()) ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      final bDate = DateTime.tryParse((b['created_at'] ?? '').toString()) ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      return bDate.compareTo(aDate);
+    });
+    return next;
   }
 
   Future<void> _upsertThreadForUser(String userId, ChatThread thread) async {

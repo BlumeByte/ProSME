@@ -112,12 +112,14 @@ class AdminService {
   final SupabaseClient? _supabase;
 
   Stream<List<ArtisanProfile>> watchVerificationQueue() async* {
-    yield await fetchVerificationQueue();
-    final client = _supabase;
-    if (client == null) return;
-    yield* client
-        .from('profiles')
-        .stream(primaryKey: ['id']).asyncMap((_) => fetchVerificationQueue());
+    var lastGood = const <ArtisanProfile>[];
+    while (true) {
+      try {
+        lastGood = await fetchVerificationQueue();
+      } catch (_) {}
+      yield lastGood;
+      await Future<void>.delayed(const Duration(seconds: 15));
+    }
   }
 
   Future<List<ArtisanProfile>> fetchVerificationQueue() async {
@@ -168,12 +170,14 @@ class AdminService {
   }
 
   Stream<List<PlatformAccount>> watchAccounts() async* {
-    yield await fetchAccounts();
-    final client = _supabase;
-    if (client == null) return;
-    yield* client
-        .from('profiles')
-        .stream(primaryKey: ['id']).asyncMap((_) => fetchAccounts());
+    var lastGood = const <PlatformAccount>[];
+    while (true) {
+      try {
+        lastGood = await fetchAccounts();
+      } catch (_) {}
+      yield lastGood;
+      await Future<void>.delayed(const Duration(seconds: 15));
+    }
   }
 
   Future<List<PlatformAccount>> fetchAccounts() async {
@@ -542,12 +546,14 @@ class AdminService {
   }
 
   Stream<List<PlatformReport>> watchReports() async* {
-    yield await fetchReports();
-    final client = _supabase;
-    if (client == null) return;
-    yield* client
-        .from('reports')
-        .stream(primaryKey: ['id']).asyncMap((_) => fetchReports());
+    var lastGood = const <PlatformReport>[];
+    while (true) {
+      try {
+        lastGood = await fetchReports();
+      } catch (_) {}
+      yield lastGood;
+      await Future<void>.delayed(const Duration(seconds: 15));
+    }
   }
 
   Future<List<PlatformReport>> fetchReports() async {

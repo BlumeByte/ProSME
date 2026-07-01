@@ -239,27 +239,37 @@ class SupabaseListingService implements ListingService {
 
   @override
   Future<Listing> createListing(Listing listing) async {
-    final row = await _supabase
-        .from('listings')
-        .insert({
-          'artisan_id': listing.artisanId,
-          'title': listing.title,
-          'description': listing.description,
-          'category': listing.category,
-          'price_min': listing.priceMin,
-          'price_max': listing.priceMax,
-          'images': listing.images,
-          'location': listing.location,
-          'verified_only': listing.verifiedOnly,
-        })
-        .select()
-        .single();
-    final hydrated = await _hydrateListings([Map<String, dynamic>.from(row)]);
+    final payload = {
+      'artisan_id': listing.artisanId,
+      'title': listing.title,
+      'description': listing.description,
+      'category': listing.category,
+      'price_min': listing.priceMin,
+      'price_max': listing.priceMax,
+      'images': listing.images,
+      'location': listing.location,
+      'verified_only': listing.verifiedOnly,
+    };
+    late Listing created;
+    try {
+      final row =
+          await _supabase.from('listings').insert(payload).select().single();
+      final hydrated = await _hydrateListings([Map<String, dynamic>.from(row)]);
+      created = hydrated.first;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Listing insert response failed, checking for created row: $error',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+      final recovered = await _findLatestMatchingListing(listing);
+      if (recovered == null) rethrow;
+      created = recovered;
+    }
     if (_localDb != null) {
       final cached = await _localDb.loadCachedListings();
-      await _localDb.cacheListings([hydrated.first, ...cached]);
+      await _localDb.cacheListings([created, ...cached]);
     }
-    return hydrated.first;
+    return created;
   }
 
   @override
@@ -300,6 +310,29 @@ class SupabaseListingService implements ListingService {
       await _localDb.cacheListings(
         cached.where((listing) => listing.id != listingId).toList(),
       );
+    }
+  }
+
+  Future<Listing?> _findLatestMatchingListing(Listing listing) async {
+    try {
+      final rows = await _supabase
+          .from('listings')
+          .select()
+          .eq('artisan_id', listing.artisanId)
+          .eq('title', listing.title)
+          .eq('description', listing.description)
+          .eq('location', listing.location)
+          .order('created_at', ascending: false)
+          .limit(1);
+      if (rows.isEmpty) return null;
+      final hydrated = await _hydrateListings(
+        [Map<String, dynamic>.from(rows.first as Map)],
+      );
+      return hydrated.first;
+    } catch (error, stackTrace) {
+      debugPrint('Failed to recover created listing: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      return null;
     }
   }
 

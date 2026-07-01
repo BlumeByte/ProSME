@@ -173,8 +173,9 @@ class _AiSupportScreenState extends ConsumerState<AiSupportScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text('${settings.t('Could not send support ticket')}: $error'),
+          content: Text(
+            settings.t('Could not send support ticket. Please try again.'),
+          ),
         ),
       );
     } finally {

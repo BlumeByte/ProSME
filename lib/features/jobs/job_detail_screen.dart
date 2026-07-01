@@ -47,8 +47,10 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
       ),
       body: jobsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => _MessageState(
-          message: '${settings.t('Could not load this job')}: $error',
+        error: (_, __) => _MessageState(
+          message: settings.t(
+            'Could not load this job. Please check your connection and try again.',
+          ),
         ),
         data: (jobs) {
           final job = _findJob(jobs, widget.jobId);
@@ -195,7 +197,9 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${ref.read(appSettingsControllerProvider).t('Could not send bid')}: $error',
+            ref
+                .read(appSettingsControllerProvider)
+                .t('Could not send bid. Please try again.'),
           ),
         ),
       );
@@ -534,7 +538,9 @@ class _JobTrackingPanel extends ConsumerWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${settings.t('Could not update status')}: $error'),
+          content: Text(
+            settings.t('Could not update status. Please try again.'),
+          ),
         ),
       );
     }
@@ -706,7 +712,9 @@ class _AcceptedBidPanel extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '${ref.read(appSettingsControllerProvider).t('Could not open chat')}: $error',
+              ref
+                  .read(appSettingsControllerProvider)
+                  .t('Could not open chat. Please try again.'),
             ),
           ),
         );
@@ -782,8 +790,9 @@ class _EditJobCard extends ConsumerWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text('${settings.t('Could not delete job request')}: $error'),
+            content: Text(
+              settings.t('Could not delete job request. Please try again.'),
+            ),
           ),
         );
       }
@@ -899,7 +908,9 @@ class _EditJobCard extends ConsumerWidget {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('${settings.t('Could not update job')}: $error'),
+              content: Text(
+                settings.t('Could not update job. Please try again.'),
+              ),
             ),
           );
         }
@@ -1036,8 +1047,11 @@ class _BidsForOwner extends ConsumerWidget {
     final bidsAsync = ref.watch(jobBidsProvider(job.id));
     return bidsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => _MessageState(
-          message: '${settings.t('Could not load bids')}: $error'),
+      error: (_, __) => _MessageState(
+        message: settings.t(
+          'Could not load bids. Please check your connection and try again.',
+        ),
+      ),
       data: (bids) {
         if (bids.isEmpty) {
           return _MessageState(
@@ -1262,7 +1276,9 @@ class _BidTile extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '${ref.read(appSettingsControllerProvider).t('Could not accept bid')}: $error',
+              ref
+                  .read(appSettingsControllerProvider)
+                  .t('Could not accept bid. Please try again.'),
             ),
           ),
         );
@@ -1353,7 +1369,9 @@ class _BidTile extends ConsumerWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${settings.t('Could not save rating')}: $error'),
+            content: Text(
+              settings.t('Could not save rating. Please try again.'),
+            ),
           ),
         );
       }

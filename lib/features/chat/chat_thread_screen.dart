@@ -98,7 +98,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           content: Text(
             _editingMessage == null
                 ? settings.t('Could not send message. Please try again.')
-                : '${settings.t('Could not update message')}: $error',
+                : settings.t('Could not update message. Please try again.'),
           ),
         ),
       );
@@ -174,7 +174,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${settings.t('Could not delete messages')}: $error'),
+          content: Text(
+            settings.t('Could not delete messages. Please try again.'),
+          ),
         ),
       );
     }
@@ -214,7 +216,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      '${settings.t('Could not delete message')}: $error',
+                      settings.t('Could not delete message. Please try again.'),
                     ),
                   ),
                 );
@@ -263,7 +265,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                        '${settings.t('Could not clear messages')}: $error'),
+                      settings.t('Could not clear messages. Please try again.'),
+                    ),
                   ),
                 );
               }
@@ -736,7 +739,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            '${settings.t('Could not load messages.')}\n${settings.t('Error')}: ${snapshot.error}',
+                            settings.t(
+                              'Could not load messages. Please check your connection and try again.',
+                            ),
                             textAlign: TextAlign.center,
                           ),
                         ],

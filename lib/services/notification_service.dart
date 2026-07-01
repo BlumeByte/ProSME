@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -87,32 +86,43 @@ final foregroundNotificationListenerProvider = Provider<void>((ref) {
 
   final client = ref.watch(supabaseClientProvider);
   final notificationService = NotificationService();
-  final channel = client
-      .channel('prosme_app_notifications_${user.id}')
-      .onPostgresChanges(
-        event: PostgresChangeEvent.insert,
-        schema: 'public',
-        table: 'admin_notifications',
-        filter: PostgresChangeFilter(
-          type: PostgresChangeFilterType.eq,
-          column: 'related_user_id',
-          value: user.id,
-        ),
-        callback: (payload) {
-          final record = payload.newRecord;
-          final settings = ref.read(appSettingsControllerProvider);
-          final type = (record['type'] ?? 'system').toString();
-          if (!settings.allowsPhoneNotificationType(type)) return;
-          final title = (record['title'] ?? 'ProSME notification').toString();
-          final body = (record['body'] ?? '').toString().trim();
-          notificationService.showSimpleNotification(
-            title: settings.t(title),
-            body: settings
-                .t(body.isEmpty ? 'You have a new ProSME update.' : body),
-          );
-        },
-      )
-      .subscribe();
+  final channel = client.channel('prosme_app_notifications_${user.id}');
+  try {
+    channel
+        .onPostgresChanges(
+      event: PostgresChangeEvent.insert,
+      schema: 'public',
+      table: 'admin_notifications',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'related_user_id',
+        value: user.id,
+      ),
+      callback: (payload) {
+        final record = payload.newRecord;
+        final settings = ref.read(appSettingsControllerProvider);
+        final type = (record['type'] ?? 'system').toString();
+        if (!settings.allowsPhoneNotificationType(type)) return;
+        final title = (record['title'] ?? 'ProSME notification').toString();
+        final body = (record['body'] ?? '').toString().trim();
+        notificationService.showSimpleNotification(
+          title: settings.t(title),
+          body:
+              settings.t(body.isEmpty ? 'You have a new ProSME update.' : body),
+        );
+      },
+    )
+        .subscribe((status, [error]) {
+      final statusText = status.toString().toLowerCase();
+      if (statusText.contains('error') || statusText.contains('timeout')) {
+        debugPrint('Notification realtime unavailable: $status $error');
+      }
+    });
+  } catch (error, stackTrace) {
+    debugPrint('Failed to start notification realtime listener: $error');
+    debugPrintStack(stackTrace: stackTrace);
+    return;
+  }
 
   ref.onDispose(() {
     client.removeChannel(channel);

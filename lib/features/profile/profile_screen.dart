@@ -110,7 +110,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                        '${settings.t('Could not update status')}: $error'),
+                      settings.t('Could not update status. Please try again.'),
+                    ),
                   ),
                 );
               }

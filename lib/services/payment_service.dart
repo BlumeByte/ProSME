@@ -20,14 +20,16 @@ class PaymentService {
   Stream<VerificationSubscription?> watchVerificationSubscription(
     String userId,
   ) async* {
-    yield await fetchVerificationSubscription(userId);
-    final client = _supabase;
-    if (client == null) return;
-    yield* client
-        .from('verification_subscriptions')
-        .stream(primaryKey: ['id'])
-        .eq('user_id', userId)
-        .asyncMap((_) => fetchVerificationSubscription(userId));
+    VerificationSubscription? lastGood;
+    while (true) {
+      try {
+        lastGood = await fetchVerificationSubscription(userId);
+        yield lastGood;
+      } catch (_) {
+        yield lastGood;
+      }
+      await Future<void>.delayed(const Duration(seconds: 15));
+    }
   }
 
   Future<VerificationSubscription?> fetchVerificationSubscription(

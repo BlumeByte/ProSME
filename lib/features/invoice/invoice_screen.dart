@@ -46,7 +46,9 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${settings.t('Could not create invoice')}: $error'),
+            content: Text(
+              settings.t('Could not create invoice. Please try again.'),
+            ),
           ),
         );
       }
