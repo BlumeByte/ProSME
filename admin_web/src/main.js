@@ -81,7 +81,6 @@ const tabs = [
   ['bidTracking', 'Bids Tracking'],
   ['jobs', 'Jobs'],
   ['listings', 'Listings'],
-  ['settings', 'Settings'],
 ];
 
 const publicNav = [
@@ -272,6 +271,19 @@ const dateText = (value) => {
     month: 'short',
     day: 'numeric',
   });
+};
+
+const isAdultDate = (value) => {
+  if (!value) return false;
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return false;
+  const today = new Date();
+  const cutoff = new Date(
+    today.getFullYear() - 18,
+    today.getMonth(),
+    today.getDate(),
+  );
+  return date <= cutoff;
 };
 
 const roleBadge = (role) => {
@@ -862,6 +874,8 @@ async function signUp(event) {
   const password = String(form.get('password') || '');
   const role = lower(form.get('role')) === 'artisan' ? 'artisan' : 'customer';
   const fullName = normalize(form.get('full_name')) || email.split('@')[0];
+  const gender = lower(form.get('gender')) || 'prefer_not_to_say';
+  const dateOfBirth = normalize(form.get('date_of_birth'));
 
   if (!validEmail(email)) {
     state.error = 'Enter a complete email address.';
@@ -870,6 +884,11 @@ async function signUp(event) {
   }
   if (password.length < 8) {
     state.error = 'Password must be at least 8 characters.';
+    render();
+    return;
+  }
+  if (!isAdultDate(dateOfBirth)) {
+    state.error = 'You must be at least 18 years old to create an account.';
     render();
     return;
   }
@@ -882,7 +901,7 @@ async function signUp(event) {
     email,
     password,
     options: {
-      data: { full_name: fullName, role },
+      data: { full_name: fullName, role, gender, date_of_birth: dateOfBirth },
       emailRedirectTo: authRedirectUrl('/login'),
     },
   });
@@ -910,6 +929,8 @@ async function signUp(event) {
       email,
       full_name: fullName,
       role,
+      gender,
+      date_of_birth: dateOfBirth,
       verification_status: 'pending',
     });
   }
@@ -1093,6 +1114,11 @@ async function updateProfile(id) {
 }
 
 async function updateRole(userId, role) {
+  if (!['customer', 'artisan'].includes(role)) {
+    state.error = 'Accounts can only be set to user or artisan from this dashboard.';
+    render();
+    return;
+  }
   await updateTableRow(
     'profiles',
     userId,
@@ -1185,6 +1211,11 @@ async function deleteTableRow(table, id) {
 }
 
 async function createAccount(role) {
+  if (!['customer', 'artisan'].includes(role)) {
+    state.error = 'Accounts can only be created as user or artisan from this dashboard.';
+    render();
+    return;
+  }
   const email = normalize(window.prompt(`New ${role} email`, ''));
   if (!email) return;
   if (!validEmail(email)) {
@@ -1194,6 +1225,23 @@ async function createAccount(role) {
   }
   const fullName =
     normalize(window.prompt('Full name', '')) || email.split('@')[0];
+  const gender = lower(
+    window.prompt(
+      'Gender (female, male, non_binary, prefer_not_to_say)',
+      'prefer_not_to_say',
+    ),
+  );
+  const dateOfBirth = normalize(window.prompt('Date of birth (YYYY-MM-DD)', ''));
+  if (!['female', 'male', 'non_binary', 'prefer_not_to_say'].includes(gender)) {
+    state.error = 'Enter a supported gender value.';
+    render();
+    return;
+  }
+  if (!isAdultDate(dateOfBirth)) {
+    state.error = 'Account holder must be at least 18 years old.';
+    render();
+    return;
+  }
   const randomPassword = generateStrongPassword();
 
   await runAction(async () => {
@@ -1202,6 +1250,8 @@ async function createAccount(role) {
       password: randomPassword,
       role,
       full_name: fullName,
+      gender,
+      date_of_birth: dateOfBirth,
     });
     await adminAction('sendPasswordReset', { email });
     setNotice(`${role} created. Password setup link sent to ${email}.`);
@@ -1236,6 +1286,10 @@ async function importAccounts(file) {
           phone: normalize(normalized.phone || normalized.phone_number),
           location: normalize(normalized.location || normalized.city),
           country: normalize(normalized.country),
+          gender: lower(normalized.gender || 'prefer_not_to_say'),
+          date_of_birth: normalize(
+            normalized.date_of_birth || normalized.dob || normalized.birth_date,
+          ),
           password: normalize(normalized.password),
         };
       })
@@ -1868,7 +1922,6 @@ function renderProfiles(filterRole = null) {
         <div class="row-actions">
           <button class="primary compact-button" data-create-role="customer">Create user</button>
           <button class="primary compact-button" data-create-role="artisan">Create artisan</button>
-          <button class="primary compact-button" data-create-role="admin">Create admin</button>
           <label class="ghost small file-action">
             Import Excel
             <input type="file" accept=".xlsx,.csv" data-import-accounts />
@@ -1924,7 +1977,7 @@ function renderProfileRow(profile) {
         <button class="ghost small" data-random-password="${esc(profile.id)}" data-email="${esc(profile.email || '')}">Random password</button>
         <button class="reject small" data-delete-account="${esc(profile.id)}" data-email="${esc(profile.email || '')}">Delete</button>
         <select data-role-user="${esc(profile.id)}">
-          ${['customer', 'artisan', 'admin']
+          ${['customer', 'artisan']
             .map(
               (role) =>
                 `<option value="${role}" ${profile.role === role ? 'selected' : ''}>${role}</option>`,
@@ -3027,6 +3080,19 @@ function renderAuthPage(mode = state.authMode) {
                   <option value="customer">Customer</option>
                   <option value="artisan">Artisan</option>
                 </select>
+              </label>
+              <label>
+                Gender
+                <select name="gender" required>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                  <option value="non_binary">Non-binary</option>
+                  <option value="prefer_not_to_say">Prefer not to say</option>
+                </select>
+              </label>
+              <label>
+                Date of birth
+                <input name="date_of_birth" type="date" required />
               </label>`
             : ''
         }
@@ -3217,8 +3283,6 @@ function renderContent() {
       return renderShell(renderJobs());
     case 'listings':
       return renderShell(renderListings());
-    case 'settings':
-      return renderShell(renderSettings());
     default:
       return renderShell(renderOverview());
   }

@@ -80,9 +80,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             .delete()
             .eq('id', item.id)
             .select('id');
-        if (deleted.isEmpty) {
-          throw StateError(settings.t('Notification could not be deleted.'));
-        }
+        // A zero-row delete is already the desired visible state. This can
+        // happen if realtime/refetch removed the row before the delete returns.
+        debugPrint('Deleted notification rows: ${deleted.length}');
       }
       if (!mounted) return true;
       setState(() => _future = _loadNotifications());

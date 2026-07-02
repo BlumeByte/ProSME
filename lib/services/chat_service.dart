@@ -622,6 +622,7 @@ class SupabaseChatService implements ChatService {
     required String threadId,
     required String userId,
   }) async {
+    await _localDb.hideThreadForUser(threadId, userId);
     try {
       final current = await _supabase
           .from('threads')
@@ -640,6 +641,7 @@ class SupabaseChatService implements ChatService {
           final duplicateId = (row['id'] ?? '').toString();
           if (duplicateId.isNotEmpty) {
             await _localDb.hideThreadForUser(duplicateId, userId);
+            await _hideRemoteThreadForUser(duplicateId);
           }
         }
         return;
@@ -647,7 +649,19 @@ class SupabaseChatService implements ChatService {
     } catch (_) {
       // Fall back to hiding the selected row locally.
     }
-    await _localDb.hideThreadForUser(threadId, userId);
+    await _hideRemoteThreadForUser(threadId);
+  }
+
+  Future<void> _hideRemoteThreadForUser(String threadId) async {
+    try {
+      await _supabase.rpc(
+        'delete_thread_for_current_user',
+        params: {'p_thread_id': threadId},
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Failed to persist chat deletion: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   Future<void> _refreshThreadSummary(String threadId) async {

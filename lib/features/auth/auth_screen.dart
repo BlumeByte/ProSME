@@ -24,13 +24,39 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _dateOfBirthController = TextEditingController();
   bool _isLoading = false;
   bool _isCreateAccountMode = false;
   UserRole _selectedRole = UserRole.customer;
+  String _selectedGender = 'prefer_not_to_say';
+  DateTime? _dateOfBirth;
 
   String get _username => _usernameController.text.trim();
   String get _email => _emailController.text.trim();
   String get _password => _passwordController.text;
+
+  bool _isAdult(DateTime value) {
+    final today = DateTime.now();
+    final adultCutoff = DateTime(today.year - 18, today.month, today.day);
+    return !value.isAfter(adultCutoff);
+  }
+
+  Future<void> _pickDateOfBirth() async {
+    final today = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate:
+          _dateOfBirth ?? DateTime(today.year - 18, today.month, today.day),
+      firstDate: DateTime(today.year - 100),
+      lastDate: today,
+    );
+    if (picked == null) return;
+    setState(() {
+      _dateOfBirth = picked;
+      _dateOfBirthController.text =
+          '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+    });
+  }
 
   String _friendlyError(Object error) {
     if (error is PendingEmailVerificationException) {
@@ -257,6 +283,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (!_usernamePattern.hasMatch(_username)) {
       return 'Username must be 3-20 characters (letters, numbers, underscores).';
     }
+    if (_dateOfBirth == null) {
+      return 'Date of birth is required.';
+    }
+    if (!_isAdult(_dateOfBirth!)) {
+      return 'You must be at least 18 years old to create an account.';
+    }
     return null;
   }
 
@@ -321,6 +353,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _dateOfBirthController.dispose();
     super.dispose();
   }
 
@@ -395,6 +428,45 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 decoration: InputDecoration(labelText: settings.t('Username')),
               ),
               const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedGender,
+                decoration: InputDecoration(labelText: settings.t('Gender')),
+                items: [
+                  DropdownMenuItem(
+                    value: 'female',
+                    child: Text(settings.t('Female')),
+                  ),
+                  DropdownMenuItem(
+                    value: 'male',
+                    child: Text(settings.t('Male')),
+                  ),
+                  DropdownMenuItem(
+                    value: 'non_binary',
+                    child: Text(settings.t('Non-binary')),
+                  ),
+                  DropdownMenuItem(
+                    value: 'prefer_not_to_say',
+                    child: Text(settings.t('Prefer not to say')),
+                  ),
+                ],
+                onChanged: _isLoading
+                    ? null
+                    : (value) {
+                        if (value == null) return;
+                        setState(() => _selectedGender = value);
+                      },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _dateOfBirthController,
+                readOnly: true,
+                decoration: InputDecoration(
+                  labelText: settings.t('Date of birth'),
+                  suffixIcon: const Icon(Icons.calendar_today_outlined),
+                ),
+                onTap: _isLoading ? null : _pickDateOfBirth,
+              ),
+              const SizedBox(height: 12),
             ],
             TextField(
               controller: _emailController,
@@ -447,6 +519,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                             _password,
                             username: _username,
                             role: _selectedRole,
+                            gender: _selectedGender,
+                            dateOfBirth: _dateOfBirth,
                           ),
                           authService: authService,
                         );

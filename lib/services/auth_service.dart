@@ -50,6 +50,8 @@ abstract class AuthService {
     String password, {
     String? username,
     UserRole role = UserRole.customer,
+    String? gender,
+    DateTime? dateOfBirth,
   });
   Future<void> requestSignupEmailOtp(String email);
   Future<AppUser> verifySignupEmailOtp(String email, String code);
@@ -119,6 +121,8 @@ class MockAuthService implements AuthService {
     String password, {
     String? username,
     UserRole role = UserRole.customer,
+    String? gender,
+    DateTime? dateOfBirth,
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
     final normalizedUsername = (username ?? '').trim().toLowerCase();
@@ -147,6 +151,8 @@ class MockAuthService implements AuthService {
       email: email.trim(),
       photoUrl: '',
       verificationStatus: VerificationStatus.pending,
+      gender: gender ?? '',
+      dateOfBirth: dateOfBirth,
       createdAt: DateTime.now(),
     );
     _accountsByEmail[normalizedEmail] = _currentUser!;
@@ -428,7 +434,7 @@ class SupabaseAuthService implements AuthService {
       final response = await _supabase
           .from('profiles')
           .select(
-            'id,username,full_name,phone,email,avatar_url,role,verification_status,country,country_code,description,is_busy,email_verified,phone_verified,email_notifications,phone_notifications,blocked_email_notification_types,blocked_phone_notification_types,app_language,currency_code,username_updated_at,created_at,updated_at',
+            'id,username,full_name,phone,email,avatar_url,role,verification_status,country,country_code,description,gender,date_of_birth,is_busy,email_verified,phone_verified,email_notifications,phone_notifications,blocked_email_notification_types,blocked_phone_notification_types,app_language,currency_code,username_updated_at,created_at,updated_at',
           )
           .eq('id', userId)
           .maybeSingle();
@@ -456,6 +462,13 @@ class SupabaseAuthService implements AuthService {
     final role =
         (existingProfile?['role'] ?? metadata['role'] ?? UserRole.customer.name)
             .toString();
+    final gender = (existingProfile?['gender'] ?? metadata['gender'] ?? '')
+        .toString()
+        .trim();
+    final dateOfBirth =
+        (existingProfile?['date_of_birth'] ?? metadata['date_of_birth'] ?? '')
+            .toString()
+            .trim();
 
     final payload = <String, dynamic>{
       'id': user.id,
@@ -469,6 +482,8 @@ class SupabaseAuthService implements AuthService {
       'country': existingProfile?['country'] ?? 'Ghana',
       'country_code': existingProfile?['country_code'] ?? '+233',
       'description': existingProfile?['description'] ?? '',
+      'gender': gender.isEmpty ? null : gender,
+      'date_of_birth': dateOfBirth.isEmpty ? null : dateOfBirth,
       'is_busy': existingProfile?['is_busy'] ?? false,
       'email_verified':
           existingProfile?['email_verified'] ?? (user.emailConfirmedAt != null),
@@ -554,6 +569,15 @@ class SupabaseAuthService implements AuthService {
               .toString(),
       description:
           (source['description'] ?? metadata['description'] ?? '').toString(),
+      gender: (source['gender'] ?? metadata['gender'] ?? '').toString(),
+      dateOfBirth: DateTime.tryParse(
+        (source['date_of_birth'] ??
+                source['dateOfBirth'] ??
+                metadata['date_of_birth'] ??
+                metadata['dateOfBirth'] ??
+                '')
+            .toString(),
+      ),
       isBusy: source['is_busy'] == true ||
           source['isBusy'] == true ||
           metadata['is_busy'] == true ||
@@ -712,6 +736,8 @@ class SupabaseAuthService implements AuthService {
     String password, {
     String? username,
     UserRole role = UserRole.customer,
+    String? gender,
+    DateTime? dateOfBirth,
   }) async {
     final normalizedUsername = (username ?? email.split('@').first).trim();
     if (!isStrongPassword(password)) {
@@ -727,6 +753,8 @@ class SupabaseAuthService implements AuthService {
         'full_name': normalizedUsername,
         'username': normalizedUsername,
         'role': role.name,
+        'gender': gender,
+        'date_of_birth': dateOfBirth?.toIso8601String().split('T').first,
       },
     );
 

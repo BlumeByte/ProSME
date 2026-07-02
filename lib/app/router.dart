@@ -64,6 +64,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return null;
       }
 
+      if (fullPath == RouteNames.loginCallback) {
+        return isRecovering ? RouteNames.resetPassword : null;
+      }
+
       if (isRecovering && fullPath != RouteNames.resetPassword) {
         return RouteNames.resetPassword;
       }
@@ -104,6 +108,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.auth,
         builder: (context, state) => const AuthScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.loginCallback,
+        builder: (context, state) => const AuthCallbackScreen(),
       ),
       GoRoute(
         path: RouteNames.resetPassword,
@@ -219,6 +227,52 @@ bool _requiresAuth(String fullPath) {
   if (fullPath.startsWith('${RouteNames.chatThread}/')) return true;
   if (fullPath.startsWith('${RouteNames.jobDetail}/')) return true;
   return false;
+}
+
+class AuthCallbackScreen extends ConsumerStatefulWidget {
+  const AuthCallbackScreen({super.key});
+
+  @override
+  ConsumerState<AuthCallbackScreen> createState() => _AuthCallbackScreenState();
+}
+
+class _AuthCallbackScreenState extends ConsumerState<AuthCallbackScreen> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_finishCallback());
+  }
+
+  Future<void> _finishCallback() async {
+    await Future<void>.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+    final isRecovering = ref.read(passwordRecoveryActiveProvider);
+    if (isRecovering) {
+      context.go(RouteNames.resetPassword);
+      return;
+    }
+    final authState = ref.read(authStateProvider).valueOrNull;
+    context.go(authState == null ? RouteNames.auth : _homeForRole(authState));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = ref.watch(appSettingsControllerProvider);
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(settings.t('Completing sign-in...')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 String _homeForRole(AppUser? user) {

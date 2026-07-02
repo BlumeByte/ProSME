@@ -62,7 +62,19 @@ class _AdminPlatformDashboardScreenState
     ];
     final useBottomNav = MediaQuery.sizeOf(context).width < 720;
     return Scaffold(
-      appBar: AppBar(title: Text(settings.t('Admin Dashboard'))),
+      appBar: AppBar(
+        title: Text(settings.t('Admin Dashboard')),
+        actions: [
+          IconButton(
+            tooltip: settings.t('Logout'),
+            onPressed: () async {
+              await ref.read(authServiceProvider).signOut();
+              if (context.mounted) context.go(RouteNames.auth);
+            },
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
       body: useBottomNav
           ? sections[_selectedIndex]
           : Row(
@@ -783,7 +795,7 @@ class _AccountTile extends ConsumerWidget {
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
-                children: UserRole.values.map((role) {
+                children: [UserRole.customer, UserRole.artisan].map((role) {
                   final selected = account.role == role;
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),

@@ -12,6 +12,8 @@ class AppUser {
     this.country = 'Ghana',
     this.countryCode = '+233',
     this.description = '',
+    this.gender = '',
+    this.dateOfBirth,
     this.isBusy = false,
     this.emailVerified = false,
     this.phoneVerified = false,
@@ -35,6 +37,8 @@ class AppUser {
   final String country;
   final String countryCode;
   final String description;
+  final String gender;
+  final DateTime? dateOfBirth;
   final bool isBusy;
   final bool emailVerified;
   final bool phoneVerified;
@@ -57,6 +61,8 @@ class AppUser {
     String? country,
     String? countryCode,
     String? description,
+    String? gender,
+    DateTime? dateOfBirth,
     bool? isBusy,
     bool? emailVerified,
     bool? phoneVerified,
@@ -79,6 +85,8 @@ class AppUser {
       country: country ?? this.country,
       countryCode: countryCode ?? this.countryCode,
       description: description ?? this.description,
+      gender: gender ?? this.gender,
+      dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       isBusy: isBusy ?? this.isBusy,
       emailVerified: emailVerified ?? this.emailVerified,
       phoneVerified: phoneVerified ?? this.phoneVerified,
@@ -110,6 +118,8 @@ class AppUser {
       country: (json['country'] as String?) ?? 'Ghana',
       countryCode: (json['countryCode'] as String?) ?? '+233',
       description: (json['description'] as String?) ?? '',
+      gender: (json['gender'] as String?) ?? '',
+      dateOfBirth: DateTime.tryParse((json['dateOfBirth'] ?? '').toString()),
       isBusy: (json['isBusy'] as bool?) ?? false,
       emailVerified: (json['emailVerified'] as bool?) ?? false,
       phoneVerified: (json['phoneVerified'] as bool?) ?? false,
@@ -145,6 +155,8 @@ class AppUser {
       'country': country,
       'countryCode': countryCode,
       'description': description,
+      'gender': gender,
+      'dateOfBirth': dateOfBirth?.toIso8601String(),
       'isBusy': isBusy,
       'emailVerified': emailVerified,
       'phoneVerified': phoneVerified,

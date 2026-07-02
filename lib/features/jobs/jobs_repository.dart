@@ -27,6 +27,8 @@ class JobFeedItem {
     this.etaAt,
     this.startedAt,
     this.completedAt,
+    this.deletedByUserAt,
+    this.deletedByUserReason,
   });
 
   final String id;
@@ -46,6 +48,8 @@ class JobFeedItem {
   final DateTime? etaAt;
   final DateTime? startedAt;
   final DateTime? completedAt;
+  final DateTime? deletedByUserAt;
+  final String? deletedByUserReason;
 }
 
 class JobProgressEvent {
@@ -154,6 +158,8 @@ abstract class JobsRepository {
   });
 
   Future<void> deleteJob(String jobId);
+
+  Future<void> removeAcceptedJobFromBookings(String jobId);
 
   Future<JobBid> createBid({
     required String jobId,
@@ -480,6 +486,20 @@ class SupabaseJobsRepository implements JobsRepository {
     await _localDb?.removeCachedJobRow(jobId);
   }
 
+  @override
+  Future<void> removeAcceptedJobFromBookings(String jobId) async {
+    final row = await _client
+        .from('jobs')
+        .update({
+          'deleted_by_user_at': DateTime.now().toUtc().toIso8601String(),
+          'deleted_by_user_reason': 'removed_from_bookings',
+        })
+        .eq('id', jobId)
+        .select()
+        .single();
+    await _localDb?.upsertCachedJobRow(Map<String, dynamic>.from(row as Map));
+  }
+
   Future<JobFeedItem?> _findLatestMatchingJob({
     required String createdBy,
     required String title,
@@ -652,6 +672,9 @@ class SupabaseJobsRepository implements JobsRepository {
       etaAt: DateTime.tryParse((row['eta_at'] ?? '').toString()),
       startedAt: DateTime.tryParse((row['started_at'] ?? '').toString()),
       completedAt: DateTime.tryParse((row['completed_at'] ?? '').toString()),
+      deletedByUserAt:
+          DateTime.tryParse((row['deleted_by_user_at'] ?? '').toString()),
+      deletedByUserReason: (row['deleted_by_user_reason'] as String?)?.trim(),
       images: List<String>.from(
         (row['images'] ?? const <dynamic>[]) as List<dynamic>,
       ),
@@ -792,6 +815,8 @@ class MockJobsRepository implements JobsRepository {
       locationSource: locationSource,
       workStatus: 'open',
       acceptedAmount: null,
+      deletedByUserAt: null,
+      deletedByUserReason: null,
     );
     _jobs.insert(0, job);
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
@@ -843,6 +868,8 @@ class MockJobsRepository implements JobsRepository {
       etaAt: current.etaAt,
       startedAt: current.startedAt,
       completedAt: current.completedAt,
+      deletedByUserAt: current.deletedByUserAt,
+      deletedByUserReason: current.deletedByUserReason,
     );
     _jobs[index] = updated;
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
@@ -854,6 +881,35 @@ class MockJobsRepository implements JobsRepository {
     _jobs.removeWhere((job) => job.id == jobId);
     _bidsByJobId.remove(jobId);
     _ratingsByJobId.remove(jobId);
+    _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
+  }
+
+  @override
+  Future<void> removeAcceptedJobFromBookings(String jobId) async {
+    final index = _jobs.indexWhere((job) => job.id == jobId);
+    if (index == -1) return;
+    final job = _jobs[index];
+    _jobs[index] = JobFeedItem(
+      id: job.id,
+      title: job.title,
+      description: job.description,
+      location: job.location,
+      budget: job.budget,
+      createdBy: job.createdBy,
+      createdAt: job.createdAt,
+      images: job.images,
+      status: job.status,
+      locationLat: job.locationLat,
+      locationLng: job.locationLng,
+      locationSource: job.locationSource,
+      workStatus: job.workStatus,
+      acceptedAmount: job.acceptedAmount,
+      etaAt: job.etaAt,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt,
+      deletedByUserAt: DateTime.now(),
+      deletedByUserReason: 'removed_from_bookings',
+    );
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
   }
 
@@ -1024,6 +1080,8 @@ JobFeedItem _copyJobWithProgress(
     startedAt: status == 'in_progress' ? job.startedAt ?? now : job.startedAt,
     completedAt:
         status == 'completed' ? job.completedAt ?? now : job.completedAt,
+    deletedByUserAt: job.deletedByUserAt,
+    deletedByUserReason: job.deletedByUserReason,
   );
 }
 

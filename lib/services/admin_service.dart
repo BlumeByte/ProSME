@@ -255,6 +255,9 @@ class AdminService {
     required String userId,
     required UserRole role,
   }) async {
+    if (role == UserRole.admin) {
+      throw ArgumentError('Admin role updates are not allowed here.');
+    }
     final client = _supabase;
     if (client == null) return;
     await client.from('profiles').update({'role': role.name}).eq('id', userId);

@@ -33,6 +33,24 @@ const cleanNullable = (value: unknown) => {
   const normalized = clean(value);
   return normalized.length === 0 ? null : normalized;
 };
+const allowedGenders = new Set([
+  'female',
+  'male',
+  'non_binary',
+  'prefer_not_to_say',
+]);
+const isAdultDate = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return false;
+  const today = new Date();
+  const cutoff = new Date(Date.UTC(
+    today.getUTCFullYear() - 18,
+    today.getUTCMonth(),
+    today.getUTCDate(),
+  ));
+  return date <= cutoff;
+};
 
 const hasOwn = (source: Record<string, unknown>, key: string) =>
   Object.prototype.hasOwnProperty.call(source, key);
@@ -439,17 +457,23 @@ Deno.serve(async (req) => {
       const phone = clean(body.phone);
       const country = clean(body.country);
       const location = clean(body.location);
+      const gender = clean(body.gender) || 'prefer_not_to_say';
+      const dateOfBirth = clean(body.date_of_birth);
       const password = clean(body.password) || randomPassword();
       const allowedRoles = new Set(['customer', 'artisan', 'admin']);
 
       if (!validEmail(email)) return fail('Valid email is required.');
       if (!allowedRoles.has(role)) return fail('Invalid role.');
+      if (!allowedGenders.has(gender)) return fail('Invalid gender.');
+      if (!isAdultDate(dateOfBirth)) {
+        return fail('Account holder must be at least 18 years old.');
+      }
 
       const { data, error } = await adminClient.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
-        user_metadata: { full_name: fullName, role },
+        user_metadata: { full_name: fullName, role, gender, date_of_birth: dateOfBirth },
         app_metadata: { role },
       });
 
@@ -465,6 +489,8 @@ Deno.serve(async (req) => {
           phone,
           country: country || undefined,
           location,
+          gender,
+          date_of_birth: dateOfBirth,
           role,
           verification_status: 'pending',
         });
@@ -508,6 +534,11 @@ Deno.serve(async (req) => {
           clean(account.full_name) ||
           clean(account.name) ||
           email.split('@')[0];
+        const gender = clean(account.gender) || 'prefer_not_to_say';
+        const dateOfBirth =
+          clean(account.date_of_birth) ||
+          clean(account.dob) ||
+          clean(account.birth_date);
         const password = clean(account.password) || randomPassword();
 
         if (!validEmail(email)) {
@@ -518,12 +549,23 @@ Deno.serve(async (req) => {
           failed.push({ email, error: 'Invalid role.' });
           continue;
         }
+        if (!allowedGenders.has(gender)) {
+          failed.push({ email, error: 'Invalid gender.' });
+          continue;
+        }
+        if (!isAdultDate(dateOfBirth)) {
+          failed.push({
+            email,
+            error: 'Account holder must be at least 18 years old.',
+          });
+          continue;
+        }
 
         const { data, error } = await adminClient.auth.admin.createUser({
           email,
           password,
           email_confirm: true,
-          user_metadata: { full_name: fullName, role },
+          user_metadata: { full_name: fullName, role, gender, date_of_birth: dateOfBirth },
           app_metadata: { role },
         });
 
@@ -544,6 +586,8 @@ Deno.serve(async (req) => {
             phone: clean(account.phone),
             country: cleanNullable(account.country),
             location: clean(account.location),
+            gender,
+            date_of_birth: dateOfBirth,
             role,
             verification_status: 'pending',
           });

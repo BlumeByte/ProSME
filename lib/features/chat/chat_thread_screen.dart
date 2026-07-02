@@ -301,6 +301,25 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     return '';
   }
 
+  Future<bool> _shouldShowVerificationWarning() async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null || !shouldUseSupabase()) return false;
+    final otherUserId = await _resolveOtherUserId();
+    if (otherUserId.isEmpty || otherUserId == user.id) return false;
+    try {
+      final row = await ref
+          .read(supabaseClientProvider)
+          .from('profiles')
+          .select('verification_status')
+          .eq('id', otherUserId)
+          .maybeSingle();
+      final status = (row?['verification_status'] ?? '').toString();
+      return status != 'verified';
+    } catch (_) {
+      return true;
+    }
+  }
+
   WalletTransaction? _invoiceFromMessage(ChatMessage message) {
     if (message.type != MessageType.invoice) return null;
     try {
@@ -699,24 +718,30 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ),
       body: Column(
         children: [
-          Material(
-            color: colorScheme.surfaceContainerHighest,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      settings.t(
-                        'Confirm artisan verification status before sharing payments or personal details.',
+          FutureBuilder<bool>(
+            future: _shouldShowVerificationWarning(),
+            builder: (context, snapshot) {
+              if (snapshot.data != true) return const SizedBox.shrink();
+              return Material(
+                color: colorScheme.surfaceContainerHighest,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          settings.t(
+                            'This account is not verified. Be cautious before sharing payments or personal details.',
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
           Expanded(
             child: StreamBuilder<List<ChatMessage>>(

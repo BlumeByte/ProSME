@@ -118,6 +118,10 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
     final ownsJob = job.createdBy == user.id;
+    final hasAcceptedBid = job.acceptedAmount != null ||
+        job.workStatus != 'open' ||
+        job.status == 'active' ||
+        job.status == 'completed';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -125,9 +129,11 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
           settings.t(ownsJob ? 'Delete job request' : 'Remove job request'),
         ),
         content: Text(
-          ownsJob
-              ? '${settings.t('Delete')} "${job.title}" ${settings.t('permanently?')}'
-              : '${settings.t('Remove')} "${job.title}" ${settings.t('from your list?')}',
+          ownsJob && hasAcceptedBid
+              ? '${settings.t('Remove')} "${job.title}" ${settings.t('from your bookings? It will remain in Work history.')}'
+              : ownsJob
+                  ? '${settings.t('Delete')} "${job.title}" ${settings.t('permanently?')}'
+                  : '${settings.t('Remove')} "${job.title}" ${settings.t('from your list?')}',
         ),
         actions: [
           TextButton(
@@ -145,7 +151,13 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     if (confirmed != true) return;
     try {
       if (ownsJob) {
-        await ref.read(jobsRepositoryProvider).deleteJob(job.id);
+        if (hasAcceptedBid) {
+          await ref
+              .read(jobsRepositoryProvider)
+              .removeAcceptedJobFromBookings(job.id);
+        } else {
+          await ref.read(jobsRepositoryProvider).deleteJob(job.id);
+        }
         ref.invalidate(jobsStreamProvider);
       } else {
         await _hideJob(job.id, showNotice: false);
@@ -155,7 +167,9 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
         SnackBar(
           content: Text(
             settings.t(ownsJob
-                ? 'Job request deleted.'
+                ? hasAcceptedBid
+                    ? 'Booking removed from the app. It remains in Work history.'
+                    : 'Job request deleted.'
                 : 'Request removed from your list.'),
           ),
         ),
@@ -229,6 +243,9 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
         data: (jobs) {
           final participantJobs = jobs.where((job) {
             if (_hiddenJobIds.contains(job.id)) return false;
+            if (job.createdBy == user.id && job.deletedByUserAt != null) {
+              return false;
+            }
             if (job.workStatus == 'open') return true;
             return job.createdBy == user.id || acceptedJobIds.contains(job.id);
           }).toList(growable: false);

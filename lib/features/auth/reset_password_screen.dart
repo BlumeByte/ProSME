@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -57,9 +59,15 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
 
     setState(() => _loading = true);
     try {
-      await ref.read(authServiceProvider).updatePassword(password, '');
+      await ref
+          .read(authServiceProvider)
+          .updatePassword(password, '')
+          .timeout(const Duration(seconds: 30));
       ref.read(passwordRecoveryActiveProvider.notifier).state = false;
-      await ref.read(authServiceProvider).signOut();
+      await ref
+          .read(authServiceProvider)
+          .signOut()
+          .timeout(const Duration(seconds: 15), onTimeout: () {});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(settings.t('Password updated. Sign in again.'))),

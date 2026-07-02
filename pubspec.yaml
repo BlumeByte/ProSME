@@ -1,7 +1,7 @@
 name: prosme
 description: ProSME marketplace app for customers, artisans, and admins.
 publish_to: "none"
-version: 1.0.4+5
+version: 1.0.5+6
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
