@@ -273,17 +273,33 @@ const dateText = (value) => {
   });
 };
 
-const isAdultDate = (value) => {
-  if (!value) return false;
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return false;
+const dateInputValue = (date) =>
+  [
+    date.getFullYear().toString().padStart(4, '0'),
+    (date.getMonth() + 1).toString().padStart(2, '0'),
+    date.getDate().toString().padStart(2, '0'),
+  ].join('-');
+const adultCutoffDate = () => {
   const today = new Date();
-  const cutoff = new Date(
+  return new Date(
     today.getFullYear() - 18,
     today.getMonth(),
     today.getDate(),
   );
-  return date <= cutoff;
+};
+const adultCutoffInputValue = () => dateInputValue(adultCutoffDate());
+const isAdultDate = (value) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return false;
+  }
+  return date <= adultCutoffDate();
 };
 
 const roleBadge = (role) => {
@@ -3092,7 +3108,7 @@ function renderAuthPage(mode = state.authMode) {
               </label>
               <label>
                 Date of birth
-                <input name="date_of_birth" type="date" required />
+                <input name="date_of_birth" type="date" max="${adultCutoffInputValue()}" required />
               </label>`
             : ''
         }

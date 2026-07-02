@@ -1,16 +1,11 @@
 -- ProSME production data reset.
--- Destructive: removes app rows, Supabase Auth users, and app storage objects.
+-- Destructive: removes app rows and Supabase Auth users.
 -- Preserves schemas, tables, policies, functions, storage buckets, and migration history.
+-- Storage objects must be removed with the Storage API; run:
+--   node scripts/reset_production_storage.mjs
+-- before or after this SQL if uploaded files also need to be cleared.
 
 begin;
-
--- Clear files uploaded by users/artisans/admins while keeping the buckets.
-delete from storage.objects
-where bucket_id in (
-  'avatars',
-  'listing-images',
-  'artisan-verification'
-);
 
 -- Clear every application table in public, including profiles, listings,
 -- jobs, chats, notifications, reports, wallet history, billing records,

@@ -2,7 +2,8 @@
   "scripts": {
     "dev:web": "npm --prefix admin_web run dev",
     "build:web": "npm --prefix admin_web run build",
-    "preview:web": "npm --prefix admin_web run preview"
+    "preview:web": "npm --prefix admin_web run preview",
+    "reset:storage": "node scripts/reset_production_storage.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

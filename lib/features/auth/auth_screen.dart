@@ -43,12 +43,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   Future<void> _pickDateOfBirth() async {
     final today = DateTime.now();
+    final adultCutoff = DateTime(today.year - 18, today.month, today.day);
     final picked = await showDatePicker(
       context: context,
-      initialDate:
-          _dateOfBirth ?? DateTime(today.year - 18, today.month, today.day),
+      initialDate: _dateOfBirth ?? adultCutoff,
       firstDate: DateTime(today.year - 100),
-      lastDate: today,
+      lastDate: adultCutoff,
     );
     if (picked == null) return;
     setState(() {
