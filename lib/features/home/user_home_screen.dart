@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/widgets/admob_banner.dart';
 import '../../core/widgets/app_scaffold.dart';
 import '../../core/widgets/sme_page_banner.dart';
 import '../../routes/route_names.dart';
@@ -121,6 +122,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
             Expanded(
               child: IndexedStack(index: currentIndex, children: _pages),
             ),
+            if (currentIndex == 0) const AdMobBannerSlot(),
           ],
         ),
         bottomNavigationBar: StreamBuilder(

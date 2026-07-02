@@ -127,7 +127,7 @@ flutter build appbundle --release \
   --dart-define=SUPABASE_ANON_KEY=<your-anon-key> \
   --dart-define=GOOGLE_OAUTH_REDIRECT_URL=com.blumebyte.prosme://login-callback \
   --dart-define=PASSWORD_RECOVERY_REDIRECT_URL=com.blumebyte.prosme://login-callback \
-  --dart-define=ADMOB_NATIVE_AD_UNIT_ID=ca-app-pub-3851492633678585/4922760393
+  --dart-define=ADMOB_BANNER_AD_UNIT_ID=ca-app-pub-3851492633678585/7100000049
 ```
 
 For a signed upload bundle, create `android/key.properties` with `storeFile`, `storePassword`, `keyAlias`, and `keyPassword`. Without that file, local release builds fall back to debug signing and are not Play Store upload-ready.

@@ -31,10 +31,10 @@ const String kPaystackCheckoutUrl = String.fromEnvironment(
   'PAYSTACK_CHECKOUT_URL',
   defaultValue: '',
 );
-const String kAdMobAppId = 'ca-app-pub-3851492633678585~9436720475';
-const String kAdMobNativeAdUnitId = String.fromEnvironment(
-  'ADMOB_NATIVE_AD_UNIT_ID',
-  defaultValue: 'ca-app-pub-3851492633678585/4922760393',
+const String kAdMobAppId = 'ca-app-pub-3851492633678585~8157061300';
+const String kAdMobBannerAdUnitId = String.fromEnvironment(
+  'ADMOB_BANNER_AD_UNIT_ID',
+  defaultValue: 'ca-app-pub-3851492633678585/7100000049',
 );
 const double kVerificationCustomerMonthlyUsd = 2;
 const double kVerificationArtisanMonthlyUsd = 3;
