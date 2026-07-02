@@ -17,7 +17,7 @@ val requestedReleaseBuild = gradle.startParameter.taskNames.any {
 }
 
 android {
-    namespace = "com.prosme.app"
+    namespace = "com.blumebyte.prosme"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -32,7 +32,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.prosme.app"
+        applicationId = "com.blumebyte.prosme"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -64,8 +64,8 @@ android {
                 }
                 signingConfigs.getByName("debug")
             }
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }

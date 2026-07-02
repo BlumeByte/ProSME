@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'app.dart';
 import 'config/supabase_options.dart';
 import 'services/app_launch_service.dart';
@@ -40,6 +41,7 @@ Future<void> main() async {
   await AppLaunchService.init();
   await ThemeModeController.init();
   await AppSettingsController.init();
+  await MobileAds.instance.initialize();
   unawaited(NotificationService().initialize());
   unawaited(AnalyticsService.trackAppOpen());
   if (shouldUseSupabase()) {

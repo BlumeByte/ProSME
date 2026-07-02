@@ -17,7 +17,7 @@ const String kSupabaseAnonKey = String.fromEnvironment(
 const String kGoogleOAuthRedirectUrl = String.fromEnvironment(
   'GOOGLE_OAUTH_REDIRECT_URL',
   // Override with your Android applicationId, e.g. com.yourcompany.prosme://login-callback
-  defaultValue: 'com.prosme.app://login-callback',
+  defaultValue: 'com.blumebyte.prosme://login-callback',
 );
 const String kPasswordRecoveryRedirectUrl = String.fromEnvironment(
   'PASSWORD_RECOVERY_REDIRECT_URL',
@@ -30,6 +30,11 @@ const String kEmailVerificationRedirectUrl = String.fromEnvironment(
 const String kPaystackCheckoutUrl = String.fromEnvironment(
   'PAYSTACK_CHECKOUT_URL',
   defaultValue: '',
+);
+const String kAdMobAppId = 'ca-app-pub-3851492633678585~9436720475';
+const String kAdMobNativeAdUnitId = String.fromEnvironment(
+  'ADMOB_NATIVE_AD_UNIT_ID',
+  defaultValue: 'ca-app-pub-3851492633678585/4922760393',
 );
 const double kVerificationCustomerMonthlyUsd = 2;
 const double kVerificationArtisanMonthlyUsd = 3;

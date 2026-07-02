@@ -1,4 +1,4 @@
-package com.prosme.prosme
+package com.blumebyte.prosme
 
 import io.flutter.embedding.android.FlutterActivity
 
