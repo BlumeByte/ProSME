@@ -402,7 +402,6 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final listingService = ref.watch(listingServiceProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final settings = ref.watch(appSettingsControllerProvider);
     final currencyCode = settings.currencyCode;
@@ -424,26 +423,23 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
       }
     }
 
-    return StreamBuilder<List<Listing>>(
-      stream: listingService.watchListings(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                settings.t(
-                  'Could not load professionals. Please check your connection and try again.',
-                ),
-                textAlign: TextAlign.center,
+    final listingsAsync = ref.watch(listingsStreamProvider);
+    return listingsAsync.when(
+      error: (_, __) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              settings.t(
+                'Could not load professionals. Please check your connection and try again.',
               ),
+              textAlign: TextAlign.center,
             ),
-          );
-        }
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final listings = snapshot.data!;
+          ),
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      data: (listings) {
         _notifyOnNewListing(listings);
         final filtered = listings.where((listing) {
           final serviceText =

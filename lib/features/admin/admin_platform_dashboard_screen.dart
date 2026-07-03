@@ -795,27 +795,36 @@ class _AccountTile extends ConsumerWidget {
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
-                children: [UserRole.customer, UserRole.artisan].map((role) {
-                  final selected = account.role == role;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: OutlinedButton(
-                      onPressed: selected
-                          ? null
-                          : () async {
-                              await ref
-                                  .read(adminServiceProvider)
-                                  .updateAccountRole(
-                                    userId: account.id,
-                                    role: role,
-                                  );
-                            },
-                      child: Text(selected
-                          ? '${role.name} ${settings.t('active')}'
-                          : '${settings.t('Set')} ${role.name}'),
-                    ),
-                  );
-                }).toList(growable: false),
+                children: [
+                  ...[UserRole.customer, UserRole.artisan].map((role) {
+                    final selected = account.role == role;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: OutlinedButton(
+                        onPressed: selected
+                            ? null
+                            : () async {
+                                await ref
+                                    .read(adminServiceProvider)
+                                    .updateAccountRole(
+                                      userId: account.id,
+                                      role: role,
+                                    );
+                              },
+                        child: Text(selected
+                            ? '${role.name} ${settings.t('active')}'
+                            : '${settings.t('Set')} ${role.name}'),
+                      ),
+                    );
+                  }),
+                  OutlinedButton.icon(
+                    onPressed: account.role == UserRole.admin
+                        ? null
+                        : () => _confirmResetData(context, ref, settings),
+                    icon: const Icon(Icons.cleaning_services_outlined),
+                    label: Text(settings.t('Reset data')),
+                  ),
+                ],
               ),
             ),
           ],
@@ -827,6 +836,49 @@ class _AccountTile extends ConsumerWidget {
   String _initial(String value) {
     final trimmed = value.trim();
     return trimmed.isEmpty ? '?' : trimmed[0].toUpperCase();
+  }
+
+  Future<void> _confirmResetData(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    final label = account.email.isEmpty ? account.id : account.email;
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(settings.t('Reset account data')),
+            content: Text(
+              settings.t(
+                'Clear listings, bookings, chats, saved items, notifications, reports, verification records, and billing records for this account. Login and profile stay active.',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(settings.t('Cancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text('${settings.t('Reset')} $label'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !context.mounted) return;
+    try {
+      await ref.read(adminServiceProvider).resetAccountData(userId: account.id);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(settings.t('Account data reset.'))),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    }
   }
 }
 

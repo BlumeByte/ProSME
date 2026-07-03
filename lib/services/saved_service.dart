@@ -25,10 +25,12 @@ abstract class SavedService {
 
 class MockSavedService implements SavedService {
   final _saved = <String>{};
+  final _controller = StreamController<List<String>>.broadcast();
 
   @override
-  Stream<List<String>> watchSavedListingIds(String userId) {
-    return Stream.value(List<String>.from(_saved));
+  Stream<List<String>> watchSavedListingIds(String userId) async* {
+    yield List<String>.from(_saved);
+    yield* _controller.stream;
   }
 
   @override
@@ -39,11 +41,13 @@ class MockSavedService implements SavedService {
   @override
   Future<void> saveListing(String userId, String listingId) async {
     _saved.add(listingId);
+    _controller.add(List<String>.from(_saved));
   }
 
   @override
   Future<void> unsaveListing(String userId, String listingId) async {
     _saved.remove(listingId);
+    _controller.add(List<String>.from(_saved));
   }
 }
 
@@ -56,48 +60,68 @@ class SupabaseSavedService implements SavedService {
 
   final SupabaseClient _supabase;
   final LocalDbService? _localDb;
+  final Map<String, StreamController<List<String>>> _controllers = {};
+  final Map<String, List<String>> _latestByUser = {};
+  final Map<String, Timer> _refreshTimers = {};
 
   @override
   Stream<List<String>> watchSavedListingIds(String userId) {
-    late final StreamController<List<String>> controller;
-    Timer? refreshTimer;
-    var lastEmitted = const <String>[];
+    _ensureUserStarted(userId);
+    return Stream<List<String>>.multi((controller) {
+      controller.add(
+        List<String>.unmodifiable(_latestByUser[userId] ?? const []),
+      );
+      final subscription = _controllerFor(userId).stream.listen(
+            controller.add,
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = subscription.cancel;
+    });
+  }
 
-    void emitIfChanged(List<String> ids) {
-      final next = List<String>.unmodifiable(ids);
-      if (listEquals(lastEmitted, next)) return;
-      lastEmitted = next;
-      if (!controller.isClosed) controller.add(next);
-    }
-
-    Future<void> refresh() async {
-      try {
-        emitIfChanged(await fetchSavedListingIds(userId));
-      } catch (error, stackTrace) {
-        debugPrint('Failed to refresh saved listings: $error');
-        debugPrintStack(stackTrace: stackTrace);
-        emitIfChanged(
-          await _localDb?.loadCachedSavedListingIds(userId) ?? const [],
-        );
-      }
-    }
-
-    controller = StreamController<List<String>>.broadcast(
-      onListen: () async {
-        emitIfChanged(
-          await _localDb?.loadCachedSavedListingIds(userId) ?? const [],
-        );
-        unawaited(refresh());
-        refreshTimer = Timer.periodic(
-          const Duration(seconds: 12),
-          (_) => unawaited(refresh()),
-        );
-      },
-      onCancel: () {
-        refreshTimer?.cancel();
-      },
+  StreamController<List<String>> _controllerFor(String userId) {
+    return _controllers.putIfAbsent(
+      userId,
+      () => StreamController<List<String>>.broadcast(),
     );
-    return controller.stream;
+  }
+
+  void _ensureUserStarted(String userId) {
+    if (_refreshTimers.containsKey(userId)) return;
+    unawaited(() async {
+      final cached =
+          await _localDb?.loadCachedSavedListingIds(userId) ?? const [];
+      _emitSavedIds(userId, cached, force: true);
+      await _refreshSavedIds(userId);
+    }());
+    _refreshTimers[userId] = Timer.periodic(
+      const Duration(seconds: 12),
+      (_) => unawaited(_refreshSavedIds(userId)),
+    );
+  }
+
+  Future<void> _refreshSavedIds(String userId) async {
+    try {
+      _emitSavedIds(userId, await fetchSavedListingIds(userId));
+    } catch (error, stackTrace) {
+      debugPrint('Failed to refresh saved listings: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      _emitSavedIds(
+        userId,
+        await _localDb?.loadCachedSavedListingIds(userId) ?? const [],
+        force: true,
+      );
+    }
+  }
+
+  void _emitSavedIds(String userId, List<String> ids, {bool force = false}) {
+    final next = List<String>.unmodifiable(ids);
+    final current = _latestByUser[userId] ?? const <String>[];
+    if (!force && listEquals(current, next)) return;
+    _latestByUser[userId] = next;
+    final controller = _controllerFor(userId);
+    if (!controller.isClosed) controller.add(next);
   }
 
   @override
@@ -117,6 +141,9 @@ class SupabaseSavedService implements SavedService {
   @override
   Future<void> saveListing(String userId, String listingId) async {
     await _localDb?.addCachedSavedListingId(userId, listingId);
+    final local = await _localDb?.loadCachedSavedListingIds(userId) ??
+        {...?_latestByUser[userId], listingId}.toList();
+    _emitSavedIds(userId, local, force: true);
     try {
       await _supabase.from('saved_listings').upsert({
         'user_id': userId,
@@ -136,6 +163,11 @@ class SupabaseSavedService implements SavedService {
   @override
   Future<void> unsaveListing(String userId, String listingId) async {
     await _localDb?.removeCachedSavedListingId(userId, listingId);
+    final local = await _localDb?.loadCachedSavedListingIds(userId) ??
+        (_latestByUser[userId] ?? const <String>[])
+            .where((id) => id != listingId)
+            .toList();
+    _emitSavedIds(userId, local, force: true);
     try {
       await _supabase
           .from('saved_listings')

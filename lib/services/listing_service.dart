@@ -55,6 +55,10 @@ class SupabaseListingService implements ListingService {
 
   final SupabaseClient _supabase;
   final LocalDbService? _localDb;
+  final StreamController<List<Listing>> _controller =
+      StreamController<List<Listing>>.broadcast();
+  List<Listing> _latest = const [];
+  bool _started = false;
 
   static String _profileDisplayName(dynamic profile) {
     final row = Map<String, dynamic>.from(profile as Map);
@@ -179,45 +183,50 @@ class SupabaseListingService implements ListingService {
 
   @override
   Stream<List<Listing>> watchListings() {
-    late final StreamController<List<Listing>> controller;
-    Timer? refreshTimer;
-    var lastEmitted = const <Listing>[];
+    _ensureStarted();
+    return Stream<List<Listing>>.multi((controller) {
+      controller.add(List<Listing>.unmodifiable(_latest));
+      final subscription = _controller.stream.listen(
+        controller.add,
+        onError: controller.addError,
+        onDone: controller.close,
+      );
+      controller.onCancel = subscription.cancel;
+    });
+  }
 
-    void emitIfChanged(List<Listing> listings) {
-      if (_listingListsEqual(lastEmitted, listings)) return;
-      lastEmitted = List<Listing>.unmodifiable(listings);
-      if (!controller.isClosed) controller.add(lastEmitted);
-    }
+  void _ensureStarted() {
+    if (_started) return;
+    _started = true;
+    unawaited(() async {
+      final cached = await _localDb?.loadCachedListings() ?? const [];
+      _emitListings(cached, force: true);
+      await _refreshListings();
+    }());
+    Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => unawaited(_refreshListings()),
+    );
+  }
 
-    Future<void> refresh() async {
-      try {
-        final listings = await fetchListings();
-        if (_localDb != null) {
-          await _localDb.cacheListings(listings);
-        }
-        emitIfChanged(listings);
-      } catch (error, stackTrace) {
-        debugPrint('Failed to refresh listings: $error');
-        debugPrintStack(stackTrace: stackTrace);
+  Future<void> _refreshListings() async {
+    try {
+      _emitListings(await fetchListings());
+    } catch (error, stackTrace) {
+      debugPrint('Failed to refresh listings: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (_latest.isEmpty) {
+        _emitListings(await _localDb?.loadCachedListings() ?? const [],
+            force: true);
       }
     }
+  }
 
-    controller = StreamController<List<Listing>>.broadcast(
-      onListen: () async {
-        final cached = await _localDb?.loadCachedListings() ?? const [];
-        emitIfChanged(cached);
-        unawaited(refresh());
-        refreshTimer = Timer.periodic(
-          const Duration(seconds: 30),
-          (_) => unawaited(refresh()),
-        );
-      },
-      onCancel: () {
-        refreshTimer?.cancel();
-      },
-    );
-
-    return controller.stream;
+  void _emitListings(List<Listing> listings, {bool force = false}) {
+    final next = List<Listing>.unmodifiable(listings);
+    if (!force && _listingListsEqual(_latest, next)) return;
+    _latest = next;
+    if (!_controller.isClosed) _controller.add(next);
   }
 
   @override
@@ -267,7 +276,15 @@ class SupabaseListingService implements ListingService {
     }
     if (_localDb != null) {
       final cached = await _localDb.loadCachedListings();
-      await _localDb.cacheListings([created, ...cached]);
+      final next = [
+        created,
+        ...cached.where((item) => item.id != created.id),
+      ];
+      await _localDb.cacheListings(next);
+      _emitListings(next, force: true);
+    } else {
+      _emitListings(
+          [created, ..._latest.where((item) => item.id != created.id)]);
     }
     return created;
   }
@@ -297,7 +314,20 @@ class SupabaseListingService implements ListingService {
         for (final item in cached)
           if (item.id == hydrated.first.id) hydrated.first else item,
       ];
+      if (!next.any((item) => item.id == hydrated.first.id)) {
+        next.insert(0, hydrated.first);
+      }
       await _localDb.cacheListings(next);
+      _emitListings(next, force: true);
+    } else {
+      final next = [
+        for (final item in _latest)
+          if (item.id == hydrated.first.id) hydrated.first else item,
+      ];
+      if (!next.any((item) => item.id == hydrated.first.id)) {
+        next.insert(0, hydrated.first);
+      }
+      _emitListings(next, force: true);
     }
     return hydrated.first;
   }
@@ -309,6 +339,15 @@ class SupabaseListingService implements ListingService {
       final cached = await _localDb.loadCachedListings();
       await _localDb.cacheListings(
         cached.where((listing) => listing.id != listingId).toList(),
+      );
+      _emitListings(
+        cached.where((listing) => listing.id != listingId).toList(),
+        force: true,
+      );
+    } else {
+      _emitListings(
+        _latest.where((listing) => listing.id != listingId).toList(),
+        force: true,
       );
     }
   }

@@ -64,6 +64,7 @@ class _UploadRequestScreenState extends ConsumerState<UploadRequestScreen> {
             ),
             createdBy: user.id,
           );
+      ref.invalidate(jobsStreamProvider);
       if (!mounted) return;
       _titleController.clear();
       _descriptionController.clear();

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../config/supabase_options.dart';
+import '../models/listing.dart';
 import 'auth_service.dart';
 import 'chat_service.dart';
 import 'listing_service.dart';
@@ -59,6 +60,10 @@ final listingServiceProvider = Provider<ListingService>((ref) {
     Supabase.instance.client,
     ref.watch(localDbProvider),
   );
+});
+
+final listingsStreamProvider = StreamProvider<List<Listing>>((ref) {
+  return ref.watch(listingServiceProvider).watchListings();
 });
 
 final chatServiceProvider = Provider<ChatService>((ref) {

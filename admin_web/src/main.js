@@ -1167,6 +1167,30 @@ async function deleteAccount(userId, email) {
   });
 }
 
+async function resetAccountData(userId, email) {
+  if (state.session?.user?.id === userId) {
+    state.error =
+      'You cannot reset the Admin Account you are currently using.';
+    render();
+    return;
+  }
+  const label = email || userId;
+  if (
+    !window.confirm(
+      `Reset all app data for ${label}? The login account will remain, but listings, bookings, chats, saved items, notifications, reports, verification records, and billing records will be cleared.`,
+    )
+  )
+    return;
+
+  await runAction(async () => {
+    const result = await adminAction('resetUserData', { userId });
+    if (result?.ok === false)
+      throw new Error(result.error || 'Could not reset account data.');
+    setNotice('Account data reset. Login and profile were kept.');
+    await refreshData();
+  });
+}
+
 async function updateTableRow(table, id, patch, message) {
   state.busy = true;
   state.error = '';
@@ -1990,6 +2014,7 @@ function renderProfileRow(profile) {
       <td class="row-actions">
         <button class="ghost small" data-edit-profile="${esc(profile.id)}">Edit</button>
         <button class="ghost small" data-reset-email="${esc(profile.email || '')}">Reset</button>
+        <button class="ghost small" data-reset-account-data="${esc(profile.id)}" data-email="${esc(profile.email || '')}">Reset data</button>
         <button class="ghost small" data-random-password="${esc(profile.id)}" data-email="${esc(profile.email || '')}">Random password</button>
         <button class="reject small" data-delete-account="${esc(profile.id)}" data-email="${esc(profile.email || '')}">Delete</button>
         <select data-role-user="${esc(profile.id)}">
@@ -3487,6 +3512,12 @@ function bindEvents() {
   document.querySelectorAll('[data-random-password]').forEach((button) => {
     button.addEventListener('click', () =>
       randomizePassword(button.dataset.randomPassword, button.dataset.email),
+    );
+  });
+
+  document.querySelectorAll('[data-reset-account-data]').forEach((button) => {
+    button.addEventListener('click', () =>
+      resetAccountData(button.dataset.resetAccountData, button.dataset.email),
     );
   });
 

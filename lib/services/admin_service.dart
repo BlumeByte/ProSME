@@ -263,6 +263,26 @@ class AdminService {
     await client.from('profiles').update({'role': role.name}).eq('id', userId);
   }
 
+  Future<void> resetAccountData({required String userId}) async {
+    final client = _supabase;
+    if (client == null) return;
+    final response = await client.functions.invoke(
+      'admin-dashboard',
+      body: {
+        'action': 'resetUserData',
+        'userId': userId,
+      },
+    );
+    final data = response.data is Map
+        ? Map<String, dynamic>.from(response.data as Map)
+        : <String, dynamic>{};
+    if (response.status < 200 || response.status >= 300 || data['ok'] != true) {
+      throw StateError(
+        (data['error'] ?? 'Could not reset account data.').toString(),
+      );
+    }
+  }
+
   Future<void> submitArtisanVerification({
     required String userId,
     required String phone,

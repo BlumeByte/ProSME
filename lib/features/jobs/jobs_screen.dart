@@ -904,6 +904,7 @@ Future<void> _openCreateJobSheet(BuildContext context, WidgetRef ref) async {
                                 ),
                                 createdBy: user.id,
                               );
+                          ref.invalidate(jobsStreamProvider);
                           if (context.mounted) {
                             Navigator.of(context).pop();
                             ScaffoldMessenger.of(context).showSnackBar(

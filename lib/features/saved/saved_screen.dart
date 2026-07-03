@@ -6,7 +6,6 @@ import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/listing_card.dart';
 import '../../core/widgets/loading_state.dart';
 import '../../core/widgets/safe_back_button.dart';
-import '../../models/listing.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
@@ -60,51 +59,47 @@ class _SavedBody extends ConsumerWidget {
           );
         }
 
-        final listingService = ref.watch(listingServiceProvider);
-        return FutureBuilder<List<Listing>>(
-          future: listingService.fetchListings(),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return EmptyState(
-                title: settings.t('Could not load saved listings'),
-                subtitle: settings.t(
-                  'Please check your connection and try again.',
-                ),
-              );
-            }
-            if (!snapshot.hasData) {
-              return LoadingState(
+        return ref.watch(listingsStreamProvider).when(
+              error: (_, __) {
+                return EmptyState(
+                  title: settings.t('Could not load saved listings'),
+                  subtitle: settings.t(
+                    'Please check your connection and try again.',
+                  ),
+                );
+              },
+              loading: () => LoadingState(
                 label: settings.t('Loading saved listings...'),
-              );
-            }
-            final saved = snapshot.data!
-                .where((listing) => savedIds.contains(listing.id))
-                .toList(growable: false);
+              ),
+              data: (listings) {
+                final saved = listings
+                    .where((listing) => savedIds.contains(listing.id))
+                    .toList(growable: false);
 
-            if (saved.isEmpty) {
-              return EmptyState(
-                title: settings.t('No saved listings'),
-                subtitle: settings.t(
-                  'Tap the bookmark icon on any listing to save it here.',
-                ),
-              );
-            }
+                if (saved.isEmpty) {
+                  return EmptyState(
+                    title: settings.t('No saved listings'),
+                    subtitle: settings.t(
+                      'Tap the bookmark icon on any listing to save it here.',
+                    ),
+                  );
+                }
 
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: saved.length,
-              itemBuilder: (context, index) {
-                final listing = saved[index];
-                return ListingCard(
-                  listing: listing,
-                  currencyCode: currencyCode,
-                  onTap: () =>
-                      context.push('${RouteNames.listingDetail}/${listing.id}'),
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: saved.length,
+                  itemBuilder: (context, index) {
+                    final listing = saved[index];
+                    return ListingCard(
+                      listing: listing,
+                      currencyCode: currencyCode,
+                      onTap: () => context
+                          .push('${RouteNames.listingDetail}/${listing.id}'),
+                    );
+                  },
                 );
               },
             );
-          },
-        );
       },
     );
   }

@@ -1226,17 +1226,17 @@ Future<void> _showAppSettingsSheet(
                         ButtonSegment(
                           value: ThemeMode.system,
                           icon: const Icon(Icons.settings_suggest_outlined),
-                          label: Text(settings.t('System')),
+                          label: _SegmentLabel(settings.t('System')),
                         ),
                         ButtonSegment(
                           value: ThemeMode.light,
                           icon: const Icon(Icons.light_mode_outlined),
-                          label: Text(settings.t('Light')),
+                          label: _SegmentLabel(settings.t('Light')),
                         ),
                         ButtonSegment(
                           value: ThemeMode.dark,
                           icon: const Icon(Icons.dark_mode_outlined),
-                          label: Text(settings.t('Dark')),
+                          label: _SegmentLabel(settings.t('Dark')),
                         ),
                       ],
                       selected: {themeMode},
@@ -1394,6 +1394,25 @@ Future<void> _showAppSettingsSheet(
       ),
     ),
   );
+}
+
+class _SegmentLabel extends StatelessWidget {
+  const _SegmentLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        softWrap: false,
+      ),
+    );
+  }
 }
 
 String _notificationTypeLabel(AppSettings settings, String type) {

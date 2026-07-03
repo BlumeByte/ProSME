@@ -411,6 +411,145 @@ const randomPassword = () => {
   return `${token}Aa!7`;
 };
 
+const maybeDelete = async (
+  adminClient: ReturnType<typeof createClient>,
+  table: string,
+  column: string,
+  value: string,
+) => {
+  const { error } = await adminClient.from(table).delete().eq(column, value);
+  if (error) {
+    console.warn(`resetUserData skipped ${table}.${column}: ${error.message}`);
+  }
+};
+
+const resetUserData = async ({
+  adminClient,
+  userId,
+  adminId,
+}: {
+  adminClient: ReturnType<typeof createClient>;
+  userId: string;
+  adminId: string;
+}) => {
+  const { data: profile, error: profileError } = await adminClient
+    .from('profiles')
+    .select('id,email,role')
+    .eq('id', userId)
+    .maybeSingle();
+  if (profileError) throw new Error(profileError.message);
+  if (!profile) throw new Error('Profile not found.');
+
+  const jobIds = new Set<string>();
+  const bidIds = new Set<string>();
+  const threadIds = new Set<string>();
+
+  const ownedJobs = await adminClient
+    .from('jobs')
+    .select('id,accepted_bid_id,accepted_amount,work_status,status')
+    .eq('created_by', userId);
+  if (!ownedJobs.error) {
+    for (const row of ownedJobs.data || []) jobIds.add(clean(row.id));
+  }
+  const artisanBids = await adminClient.from('job_bids').select('id,job_id').eq('artisan_id', userId);
+  if (!artisanBids.error) {
+    for (const row of artisanBids.data || []) {
+      bidIds.add(clean(row.id));
+    }
+  }
+  const ownedThreads = await adminClient
+    .from('threads')
+    .select('id')
+    .or(`user_id.eq.${userId},artisan_id.eq.${userId}`);
+  if (!ownedThreads.error) {
+    for (const row of ownedThreads.data || []) threadIds.add(clean(row.id));
+  }
+
+  const jobIdList = [...jobIds].filter(Boolean);
+  const bidIdList = [...bidIds].filter(Boolean);
+  const threadIdList = [...threadIds].filter(Boolean);
+  const lockedJobIds = (ownedJobs.data || [])
+    .filter((row) => {
+      const workStatus = clean(row.work_status) || 'open';
+      const status = clean(row.status) || 'open';
+      return (
+        clean(row.accepted_bid_id) ||
+        row.accepted_amount !== null ||
+        workStatus !== 'open' ||
+        status === 'active' ||
+        status === 'completed'
+      );
+    })
+    .map((row) => clean(row.id))
+    .filter(Boolean);
+  const deletableJobIds = jobIdList.filter((id) => !lockedJobIds.includes(id));
+
+  if (deletableJobIds.length) {
+    await adminClient.from('job_status_events').delete().in('job_id', deletableJobIds);
+    await adminClient.from('job_ratings').delete().in('job_id', deletableJobIds);
+    await adminClient.from('wallet_transactions').delete().in('job_id', deletableJobIds);
+    await adminClient.from('job_bids').delete().in('job_id', deletableJobIds);
+    await adminClient.from('jobs').delete().in('id', deletableJobIds);
+  }
+  if (lockedJobIds.length) {
+    await adminClient.from('jobs').update({ created_by: null }).in('id', lockedJobIds);
+  }
+  if (bidIdList.length) {
+    await adminClient.from('wallet_transactions').delete().in('bid_id', bidIdList);
+    await adminClient.from('job_bids').delete().in('id', bidIdList);
+  }
+  if (threadIdList.length) {
+    await adminClient.from('user_thread_deletions').delete().in('thread_id', threadIdList);
+    await adminClient.from('messages').delete().in('thread_id', threadIdList);
+    await adminClient.from('threads').delete().in('id', threadIdList);
+  }
+
+  await maybeDelete(adminClient, 'messages', 'sender_id', userId);
+  await maybeDelete(adminClient, 'saved_listings', 'user_id', userId);
+  await maybeDelete(adminClient, 'listings', 'artisan_id', userId);
+  await maybeDelete(adminClient, 'job_ratings', 'artisan_id', userId);
+  await maybeDelete(adminClient, 'job_ratings', 'user_id', userId);
+  await maybeDelete(adminClient, 'wallet_transactions', 'user_id', userId);
+  await maybeDelete(adminClient, 'wallet_transactions', 'artisan_id', userId);
+  await maybeDelete(adminClient, 'reports', 'reporter_id', userId);
+  await maybeDelete(adminClient, 'reports', 'reported_user_id', userId);
+  await maybeDelete(adminClient, 'analytics_events', 'user_id', userId);
+  await maybeDelete(adminClient, 'verification_payments', 'user_id', userId);
+  await maybeDelete(adminClient, 'verification_subscriptions', 'user_id', userId);
+  await maybeDelete(adminClient, 'email_outbox', 'related_user_id', userId);
+  await maybeDelete(adminClient, 'admin_notifications', 'related_user_id', userId);
+  await maybeDelete(adminClient, 'admin_notifications', 'actor_id', userId);
+
+  const { error: updateError } = await adminClient
+    .from('profiles')
+    .update({
+      verification_status: 'pending',
+      verification_notes: null,
+      verification_submitted_at: null,
+      verification_reviewed_at: null,
+      verification_retry_after: null,
+      verification_expires_at: null,
+      national_id_front_url: null,
+      national_id_back_url: null,
+      business_certificate_urls: [],
+      is_busy: false,
+      rating_summary: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', userId);
+  if (updateError) throw new Error(updateError.message);
+
+  await adminClient.from('admin_notifications').insert({
+    type: 'account_data_reset',
+    title: 'Account data reset',
+    body: `${clean(profile.email) || userId} was reset by admin.`,
+    actor_id: adminId,
+    related_user_id: userId,
+    related_table: 'profiles',
+    related_id: userId,
+  });
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS')
     return new Response('ok', { headers: corsHeaders });
@@ -733,6 +872,16 @@ Deno.serve(async (req) => {
       if (error) return fail(error.message);
 
       await adminClient.from('profiles').delete().eq('id', userId);
+      return ok({ userId });
+    }
+
+    if (action === 'resetUserData') {
+      const userId = clean(body.userId || body.id);
+      if (!userId) return fail('User id is required.');
+      if (userId === user.id) {
+        return fail('You cannot reset the Admin Account you are currently using.');
+      }
+      await resetUserData({ adminClient, userId, adminId: user.id });
       return ok({ userId });
     }
 
