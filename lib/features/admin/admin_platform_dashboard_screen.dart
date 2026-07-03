@@ -158,7 +158,12 @@ class _AdminOverview extends ConsumerWidget {
                 _MetricCard(
                     label: settings.t('Listings'), value: counts.listings),
                 _MetricCard(label: settings.t('Jobs'), value: counts.jobs),
+                _MetricCard(
+                    label: settings.t('Direct jobs'), value: counts.directJobs),
                 _MetricCard(label: settings.t('Bids'), value: counts.bids),
+                _MetricCard(
+                    label: settings.t('Countered bids'),
+                    value: counts.counteredBids),
                 _MetricCard(label: settings.t('Chats'), value: counts.threads),
                 _MetricCard(
                     label: settings.t('Messages'), value: counts.messages),
@@ -284,6 +289,16 @@ class _JobProgressHealth extends ConsumerWidget {
                   icon: Icons.radio_button_checked,
                 ),
                 _ProgressMetric(
+                  label: settings.t('Public requests'),
+                  value: counts.publicJobs,
+                  icon: Icons.campaign_outlined,
+                ),
+                _ProgressMetric(
+                  label: settings.t('Direct requests'),
+                  value: counts.directJobs,
+                  icon: Icons.assignment_ind_outlined,
+                ),
+                _ProgressMetric(
                   label: settings.t('Accepted'),
                   value: counts.acceptedJobs,
                   icon: Icons.handshake_outlined,
@@ -307,6 +322,26 @@ class _JobProgressHealth extends ConsumerWidget {
                   label: settings.t('Completed'),
                   value: counts.completedJobs,
                   icon: Icons.task_alt,
+                ),
+                _ProgressMetric(
+                  label: settings.t('Pending bids'),
+                  value: counts.pendingBids,
+                  icon: Icons.hourglass_top_outlined,
+                ),
+                _ProgressMetric(
+                  label: settings.t('Edited bids'),
+                  value: counts.editedBids,
+                  icon: Icons.edit_outlined,
+                ),
+                _ProgressMetric(
+                  label: settings.t('Countered bids'),
+                  value: counts.counteredBids,
+                  icon: Icons.swap_horiz_outlined,
+                ),
+                _ProgressMetric(
+                  label: settings.t('Rejected bids'),
+                  value: counts.rejectedBids,
+                  icon: Icons.block_outlined,
                 ),
               ],
             ),
@@ -951,8 +986,16 @@ class _ModulesPanel extends ConsumerWidget {
         final modules = [
           ('Profiles', counts.accounts, 'Account and role records'),
           ('Listings', counts.listings, 'Artisan service listings'),
-          ('Jobs', counts.jobs, 'Customer service requests'),
-          ('Bids', counts.bids, 'Negotiation offers from artisans'),
+          (
+            'Jobs',
+            counts.jobs,
+            '${counts.publicJobs} public, ${counts.directJobs} direct requests'
+          ),
+          (
+            'Bids',
+            counts.bids,
+            '${counts.pendingBids} pending, ${counts.counteredBids} countered, ${counts.acceptedBids} accepted'
+          ),
           ('Threads', counts.threads, 'Chat rooms'),
           ('Messages', counts.messages, 'Chat messages and offers'),
           ('Reports', counts.reports, 'Chat, support, and safety reports'),

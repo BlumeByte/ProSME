@@ -32,6 +32,8 @@ class PlatformModuleCounts {
     required this.tenants,
     required this.listings,
     required this.jobs,
+    required this.publicJobs,
+    required this.directJobs,
     required this.openJobs,
     required this.acceptedJobs,
     required this.startPendingJobs,
@@ -39,6 +41,11 @@ class PlatformModuleCounts {
     required this.completionPendingJobs,
     required this.completedJobs,
     required this.bids,
+    required this.pendingBids,
+    required this.editedBids,
+    required this.counteredBids,
+    required this.acceptedBids,
+    required this.rejectedBids,
     required this.threads,
     required this.messages,
     required this.notifications,
@@ -50,6 +57,8 @@ class PlatformModuleCounts {
   final int tenants;
   final int listings;
   final int jobs;
+  final int publicJobs;
+  final int directJobs;
   final int openJobs;
   final int acceptedJobs;
   final int startPendingJobs;
@@ -57,6 +66,11 @@ class PlatformModuleCounts {
   final int completionPendingJobs;
   final int completedJobs;
   final int bids;
+  final int pendingBids;
+  final int editedBids;
+  final int counteredBids;
+  final int acceptedBids;
+  final int rejectedBids;
   final int threads;
   final int messages;
   final int notifications;
@@ -200,6 +214,8 @@ class AdminService {
         tenants: 0,
         listings: 0,
         jobs: 0,
+        publicJobs: 0,
+        directJobs: 0,
         openJobs: 0,
         acceptedJobs: 0,
         startPendingJobs: 0,
@@ -207,6 +223,11 @@ class AdminService {
         completionPendingJobs: 0,
         completedJobs: 0,
         bids: 0,
+        pendingBids: 0,
+        editedBids: 0,
+        counteredBids: 0,
+        acceptedBids: 0,
+        rejectedBids: 0,
         threads: 0,
         messages: 0,
         notifications: 0,
@@ -217,8 +238,9 @@ class AdminService {
 
     final accounts = await fetchAccounts();
     final listingRows = await _supabase.from('listings').select('id');
-    final jobRows = await _supabase.from('jobs').select('id,work_status');
-    final bidRows = await _supabase.from('job_bids').select('id');
+    final jobRows =
+        await _supabase.from('jobs').select('id,work_status,request_type');
+    final bidRows = await _supabase.from('job_bids').select('id,status');
     final threadRows = await _supabase.from('threads').select('id');
     final messageRows = await _supabase.from('messages').select('id');
     final notificationRows =
@@ -231,18 +253,34 @@ class AdminService {
     int countJobs(String status) => jobs
         .where((job) => (job['work_status'] ?? 'open').toString() == status)
         .length;
+    int countRequestType(String type) => jobs
+        .where((job) => (job['request_type'] ?? 'public').toString() == type)
+        .length;
+    final bids = (bidRows as List<dynamic>)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
+    int countBids(String status) => bids
+        .where((bid) => (bid['status'] ?? 'pending').toString() == status)
+        .length;
     return PlatformModuleCounts(
       accounts: accounts.length,
       tenants: accounts.map((account) => account.tenantId).toSet().length,
       listings: (listingRows as List<dynamic>).length,
       jobs: jobs.length,
+      publicJobs: countRequestType('public'),
+      directJobs: countRequestType('direct'),
       openJobs: countJobs('open'),
       acceptedJobs: countJobs('accepted'),
       startPendingJobs: countJobs('start_pending'),
       inProgressJobs: countJobs('in_progress'),
       completionPendingJobs: countJobs('completion_pending'),
       completedJobs: countJobs('completed'),
-      bids: (bidRows as List<dynamic>).length,
+      bids: bids.length,
+      pendingBids: countBids('pending'),
+      editedBids: countBids('edited'),
+      counteredBids: countBids('countered'),
+      acceptedBids: countBids('accepted'),
+      rejectedBids: countBids('rejected'),
       threads: (threadRows as List<dynamic>).length,
       messages: (messageRows as List<dynamic>).length,
       notifications: (notificationRows as List<dynamic>).length,

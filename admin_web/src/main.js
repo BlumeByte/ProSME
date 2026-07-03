@@ -319,8 +319,14 @@ const statusBadge = (status) => {
     active: 'badge badge-green',
     completed: 'badge badge-blue',
     in_progress: 'badge badge-blue',
+    start_pending: 'badge badge-orange',
+    completion_pending: 'badge badge-orange',
     cancelled: 'badge badge-red',
     accepted: 'badge badge-green',
+    countered: 'badge badge-blue',
+    edited: 'badge badge-orange',
+    direct: 'badge badge-purple',
+    public: 'badge badge-teal',
     active: 'badge badge-green',
     payment_required: 'badge badge-orange',
     pending_payment: 'badge badge-blue',
@@ -584,7 +590,7 @@ async function refreshPortalData() {
         supabase
           .from('jobs')
           .select(
-            'id,title,description,location,budget,status,created_by,created_at',
+            'id,title,description,location,budget,status,work_status,request_type,target_artisan_id,accepted_bid_id,created_by,created_at,deleted_by_user_at',
           )
           .order('created_at', { ascending: false })
           .limit(80),
@@ -594,7 +600,7 @@ async function refreshPortalData() {
         supabase
           .from('job_bids')
           .select(
-            'id,job_id,artisan_id,amount,message,status,created_at,updated_at',
+            'id,job_id,artisan_id,created_by_user_id,amount,message,counter_message,status,created_at,updated_at',
           )
           .order('created_at', { ascending: false })
           .limit(80),
@@ -673,7 +679,7 @@ async function refreshData() {
       supabase
         .from('jobs')
         .select(
-          'id,title,description,location,budget,status,created_by,tenant_id,created_at',
+          'id,title,description,location,budget,status,work_status,request_type,target_artisan_id,accepted_bid_id,created_by,tenant_id,created_at,deleted_by_user_at',
         )
         .order('created_at', { ascending: false })
         .limit(500),
@@ -683,7 +689,7 @@ async function refreshData() {
       supabase
         .from('job_bids')
         .select(
-          'id,job_id,artisan_id,amount,message,status,created_at,updated_at',
+          'id,job_id,artisan_id,created_by_user_id,amount,message,counter_message,status,created_at,updated_at',
         )
         .order('created_at', { ascending: false })
         .limit(500),
@@ -1605,8 +1611,21 @@ function dashboardStats() {
   );
   const unread = state.data.notifications.filter((item) => !item.read_at);
   const openJobs = state.data.jobs.filter(
-    (job) => (job.status || 'active') === 'active',
+    (job) =>
+      !job.deleted_by_user_at &&
+      (job.work_status || job.status || 'open') === 'open',
   );
+  const directJobs = state.data.jobs.filter(
+    (job) => (job.request_type || 'public') === 'direct',
+  );
+  const publicJobs = state.data.jobs.filter(
+    (job) => (job.request_type || 'public') !== 'direct',
+  );
+  const bidsByStatus = state.data.bids.reduce((acc, bid) => {
+    const status = bid.status || 'pending';
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
   const reports = visibleReports();
   const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
   const recentVisits = state.data.analyticsEvents.filter(
@@ -1621,8 +1640,27 @@ function dashboardStats() {
   return [
     ['Total users', profiles.length, `${customers.length} customers`],
     ['Artisans', artisans.length, `${pending.length} pending verification`],
-    ['Listings', state.data.listings.length, 'Editable service listings'],
-    ['Open jobs', openJobs.length, `${state.data.bids.length} bids`],
+    ['Listings', state.data.listings.length, 'Editable artisan services'],
+    [
+      'Job requests',
+      state.data.jobs.length,
+      `${publicJobs.length} public - ${directJobs.length} direct`,
+    ],
+    [
+      'Open jobs',
+      openJobs.length,
+      `${bidsByStatus.pending || 0} pending bids`,
+    ],
+    [
+      'Direct offers',
+      directJobs.length,
+      `${bidsByStatus.countered || 0} countered - ${bidsByStatus.rejected || 0} rejected`,
+    ],
+    [
+      'Accepted bids',
+      bidsByStatus.accepted || 0,
+      `${bidsByStatus.edited || 0} edited offers`,
+    ],
     ['Reports', reports.length, `${unread.length} unread admin notices`],
     ['Visitors 24h', visitorCount, `${recentVisits.length} page views`],
     ['Email queue', pendingEmails.length, `${failedEmails.length} failed sends`],
@@ -2324,8 +2362,10 @@ function trackedBidRows() {
       row.customerName,
       row.artisanName,
       row.status,
+      row.job?.request_type,
       row.wallet?.invoice_number,
       row.message,
+      row.counter_message,
     ].some((value) => lower(value).includes(q));
   });
   filtered.sort((a, b) => {
@@ -2484,6 +2524,7 @@ function renderBidTracking() {
                         <strong>${money(row.amount)}</strong>
                         ${statusBadge(row.status)}
                         <small>${esc(row.message || '')}</small>
+                        ${row.counter_message ? `<small>${esc(row.counter_message)}</small>` : ''}
                       </td>
                       <td>
                         ${
@@ -2511,6 +2552,8 @@ function renderJobs() {
     'description',
     'location',
     'status',
+    'work_status',
+    'request_type',
     'tenant_id',
   ]);
   return `
@@ -2548,7 +2591,12 @@ function renderJobs() {
                     <td><strong>${esc(job.title)}</strong><small>${esc(job.description || '')}</small></td>
                     <td>${esc(job.location || '')}</td>
                     <td>${money(job.budget)}</td>
-                    <td>${statusBadge(job.status || 'active')}</td>
+                    <td>
+                      <div class="row-actions">
+                        ${statusBadge(job.request_type === 'direct' ? 'direct' : 'public')}
+                        ${statusBadge(job.work_status || job.status || 'open')}
+                      </div>
+                    </td>
                     <td>${bidCount}</td>
                     <td>${dateText(job.created_at)}</td>
                     <td class="row-actions">
@@ -3172,6 +3220,22 @@ function renderPortal() {
   const relevantBids = state.data.bids.filter(
     (bid) => bid.artisan_id === profile.id,
   );
+  const customerDirectBids = state.data.bids.filter((bid) => {
+    const job = state.data.jobs.find((item) => item.id === bid.job_id);
+    return (
+      bid.created_by_user_id === profile.id ||
+      (job && job.created_by === profile.id)
+    );
+  });
+  const directRequests = state.data.jobs.filter(
+    (job) =>
+      (job.request_type || 'public') === 'direct' &&
+      job.target_artisan_id === profile.id,
+  );
+  const publicRequests = state.data.jobs.filter(
+    (job) => (job.request_type || 'public') !== 'direct',
+  );
+  const visibleJobs = isArtisan ? [...directRequests, ...publicRequests] : ownJobs;
   const walletTotal = state.data.walletTransactions.reduce(
     (sum, item) => sum + Number(item.amount || 0),
     0,
@@ -3195,20 +3259,30 @@ function renderPortal() {
         </section>
         ${Object.keys(state.tableErrors).length ? renderTableErrors() : ''}
         <section class="stat-grid">
-          <article class="stat-card"><span>${isArtisan ? 'Bids sent' : 'Your requests'}</span><strong>${isArtisan ? relevantBids.length : ownJobs.length}</strong><small>Synced from ProSME</small></article>
+          <article class="stat-card"><span>${isArtisan ? 'Direct requests' : 'Your requests'}</span><strong>${isArtisan ? directRequests.length : ownJobs.length}</strong><small>${isArtisan ? 'Offers sent directly to you' : 'Created from your account'}</small></article>
+          <article class="stat-card"><span>${isArtisan ? 'Public requests' : 'Direct offers'}</span><strong>${isArtisan ? publicRequests.length : customerDirectBids.length}</strong><small>${isArtisan ? 'Available for artisan bids' : 'Offers sent to artisans'}</small></article>
+          <article class="stat-card"><span>${isArtisan ? 'Bids sent' : 'Accepted bids'}</span><strong>${isArtisan ? relevantBids.length : customerDirectBids.filter((bid) => bid.status === 'accepted').length}</strong><small>Pending, countered, accepted, or rejected</small></article>
           <article class="stat-card"><span>Wallet records</span><strong>${state.data.walletTransactions.length}</strong><small>${money(walletTotal)} tracked</small></article>
           <article class="stat-card"><span>Alerts</span><strong>${state.data.notifications.length}</strong><small>Dashboard notifications</small></article>
         </section>
         <section class="grid two">
           <article class="panel">
-            <div class="panel-head"><h2>${isArtisan ? 'Open job requests' : 'Your job requests'}</h2></div>
-            ${renderPortalJobs(isArtisan ? state.data.jobs : ownJobs)}
+            <div class="panel-head"><h2>${isArtisan ? 'Job and direct requests' : 'Your job requests'}</h2></div>
+            ${renderPortalJobs(visibleJobs)}
           </article>
           <article class="panel">
-            <div class="panel-head"><h2>${isArtisan ? 'Your bids' : 'Available services'}</h2></div>
-            ${isArtisan ? renderPortalBids(relevantBids) : renderPortalListings(state.data.listings)}
+            <div class="panel-head"><h2>${isArtisan ? 'Your bids' : 'Direct offer status'}</h2></div>
+            ${isArtisan ? renderPortalBids(relevantBids) : renderPortalBids(customerDirectBids)}
           </article>
         </section>
+        ${
+          isArtisan
+            ? ''
+            : `<section class="panel">
+                <div class="panel-head"><h2>Available artisan services</h2></div>
+                ${renderPortalListings(state.data.listings)}
+              </section>`
+        }
       </main>
       ${publicFooter()}
     </div>
@@ -3223,7 +3297,10 @@ function renderPortalJobs(items) {
       (job) => `
         <div class="list-row">
           <div><strong>${esc(job.title || 'Untitled job')}</strong><small>${esc(job.location || '')} · ${dateText(job.created_at)}</small></div>
-          ${statusBadge(job.status || 'open')}
+          <div class="row-actions">
+            ${statusBadge(job.request_type === 'direct' ? 'direct' : 'public')}
+            ${statusBadge(job.work_status || job.status || 'open')}
+          </div>
         </div>`,
     )
     .join('')}</div>`;
@@ -3236,7 +3313,7 @@ function renderPortalBids(items) {
     .map(
       (bid) => `
         <div class="list-row">
-          <div><strong>${money(bid.amount)}</strong><small>${dateText(bid.created_at)}</small></div>
+          <div><strong>${money(bid.amount)}</strong><small>${esc(bid.counter_message || bid.message || 'Offer')} Â· ${dateText(bid.created_at)}</small></div>
           ${statusBadge(bid.status || 'pending')}
         </div>`,
     )
