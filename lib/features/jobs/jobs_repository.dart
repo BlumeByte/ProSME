@@ -29,6 +29,8 @@ class JobFeedItem {
     this.completedAt,
     this.deletedByUserAt,
     this.deletedByUserReason,
+    this.requestType = 'public',
+    this.targetArtisanId,
   });
 
   final String id;
@@ -50,6 +52,8 @@ class JobFeedItem {
   final DateTime? completedAt;
   final DateTime? deletedByUserAt;
   final String? deletedByUserReason;
+  final String requestType;
+  final String? targetArtisanId;
 }
 
 class JobProgressEvent {
@@ -85,6 +89,8 @@ class JobBid {
     this.artisanAvatarUrl,
     this.artisanVerified = false,
     this.acceptedBidCount = 0,
+    this.createdByUserId,
+    this.counterMessage = '',
   });
 
   final String id;
@@ -98,6 +104,10 @@ class JobBid {
   final String? artisanAvatarUrl;
   final bool artisanVerified;
   final int acceptedBidCount;
+  final String? createdByUserId;
+  final String counterMessage;
+
+  bool get isDirect => createdByUserId != null && createdByUserId!.isNotEmpty;
 }
 
 class JobRating {
@@ -143,6 +153,8 @@ abstract class JobsRepository {
     double? locationLat,
     double? locationLng,
     String locationSource = 'typed',
+    String requestType = 'public',
+    String? targetArtisanId,
   });
 
   Future<JobFeedItem> updateJob({
@@ -166,9 +178,31 @@ abstract class JobsRepository {
     required String artisanId,
     required double amount,
     required String message,
+    String? createdByUserId,
+    String status = 'pending',
+  });
+
+  Future<({JobFeedItem job, JobBid bid})> createDirectBid({
+    required String customerId,
+    required String artisanId,
+    required String title,
+    required String description,
+    required String location,
+    required double amount,
+    String message = '',
   });
 
   Future<void> acceptBid(String bidId);
+
+  Future<void> rejectBid(String bidId, {String comment = ''});
+
+  Future<void> counterBid({
+    required String bidId,
+    required double amount,
+    String comment = '',
+  });
+
+  Future<void> deleteBid(String bidId);
 
   Future<void> updateProgress({
     required String jobId,
@@ -382,6 +416,8 @@ class SupabaseJobsRepository implements JobsRepository {
           artisanVerified:
               (profile?['verification_status'] ?? '').toString() == 'verified',
           acceptedBidCount: acceptedCounts[bid.artisanId] ?? 0,
+          createdByUserId: bid.createdByUserId,
+          counterMessage: bid.counterMessage,
         );
       }).toList(growable: false);
     } catch (error, stackTrace) {
@@ -402,6 +438,8 @@ class SupabaseJobsRepository implements JobsRepository {
     double? locationLat,
     double? locationLng,
     String locationSource = 'typed',
+    String requestType = 'public',
+    String? targetArtisanId,
   }) async {
     final jobId = const Uuid().v4();
     final createdAt = DateTime.now().toUtc();
@@ -416,6 +454,8 @@ class SupabaseJobsRepository implements JobsRepository {
       'location_lat': locationLat,
       'location_lng': locationLng,
       'location_source': locationSource,
+      'request_type': requestType,
+      'target_artisan_id': targetArtisanId,
     };
     try {
       final row = await _client.from('jobs').insert(payload).select().single();
@@ -459,6 +499,8 @@ class SupabaseJobsRepository implements JobsRepository {
     double? locationLat,
     double? locationLng,
     String locationSource = 'typed',
+    String requestType = 'public',
+    String? targetArtisanId,
   }) async {
     final row = await _client
         .from('jobs')
@@ -581,6 +623,8 @@ class SupabaseJobsRepository implements JobsRepository {
     required String artisanId,
     required double amount,
     required String message,
+    String? createdByUserId,
+    String status = 'pending',
   }) async {
     final row = await _client
         .from('job_bids')
@@ -590,7 +634,8 @@ class SupabaseJobsRepository implements JobsRepository {
             'artisan_id': artisanId,
             'amount': amount,
             'message': message,
-            'status': 'pending',
+            'status': status,
+            if (createdByUserId != null) 'created_by_user_id': createdByUserId,
           },
           onConflict: 'job_id,artisan_id',
         )
@@ -601,6 +646,36 @@ class SupabaseJobsRepository implements JobsRepository {
   }
 
   @override
+  Future<({JobFeedItem job, JobBid bid})> createDirectBid({
+    required String customerId,
+    required String artisanId,
+    required String title,
+    required String description,
+    required String location,
+    required double amount,
+    String message = '',
+  }) async {
+    final job = await createJob(
+      title: title,
+      description: description,
+      location: location,
+      budget: amount,
+      createdBy: customerId,
+      requestType: 'direct',
+      targetArtisanId: artisanId,
+    );
+    final bid = await createBid(
+      jobId: job.id,
+      artisanId: artisanId,
+      amount: amount,
+      message: message,
+      createdByUserId: customerId,
+      status: 'pending',
+    );
+    return (job: job, bid: bid);
+  }
+
+  @override
   Future<void> acceptBid(String bidId) async {
     await _client
         .from('job_bids')
@@ -608,6 +683,42 @@ class SupabaseJobsRepository implements JobsRepository {
         .eq('id', bidId)
         .select('id')
         .single();
+  }
+
+  @override
+  Future<void> rejectBid(String bidId, {String comment = ''}) async {
+    await _client
+        .from('job_bids')
+        .update({
+          'status': 'rejected',
+          'counter_message': comment,
+        })
+        .eq('id', bidId)
+        .select('id')
+        .single();
+  }
+
+  @override
+  Future<void> counterBid({
+    required String bidId,
+    required double amount,
+    String comment = '',
+  }) async {
+    await _client
+        .from('job_bids')
+        .update({
+          'status': 'countered',
+          'amount': amount,
+          'counter_message': comment,
+        })
+        .eq('id', bidId)
+        .select('id')
+        .single();
+  }
+
+  @override
+  Future<void> deleteBid(String bidId) async {
+    await _client.from('job_bids').delete().eq('id', bidId);
   }
 
   @override
@@ -675,6 +786,8 @@ class SupabaseJobsRepository implements JobsRepository {
       deletedByUserAt:
           DateTime.tryParse((row['deleted_by_user_at'] ?? '').toString()),
       deletedByUserReason: (row['deleted_by_user_reason'] as String?)?.trim(),
+      requestType: (row['request_type'] as String?) ?? 'public',
+      targetArtisanId: (row['target_artisan_id'] as String?)?.trim(),
       images: List<String>.from(
         (row['images'] ?? const <dynamic>[]) as List<dynamic>,
       ),
@@ -704,6 +817,8 @@ class SupabaseJobsRepository implements JobsRepository {
       status: (row['status'] as String?) ?? 'pending',
       createdAt: DateTime.tryParse((row['created_at'] as String?) ?? '') ??
           DateTime.now(),
+      createdByUserId: (row['created_by_user_id'] as String?)?.trim(),
+      counterMessage: (row['counter_message'] as String?) ?? '',
     );
   }
 
@@ -799,6 +914,8 @@ class MockJobsRepository implements JobsRepository {
     double? locationLat,
     double? locationLng,
     String locationSource = 'typed',
+    String requestType = 'public',
+    String? targetArtisanId,
   }) async {
     final job = JobFeedItem(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -817,6 +934,8 @@ class MockJobsRepository implements JobsRepository {
       acceptedAmount: null,
       deletedByUserAt: null,
       deletedByUserReason: null,
+      requestType: requestType,
+      targetArtisanId: targetArtisanId,
     );
     _jobs.insert(0, job);
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
@@ -870,6 +989,8 @@ class MockJobsRepository implements JobsRepository {
       completedAt: current.completedAt,
       deletedByUserAt: current.deletedByUserAt,
       deletedByUserReason: current.deletedByUserReason,
+      requestType: current.requestType,
+      targetArtisanId: current.targetArtisanId,
     );
     _jobs[index] = updated;
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
@@ -909,6 +1030,8 @@ class MockJobsRepository implements JobsRepository {
       completedAt: job.completedAt,
       deletedByUserAt: DateTime.now(),
       deletedByUserReason: 'removed_from_bookings',
+      requestType: job.requestType,
+      targetArtisanId: job.targetArtisanId,
     );
     _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
   }
@@ -919,6 +1042,8 @@ class MockJobsRepository implements JobsRepository {
     required String artisanId,
     required double amount,
     required String message,
+    String? createdByUserId,
+    String status = 'pending',
   }) async {
     final bids = _bidsByJobId.putIfAbsent(jobId, () => <JobBid>[]);
     final existingIndex = bids.indexWhere((bid) => bid.artisanId == artisanId);
@@ -930,8 +1055,9 @@ class MockJobsRepository implements JobsRepository {
       artisanId: artisanId,
       amount: amount,
       message: message,
-      status: 'pending',
+      status: status,
       createdAt: DateTime.now(),
+      createdByUserId: createdByUserId,
     );
     if (existingIndex == -1) {
       bids.insert(0, bid);
@@ -942,6 +1068,35 @@ class MockJobsRepository implements JobsRepository {
     }
     _bidControllers[jobId]?.add(List<JobBid>.unmodifiable(bids));
     return bid;
+  }
+
+  @override
+  Future<({JobFeedItem job, JobBid bid})> createDirectBid({
+    required String customerId,
+    required String artisanId,
+    required String title,
+    required String description,
+    required String location,
+    required double amount,
+    String message = '',
+  }) async {
+    final job = await createJob(
+      title: title,
+      description: description,
+      location: location,
+      budget: amount,
+      createdBy: customerId,
+      requestType: 'direct',
+      targetArtisanId: artisanId,
+    );
+    final bid = await createBid(
+      jobId: job.id,
+      artisanId: artisanId,
+      amount: amount,
+      message: message,
+      createdByUserId: customerId,
+    );
+    return (job: job, bid: bid);
   }
 
   @override
@@ -962,6 +1117,8 @@ class MockJobsRepository implements JobsRepository {
         artisanAvatarUrl: bid.artisanAvatarUrl,
         artisanVerified: bid.artisanVerified,
         acceptedBidCount: bid.acceptedBidCount + 1,
+        createdByUserId: bid.createdByUserId,
+        counterMessage: bid.counterMessage,
       );
       _bidControllers[entry.key]?.add(List<JobBid>.unmodifiable(entry.value));
       final jobIndex = _jobs.indexWhere((job) => job.id == bid.jobId);
@@ -986,6 +1143,67 @@ class MockJobsRepository implements JobsRepository {
       _progressControllers[bid.jobId]
           ?.add(List.unmodifiable(_progressByJobId[bid.jobId]!));
       _controller.add(List<JobFeedItem>.unmodifiable(_jobs));
+      return;
+    }
+  }
+
+  @override
+  Future<void> rejectBid(String bidId, {String comment = ''}) async {
+    _updateMockBid(
+      bidId,
+      status: 'rejected',
+      counterMessage: comment,
+    );
+  }
+
+  @override
+  Future<void> counterBid({
+    required String bidId,
+    required double amount,
+    String comment = '',
+  }) async {
+    _updateMockBid(
+      bidId,
+      status: 'countered',
+      amount: amount,
+      counterMessage: comment,
+    );
+  }
+
+  @override
+  Future<void> deleteBid(String bidId) async {
+    for (final entry in _bidsByJobId.entries) {
+      entry.value.removeWhere((bid) => bid.id == bidId);
+      _bidControllers[entry.key]?.add(List<JobBid>.unmodifiable(entry.value));
+    }
+  }
+
+  void _updateMockBid(
+    String bidId, {
+    required String status,
+    double? amount,
+    String counterMessage = '',
+  }) {
+    for (final entry in _bidsByJobId.entries) {
+      final index = entry.value.indexWhere((bid) => bid.id == bidId);
+      if (index == -1) continue;
+      final bid = entry.value[index];
+      entry.value[index] = JobBid(
+        id: bid.id,
+        jobId: bid.jobId,
+        artisanId: bid.artisanId,
+        amount: amount ?? bid.amount,
+        message: bid.message,
+        status: status,
+        createdAt: bid.createdAt,
+        artisanName: bid.artisanName,
+        artisanAvatarUrl: bid.artisanAvatarUrl,
+        artisanVerified: bid.artisanVerified,
+        acceptedBidCount: bid.acceptedBidCount,
+        createdByUserId: bid.createdByUserId,
+        counterMessage: counterMessage,
+      );
+      _bidControllers[entry.key]?.add(List<JobBid>.unmodifiable(entry.value));
       return;
     }
   }
@@ -1082,6 +1300,8 @@ JobFeedItem _copyJobWithProgress(
         status == 'completed' ? job.completedAt ?? now : job.completedAt,
     deletedByUserAt: job.deletedByUserAt,
     deletedByUserReason: job.deletedByUserReason,
+    requestType: job.requestType,
+    targetArtisanId: job.targetArtisanId,
   );
 }
 

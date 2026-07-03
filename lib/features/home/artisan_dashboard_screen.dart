@@ -170,10 +170,18 @@ class _ArtisanDashboardScreenState
           data: (jobs) {
             final openRequests = jobs
                 .where((job) =>
-                    job.workStatus == 'open' && job.createdBy != user?.id)
+                    job.workStatus == 'open' &&
+                    job.requestType == 'public' &&
+                    job.createdBy != user?.id)
+                .toList(growable: false);
+            final directRequests = jobs
+                .where((job) =>
+                    job.requestType == 'direct' &&
+                    job.targetArtisanId == user?.id &&
+                    job.workStatus == 'open')
                 .toList(growable: false);
             _notifyOnNewJob(openRequests);
-            if (openRequests.isEmpty) {
+            if (openRequests.isEmpty && directRequests.isEmpty) {
               return Card(
                 child: ListTile(
                   leading: const Icon(Icons.inbox_outlined),
@@ -186,6 +194,39 @@ class _ArtisanDashboardScreenState
             final preview = openRequests.take(3).toList(growable: false);
             return Column(
               children: [
+                if (directRequests.isNotEmpty) ...[
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.assignment_ind_outlined),
+                      title: Text(settings.t('Direct booking offers')),
+                      subtitle: Text(
+                        settings.t(
+                          '${directRequests.length} direct requests waiting for your response.',
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: widget.onOpenJobs,
+                    ),
+                  ),
+                  ...directRequests.take(3).map(
+                        (job) => Card(
+                          child: ListTile(
+                            title: Text(job.title),
+                            subtitle: Text(
+                              '${job.location} - ${settings.t('Offer')}: ${formatMoney(job.budget, currencyCode)}',
+                            ),
+                            trailing: FilledButton(
+                              onPressed: () => context
+                                  .push('${RouteNames.jobDetail}/${job.id}'),
+                              child: Text(settings.t('Respond')),
+                            ),
+                            onTap: () => context
+                                .push('${RouteNames.jobDetail}/${job.id}'),
+                          ),
+                        ),
+                      ),
+                  const SizedBox(height: 8),
+                ],
                 ...preview.map(
                   (job) {
                     final hasBid = bidJobIds.contains(job.id);

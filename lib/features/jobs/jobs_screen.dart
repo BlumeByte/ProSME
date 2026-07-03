@@ -246,8 +246,17 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
             if (job.createdBy == user.id && job.deletedByUserAt != null) {
               return false;
             }
-            if (job.workStatus == 'open') return true;
-            return job.createdBy == user.id || acceptedJobIds.contains(job.id);
+            if (!isArtisan) return job.createdBy == user.id;
+            final isDirectForArtisan =
+                job.requestType == 'direct' && job.targetArtisanId == user.id;
+            if (job.workStatus == 'open') {
+              return job.requestType == 'public' ||
+                  isDirectForArtisan ||
+                  bidJobIds.contains(job.id);
+            }
+            return job.createdBy == user.id ||
+                acceptedJobIds.contains(job.id) ||
+                isDirectForArtisan;
           }).toList(growable: false);
           final visibleJobs = _filterJobs(
             participantJobs,
@@ -344,6 +353,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                 final amountLabel = job.acceptedAmount == null
                     ? settings.t('Budget')
                     : settings.t('Accepted amount');
+                final isDirect = job.requestType == 'direct';
                 final canTrack = job.workStatus != 'open' &&
                     (job.createdBy == user.id ||
                         acceptedJobIds.contains(job.id));
@@ -361,7 +371,11 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                         canTrack
                             ? settings.t('Track')
                             : isArtisan
-                                ? settings.t(hasBid ? 'Edit bid' : 'Bid')
+                                ? settings.t(isDirect
+                                    ? 'Respond'
+                                    : hasBid
+                                        ? 'Edit bid'
+                                        : 'Bid')
                                 : job.createdBy == user.id
                                     ? settings.t('View bids')
                                     : settings.t('View'),
@@ -425,7 +439,10 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
           text.contains(_selectedRegion!.name.toLowerCase());
       final scopeMatches = !isArtisan ||
           _scope == 'all' ||
-          (_scope == 'open' && !bidJobIds.contains(job.id)) ||
+          (_scope == 'open' &&
+              job.requestType == 'public' &&
+              !bidJobIds.contains(job.id)) ||
+          (_scope == 'direct' && job.requestType == 'direct') ||
           (_scope == 'bids' && bidJobIds.contains(job.id));
       return queryMatches &&
           categoryMatches &&
@@ -623,6 +640,7 @@ class _ArtisanJobFilters extends StatelessWidget {
         SegmentedButton<String>(
           segments: [
             ButtonSegment(value: 'open', label: Text(settings.t('Open'))),
+            ButtonSegment(value: 'direct', label: Text(settings.t('Direct'))),
             ButtonSegment(value: 'bids', label: Text(settings.t('My bids'))),
             ButtonSegment(value: 'all', label: Text(settings.t('All'))),
           ],

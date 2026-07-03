@@ -69,6 +69,8 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
           final existingBid = isArtisan && user != null
               ? bids.where((bid) => bid.artisanId == user.id).firstOrNull
               : null;
+          final directBid =
+              bids.where((bid) => bid.isDirect).firstOrNull ?? existingBid;
           final jobLocked = _isJobLocked(job, acceptedBid);
           if (existingBid != null &&
               _amountController.text.isEmpty &&
@@ -116,11 +118,26 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                 else
                   _EditJobCard(job: job, currencyCode: currencyCode),
                 const SizedBox(height: 12),
-                _BidsForOwner(job: job, currencyCode: currencyCode),
+                if (job.requestType == 'direct' && directBid != null)
+                  _DirectBidForOwner(
+                    job: job,
+                    bid: directBid,
+                    currencyCode: currencyCode,
+                  )
+                else
+                  _BidsForOwner(job: job, currencyCode: currencyCode),
               ] else if (isArtisan && acceptedBid?.artisanId == user.id)
                 _AcceptedBidPanel(
                   job: job,
                   bid: acceptedBid!,
+                  currencyCode: currencyCode,
+                )
+              else if (isArtisan &&
+                  existingBid?.isDirect == true &&
+                  acceptedBid == null)
+                _DirectBidResponder(
+                  job: job,
+                  bid: existingBid!,
                   currencyCode: currencyCode,
                 )
               else if (isArtisan && acceptedBid == null)
@@ -406,6 +423,12 @@ class _JobTrackingPanel extends ConsumerWidget {
                     icon: const Icon(Icons.task_alt),
                     label: Text(settings.t('Confirm completion')),
                   ),
+                if (canConfirmCompletion)
+                  OutlinedButton.icon(
+                    onPressed: () => _reportIncompleteWork(context, ref),
+                    icon: const Icon(Icons.report_gmailerrorred_outlined),
+                    label: Text(settings.t('Report incomplete work')),
+                  ),
               ],
             ),
             const Divider(height: 28),
@@ -545,6 +568,61 @@ class _JobTrackingPanel extends ConsumerWidget {
       );
     }
   }
+
+  Future<void> _reportIncompleteWork(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final settings = ref.read(appSettingsControllerProvider);
+    final commentController = TextEditingController();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(settings.t('Report incomplete work')),
+        content: TextField(
+          controller: commentController,
+          minLines: 3,
+          maxLines: 5,
+          decoration: InputDecoration(
+            labelText: settings.t('Explain what is not complete'),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(settings.t('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(settings.t('Send report')),
+          ),
+        ],
+      ),
+    );
+    final comment = commentController.text.trim();
+    commentController.dispose();
+    if (submitted != true || comment.isEmpty) return;
+    try {
+      await ref.read(adminServiceProvider).submitJobReport(
+            jobId: job.id,
+            artisanId: acceptedBid.artisanId,
+            title: 'Customer disputes completed work',
+            message: comment,
+          );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(settings.t('Report sent to Admin Dashboard.'))),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(settings.t('Could not send report.'))),
+        );
+      }
+    }
+  }
 }
 
 Future<DateTime?> _pickEta(BuildContext context, DateTime? initial) async {
@@ -590,6 +668,21 @@ String _statusLabel(String status) {
       return 'Accepted';
     default:
       return 'Open';
+  }
+}
+
+String _directBidStatusLabel(String status) {
+  switch (status) {
+    case 'edited':
+      return 'Edited by user';
+    case 'countered':
+      return 'Countered';
+    case 'accepted':
+      return 'Accepted';
+    case 'rejected':
+      return 'Rejected';
+    default:
+      return 'Pending';
   }
 }
 
@@ -720,6 +813,538 @@ class _AcceptedBidPanel extends ConsumerWidget {
         );
       }
     }
+  }
+}
+
+class _DirectBidForOwner extends ConsumerWidget {
+  const _DirectBidForOwner({
+    required this.job,
+    required this.bid,
+    required this.currencyCode,
+  });
+
+  final JobFeedItem job;
+  final JobBid bid;
+  final String currencyCode;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
+    final locked = bid.status == 'accepted' || _isJobLocked(job, bid);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.assignment_ind_outlined),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    settings.t('Direct booking offer'),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                Chip(
+                    label: Text(settings.t(_directBidStatusLabel(bid.status)))),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '${settings.t('Offer')}: ${formatMoney(bid.amount, currencyCode)}',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            if (bid.message.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(bid.message),
+            ],
+            if (bid.counterMessage.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text('${settings.t('Artisan note')}: ${bid.counterMessage}'),
+            ],
+            const SizedBox(height: 12),
+            if (locked) ...[
+              Text(
+                settings.t(
+                  'This offer has been accepted and can no longer be changed.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _openAcceptedChat(context, ref),
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: Text(settings.t('Chat')),
+                ),
+              )
+            ] else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: () => _editDirectOffer(context, ref),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: Text(settings.t('Edit offer')),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => _deleteDirectOffer(context, ref),
+                    icon: const Icon(Icons.delete_outline),
+                    label: Text(settings.t('Delete offer')),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openAcceptedChat(BuildContext context, WidgetRef ref) async {
+    try {
+      final thread = await ref.read(chatServiceProvider).createOrOpenThread(
+            userId: job.createdBy,
+            artisanId: bid.artisanId,
+          );
+      if (context.mounted) {
+        context.push('${RouteNames.chatThread}/${thread.id}');
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ref
+                  .read(appSettingsControllerProvider)
+                  .t('Could not open chat. Please try again.'),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _editDirectOffer(BuildContext context, WidgetRef ref) async {
+    final settings = ref.read(appSettingsControllerProvider);
+    final titleController = TextEditingController(text: job.title);
+    final descriptionController = TextEditingController(text: job.description);
+    final locationController = TextEditingController(text: job.location);
+    final amountController = TextEditingController(
+      text: convertFromGhs(bid.amount, currencyCode).toStringAsFixed(0),
+    );
+    final messageController = TextEditingController(text: bid.message);
+    final formKey = GlobalKey<FormState>();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(settings.t('Edit direct offer')),
+        content: SingleChildScrollView(
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: titleController,
+                  decoration: InputDecoration(labelText: settings.t('Service')),
+                  validator: (value) => _required(value, settings),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: descriptionController,
+                  minLines: 3,
+                  maxLines: 5,
+                  decoration:
+                      InputDecoration(labelText: settings.t('Description')),
+                  validator: (value) => _required(value, settings),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: locationController,
+                  decoration:
+                      InputDecoration(labelText: settings.t('Location')),
+                  validator: (value) => _required(value, settings),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: amountController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: '${settings.t('Offer price')} ($currencyCode)',
+                  ),
+                  validator: (value) {
+                    final parsed = double.tryParse((value ?? '').trim());
+                    if (parsed == null || parsed <= 0) {
+                      return settings.t('Enter a valid price');
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: messageController,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    labelText: settings.t('Offer note (optional)'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(settings.t('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.of(context).pop(true);
+            },
+            child: Text(settings.t('Save')),
+          ),
+        ],
+      ),
+    );
+    if (saved == true) {
+      try {
+        final amount = convertToGhs(
+          double.parse(amountController.text.trim()),
+          currencyCode,
+        );
+        await ref.read(jobsRepositoryProvider).updateJob(
+              jobId: job.id,
+              title: titleController.text.trim(),
+              description: descriptionController.text.trim(),
+              location: locationController.text.trim(),
+              budget: amount,
+            );
+        await ref.read(jobsRepositoryProvider).createBid(
+              jobId: job.id,
+              artisanId: bid.artisanId,
+              amount: amount,
+              message: messageController.text.trim(),
+              createdByUserId: bid.createdByUserId,
+              status: 'edited',
+            );
+        ref.invalidate(jobsStreamProvider);
+        ref.invalidate(jobBidsProvider(job.id));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(settings.t('Direct offer updated.'))),
+          );
+        }
+      } catch (_) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(settings.t('Could not update offer.'))),
+          );
+        }
+      }
+    }
+    titleController.dispose();
+    descriptionController.dispose();
+    locationController.dispose();
+    amountController.dispose();
+    messageController.dispose();
+  }
+
+  Future<void> _deleteDirectOffer(BuildContext context, WidgetRef ref) async {
+    final settings = ref.read(appSettingsControllerProvider);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(settings.t('Delete direct offer')),
+        content: Text(settings.t('Delete this direct booking offer?')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(settings.t('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(settings.t('Delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(jobsRepositoryProvider).deleteJob(job.id);
+      ref.invalidate(jobsStreamProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(settings.t('Direct offer deleted.'))),
+        );
+        context.pop();
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(settings.t('Could not delete offer.'))),
+        );
+      }
+    }
+  }
+}
+
+class _DirectBidResponder extends ConsumerWidget {
+  const _DirectBidResponder({
+    required this.job,
+    required this.bid,
+    required this.currencyCode,
+  });
+
+  final JobFeedItem job;
+  final JobBid bid;
+  final String currencyCode;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.request_quote_outlined),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    settings.t('Direct booking request'),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                Chip(
+                    label: Text(settings.t(_directBidStatusLabel(bid.status)))),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '${settings.t('Customer offer')}: ${formatMoney(bid.amount, currencyCode)}',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            if (bid.message.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(bid.message),
+            ],
+            if (bid.counterMessage.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text('${settings.t('Your note')}: ${bid.counterMessage}'),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: () => _acceptDirectBid(context, ref),
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: Text(settings.t('Accept')),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _counterDirectBid(context, ref),
+                  icon: const Icon(Icons.price_change_outlined),
+                  label: Text(settings.t('Counter')),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _rejectDirectBid(context, ref),
+                  icon: const Icon(Icons.close),
+                  label: Text(settings.t('Reject')),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _acceptDirectBid(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(jobsRepositoryProvider).acceptBid(bid.id);
+      final thread = await ref.read(chatServiceProvider).createOrOpenThread(
+            userId: job.createdBy,
+            artisanId: bid.artisanId,
+          );
+      final settings = ref.read(appSettingsControllerProvider);
+      await ref.read(chatServiceProvider).sendMessage(
+            ChatMessage(
+              id: const Uuid().v4(),
+              threadId: thread.id,
+              senderId: bid.artisanId,
+              type: MessageType.offer,
+              content:
+                  '${settings.t('Direct booking accepted for')} ${job.title}: ${formatMoney(bid.amount, currencyCode)}.',
+              createdAt: DateTime.now(),
+            ),
+          );
+      ref.invalidate(jobsStreamProvider);
+      ref.invalidate(jobBidsProvider(job.id));
+      if (context.mounted) {
+        context.push('${RouteNames.chatThread}/${thread.id}');
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(ref
+                  .read(appSettingsControllerProvider)
+                  .t('Could not accept offer.'))),
+        );
+      }
+    }
+  }
+
+  Future<void> _counterDirectBid(BuildContext context, WidgetRef ref) async {
+    final settings = ref.read(appSettingsControllerProvider);
+    final amountController = TextEditingController(
+      text: convertFromGhs(bid.amount, currencyCode).toStringAsFixed(0),
+    );
+    final commentController = TextEditingController(text: bid.counterMessage);
+    final formKey = GlobalKey<FormState>();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(settings.t('Counter offer')),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: amountController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: '${settings.t('Counter price')} ($currencyCode)',
+                ),
+                validator: (value) {
+                  final parsed = double.tryParse((value ?? '').trim());
+                  if (parsed == null || parsed <= 0) {
+                    return settings.t('Enter a valid price');
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: commentController,
+                minLines: 2,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  labelText: settings.t('Comment (optional)'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(settings.t('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.of(context).pop(true);
+            },
+            child: Text(settings.t('Send counter')),
+          ),
+        ],
+      ),
+    );
+    if (submitted == true) {
+      try {
+        await ref.read(jobsRepositoryProvider).counterBid(
+              bidId: bid.id,
+              amount: convertToGhs(
+                double.parse(amountController.text.trim()),
+                currencyCode,
+              ),
+              comment: commentController.text.trim(),
+            );
+        ref.invalidate(jobBidsProvider(job.id));
+        ref.invalidate(jobsStreamProvider);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(settings.t('Counter offer sent.'))),
+          );
+        }
+      } catch (_) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(settings.t('Could not send counter.'))),
+          );
+        }
+      }
+    }
+    amountController.dispose();
+    commentController.dispose();
+  }
+
+  Future<void> _rejectDirectBid(BuildContext context, WidgetRef ref) async {
+    final settings = ref.read(appSettingsControllerProvider);
+    final commentController = TextEditingController();
+    final rejected = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(settings.t('Reject offer')),
+        content: TextField(
+          controller: commentController,
+          minLines: 2,
+          maxLines: 4,
+          decoration: InputDecoration(
+            labelText: settings.t('Comment (optional)'),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(settings.t('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(settings.t('Reject')),
+          ),
+        ],
+      ),
+    );
+    if (rejected == true) {
+      try {
+        await ref.read(jobsRepositoryProvider).rejectBid(
+              bid.id,
+              comment: commentController.text.trim(),
+            );
+        ref.invalidate(jobBidsProvider(job.id));
+        ref.invalidate(jobsStreamProvider);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(settings.t('Offer rejected.'))),
+          );
+        }
+      } catch (_) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(settings.t('Could not reject offer.'))),
+          );
+        }
+      }
+    }
+    commentController.dispose();
   }
 }
 

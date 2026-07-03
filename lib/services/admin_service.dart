@@ -526,6 +526,49 @@ class AdminService {
     });
   }
 
+  Future<void> submitJobReport({
+    required String jobId,
+    required String artisanId,
+    required String title,
+    required String message,
+  }) async {
+    final client = _supabase;
+    if (client == null) return;
+    final userId = client.auth.currentUser?.id;
+    final body = message.trim();
+    if (userId == null || body.isEmpty) return;
+
+    final inserted = await client
+        .from('reports')
+        .insert({
+          'reporter_id': userId,
+          if (artisanId.isNotEmpty) 'reported_user_id': artisanId,
+          'type': 'job_completion_report',
+          'category': 'work_not_completed',
+          'title': title.trim().isEmpty
+              ? 'Customer disputes completed work'
+              : title.trim(),
+          'body': body,
+          'message': body,
+          'status': 'open',
+          'related_table': 'jobs',
+          if (_uuidOrNull(jobId) != null) 'related_id': jobId,
+        })
+        .select('id')
+        .maybeSingle();
+
+    final reportId = (inserted?['id'] ?? '').toString();
+    await client.from('admin_notifications').insert({
+      'type': 'job_completion_report',
+      'title': 'Customer disputes completed work',
+      'body': body,
+      'actor_id': userId,
+      if (artisanId.isNotEmpty) 'related_user_id': artisanId,
+      'related_table': 'reports',
+      'related_id': reportId.isEmpty ? null : reportId,
+    });
+  }
+
   Future<void> blockChatUser({
     required String threadId,
     required String blockedUserId,

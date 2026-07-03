@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/constants.dart';
 import '../../core/utils/currency.dart';
 import '../../core/utils/service_categories.dart';
 import '../../core/widgets/loading_state.dart';
@@ -21,6 +22,7 @@ class ArtisanProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final listingsFuture = ref.watch(listingServiceProvider).fetchListings();
     final settings = ref.watch(appSettingsControllerProvider);
+    final user = ref.watch(authStateProvider).valueOrNull;
     final currencyCode = settings.currencyCode;
     final bids = ref.watch(artisanBidsProvider(artisanId)).valueOrNull ??
         const <JobBid>[];
@@ -149,6 +151,27 @@ class ArtisanProfileScreen extends ConsumerWidget {
                               .toList(growable: false),
                         ),
                       ],
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: isBusy
+                              ? null
+                              : () => _openDirectBookingForm(
+                                    context,
+                                    ref,
+                                    artisanId: artisanId,
+                                    artisanName: name,
+                                    defaultLocation:
+                                        first?.location ?? user?.country ?? '',
+                                    defaultTitle: categories.isEmpty
+                                        ? settings.t('Service request')
+                                        : categories.first,
+                                  ),
+                          icon: const Icon(Icons.request_quote_outlined),
+                          label: Text(settings.t('Book now')),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -207,6 +230,184 @@ class ArtisanProfileScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+Future<void> _openDirectBookingForm(
+  BuildContext context,
+  WidgetRef ref, {
+  required String artisanId,
+  required String artisanName,
+  required String defaultLocation,
+  required String defaultTitle,
+}) async {
+  final user = ref.read(authStateProvider).valueOrNull;
+  final settings = ref.read(appSettingsControllerProvider);
+  if (user == null) {
+    context.go(RouteNames.auth);
+    return;
+  }
+  if (user.role == UserRole.artisan && user.id == artisanId) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(settings.t('You cannot book yourself.'))),
+    );
+    return;
+  }
+
+  final titleController = TextEditingController(text: defaultTitle);
+  final descriptionController = TextEditingController();
+  final locationController = TextEditingController(text: defaultLocation);
+  final amountController = TextEditingController();
+  final messageController = TextEditingController();
+  final formKey = GlobalKey<FormState>();
+  final currencyCode = settings.currencyCode;
+
+  final submitted = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) => Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      child: Form(
+        key: formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${settings.t('Book')} $artisanName',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: titleController,
+                decoration: InputDecoration(labelText: settings.t('Service')),
+                validator: (value) => _requiredDirect(value, settings),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: descriptionController,
+                minLines: 3,
+                maxLines: 5,
+                decoration: InputDecoration(
+                  labelText: settings.t('What do you need done?'),
+                ),
+                validator: (value) => _requiredDirect(value, settings),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: locationController,
+                decoration: InputDecoration(labelText: settings.t('Location')),
+                validator: (value) => _requiredDirect(value, settings),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: amountController,
+                decoration: InputDecoration(
+                  labelText: '${settings.t('Offer price')} ($currencyCode)',
+                ),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                validator: (value) {
+                  final amount = double.tryParse((value ?? '').trim());
+                  if (amount == null || amount <= 0) {
+                    return settings.t('Enter a valid price');
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: messageController,
+                minLines: 2,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  labelText: settings.t('Offer note (optional)'),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    if (!formKey.currentState!.validate()) return;
+                    Navigator.of(context).pop(true);
+                  },
+                  icon: const Icon(Icons.send_outlined),
+                  label: Text(settings.t('Send booking offer')),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  if (submitted != true || !context.mounted) {
+    titleController.dispose();
+    descriptionController.dispose();
+    locationController.dispose();
+    amountController.dispose();
+    messageController.dispose();
+    return;
+  }
+
+  try {
+    final result = await ref.read(jobsRepositoryProvider).createDirectBid(
+          customerId: user.id,
+          artisanId: artisanId,
+          title: titleController.text.trim(),
+          description: descriptionController.text.trim(),
+          location: locationController.text.trim(),
+          amount: convertToGhs(
+            double.parse(amountController.text.trim()),
+            currencyCode,
+          ),
+          message: messageController.text.trim(),
+        );
+    ref.invalidate(jobsStreamProvider);
+    ref.invalidate(jobBidsProvider(result.job.id));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(settings.t('Booking offer sent.'))),
+      );
+      context.push('${RouteNames.jobDetail}/${result.job.id}');
+    }
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(settings.t('Could not send booking offer.')),
+        ),
+      );
+    }
+  } finally {
+    titleController.dispose();
+    descriptionController.dispose();
+    locationController.dispose();
+    amountController.dispose();
+    messageController.dispose();
+  }
+}
+
+String? _requiredDirect(String? value, AppSettings settings) {
+  return value == null || value.trim().isEmpty ? settings.t('Required') : null;
 }
 
 class _MetricChip extends StatelessWidget {
