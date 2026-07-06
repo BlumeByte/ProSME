@@ -50,7 +50,23 @@ const String kOAuthOidcDiscoveryEndpoint =
     '$kSupabaseUrl/auth/v1/.well-known/openid-configuration';
 
 const Color kPrimaryGreen = Color(0xFF1E7F3E);
-const List<String> kSupportedLanguages = ['English', 'Twi', 'Ewe'];
+const List<String> kSupportedLanguages = [
+  'English',
+  'French',
+  'Spanish',
+  'Portuguese',
+  'Arabic',
+  'Swahili',
+  'Hausa',
+  'Yoruba',
+  'Igbo',
+  'Twi',
+  'Ewe',
+  'Ga',
+  'Zulu',
+  'Xhosa',
+  'Afrikaans',
+];
 
 enum UserRole { customer, artisan, admin }
 
