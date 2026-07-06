@@ -65,11 +65,11 @@ List<Listing> _sortedArtisanUpdates(
 class ListingFeedScreen extends ConsumerStatefulWidget {
   const ListingFeedScreen(
       {super.key,
-      this.onOpenChatTab,
+      this.openingBanner,
       this.onOpenUploadTab,
       this.onLeaveHomeContent});
 
-  final VoidCallback? onOpenChatTab;
+  final Widget? openingBanner;
   final VoidCallback? onOpenUploadTab;
   final VoidCallback? onLeaveHomeContent;
 
@@ -325,44 +325,6 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
           ),
         ) ??
         false;
-  }
-
-  Future<void> _startChat(_ProfessionalPreview pro) async {
-    if (pro.isBusy) {
-      _showUnavailable();
-      return;
-    }
-    final user = ref.read(authStateProvider).valueOrNull;
-    if (user == null) {
-      context.go(RouteNames.auth);
-      return;
-    }
-    if (user.id == pro.artisanId) {
-      final settings = ref.read(appSettingsControllerProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(settings.t('You cannot chat with yourself.'))),
-      );
-      return;
-    }
-    if (!await _confirmUnverified(pro)) return;
-    try {
-      final thread = await ref.read(chatServiceProvider).createOrOpenThread(
-            userId: user.id,
-            artisanId: pro.artisanId,
-          );
-      if (mounted) {
-        widget.onLeaveHomeContent?.call();
-        context.push('${RouteNames.chatThread}/${thread.id}');
-      }
-    } catch (_) {
-      if (!mounted) return;
-      final settings = ref.read(appSettingsControllerProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(settings.t('Could not start chat. Please try again.')),
-        ),
-      );
-    }
   }
 
   Future<void> _bookProfessional(_ProfessionalPreview pro) async {
@@ -625,7 +587,6 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                             '${RouteNames.artisanProfile}/${pro.artisanId}',
                           );
                         },
-                        onChat: () => _startChat(pro),
                         onBook: () => _bookProfessional(pro),
                       )),
               ],
@@ -636,6 +597,10 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
           children: [
+            if (widget.openingBanner != null) ...[
+              widget.openingBanner!,
+              const SizedBox(height: 12),
+            ],
             _SearchControls(
               serviceController: _serviceController,
               locationController: _locationController,
@@ -844,7 +809,6 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                           '${RouteNames.artisanProfile}/${pro.artisanId}',
                         );
                       },
-                      onChat: () => _startChat(pro),
                       onBook: () => _bookProfessional(pro),
                     ),
                   ),
@@ -1479,7 +1443,6 @@ class _ProfessionalCard extends StatelessWidget {
     required this.currencyCode,
     required this.settings,
     required this.onOpenProfile,
-    required this.onChat,
     required this.onBook,
   });
 
@@ -1487,7 +1450,6 @@ class _ProfessionalCard extends StatelessWidget {
   final String currencyCode;
   final AppSettings settings;
   final VoidCallback onOpenProfile;
-  final VoidCallback onChat;
   final VoidCallback onBook;
 
   @override
@@ -1618,37 +1580,21 @@ class _ProfessionalCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: pro.isBusy ? null : onChat,
-                      icon: Icon(
-                        pro.isBusy ? Icons.block : Icons.chat_bubble_outline,
-                        size: 18,
-                      ),
-                      label:
-                          Text(settings.t(pro.isBusy ? 'Unavailable' : 'Chat')),
-                      style: pro.isBusy
-                          ? OutlinedButton.styleFrom(
-                              foregroundColor: unavailableColor,
-                            )
-                          : null,
-                    ),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: pro.isBusy ? null : onBook,
+                  icon: Icon(
+                    pro.isBusy ? Icons.block : Icons.request_quote_outlined,
+                    size: 18,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: pro.isBusy ? null : onBook,
-                      style: pro.isBusy
-                          ? FilledButton.styleFrom(
-                              backgroundColor: unavailableColor,
-                            )
-                          : null,
-                      child: Text(settings.t(pro.isBusy ? 'Busy' : 'Book Now')),
-                    ),
-                  ),
-                ],
+                  style: pro.isBusy
+                      ? FilledButton.styleFrom(
+                          backgroundColor: unavailableColor,
+                        )
+                      : null,
+                  label: Text(settings.t(pro.isBusy ? 'Busy' : 'Book Now')),
+                ),
               ),
             ],
           ),

@@ -797,7 +797,14 @@ class _AccountTile extends ConsumerWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(child: Text(_initial(account.name))),
+                CircleAvatar(
+                  backgroundImage: account.photoUrl.isEmpty
+                      ? null
+                      : NetworkImage(account.photoUrl),
+                  child: account.photoUrl.isEmpty
+                      ? Text(_initial(account.name))
+                      : null,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -805,7 +812,13 @@ class _AccountTile extends ConsumerWidget {
                     children: [
                       Text(account.name,
                           style: Theme.of(context).textTheme.titleMedium),
-                      Text(account.email.isEmpty ? account.id : account.email),
+                      Text(
+                        account.fullName.isEmpty
+                            ? (account.email.isEmpty
+                                ? account.id
+                                : account.email)
+                            : account.fullName,
+                      ),
                     ],
                   ),
                 ),
@@ -823,7 +836,66 @@ class _AccountTile extends ConsumerWidget {
                 Chip(
                     label: Text(
                         '${settings.t('verification')}: ${account.verificationStatus.name}')),
+                Chip(
+                  label: Text(
+                    '${settings.t('country')}: ${account.country}',
+                  ),
+                ),
+                Chip(
+                  label: Text(
+                    '${settings.t('currency')}: ${account.currencyCode}',
+                  ),
+                ),
+                Chip(
+                  label: Text(
+                    '${settings.t('language')}: ${account.appLanguage}',
+                  ),
+                ),
+                if (account.gender.isNotEmpty)
+                  Chip(
+                      label:
+                          Text('${settings.t('gender')}: ${account.gender}')),
+                if (account.dateOfBirth != null)
+                  Chip(
+                    label: Text(
+                      '${settings.t('DOB')}: ${_dateLabel(account.dateOfBirth!)}',
+                    ),
+                  ),
                 if (account.phone.isNotEmpty) Chip(label: Text(account.phone)),
+                Chip(
+                  avatar: Icon(
+                    account.emailVerified
+                        ? Icons.verified_outlined
+                        : Icons.mark_email_unread_outlined,
+                    size: 18,
+                  ),
+                  label: Text(
+                    account.emailVerified
+                        ? settings.t('Email verified')
+                        : settings.t('Email unverified'),
+                  ),
+                ),
+                Chip(
+                  avatar: Icon(
+                    account.phoneVerified
+                        ? Icons.verified_user_outlined
+                        : Icons.phone_disabled_outlined,
+                    size: 18,
+                  ),
+                  label: Text(
+                    account.phoneVerified
+                        ? settings.t('Phone verified')
+                        : settings.t('Phone unverified'),
+                  ),
+                ),
+                if (account.role == UserRole.artisan)
+                  Chip(
+                    label: Text(
+                      account.isBusy
+                          ? settings.t('Busy')
+                          : settings.t('Available'),
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 8),
@@ -831,6 +903,15 @@ class _AccountTile extends ConsumerWidget {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilledButton.icon(
+                      onPressed: () =>
+                          _showEditAccountSheet(context, ref, settings),
+                      icon: const Icon(Icons.edit_outlined),
+                      label: Text(settings.t('Edit profile')),
+                    ),
+                  ),
                   ...[UserRole.customer, UserRole.artisan].map((role) {
                     final selected = account.role == role;
                     return Padding(
@@ -871,6 +952,335 @@ class _AccountTile extends ConsumerWidget {
   String _initial(String value) {
     final trimmed = value.trim();
     return trimmed.isEmpty ? '?' : trimmed[0].toUpperCase();
+  }
+
+  String _dateLabel(DateTime value) {
+    return '${value.year.toString().padLeft(4, '0')}-'
+        '${value.month.toString().padLeft(2, '0')}-'
+        '${value.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _showEditAccountSheet(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    final formKey = GlobalKey<FormState>();
+    final usernameController = TextEditingController(text: account.username);
+    final fullNameController = TextEditingController(text: account.fullName);
+    final emailController = TextEditingController(text: account.email);
+    final phoneController = TextEditingController(text: account.phone);
+    final countryController = TextEditingController(text: account.country);
+    final countryCodeController =
+        TextEditingController(text: account.countryCode);
+    final languageController = TextEditingController(text: account.appLanguage);
+    final currencyController =
+        TextEditingController(text: account.currencyCode);
+    final descriptionController =
+        TextEditingController(text: account.description);
+    final dateController = TextEditingController(
+      text: account.dateOfBirth == null ? '' : _dateLabel(account.dateOfBirth!),
+    );
+    var role = account.role;
+    var verificationStatus = account.verificationStatus;
+    var gender = account.gender.trim().isEmpty
+        ? 'prefer_not_to_say'
+        : account.gender.trim();
+    var dateOfBirth = account.dateOfBirth;
+    var isBusy = account.isBusy;
+    var emailVerified = account.emailVerified;
+    var phoneVerified = account.phoneVerified;
+    var emailNotifications = account.emailNotifications;
+    var phoneNotifications = account.phoneNotifications;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            Future<void> pickDate() async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: dateOfBirth ?? DateTime(1995),
+                firstDate: DateTime(1900),
+                lastDate: DateTime.now(),
+              );
+              if (picked == null) return;
+              setSheetState(() {
+                dateOfBirth = picked;
+                dateController.text = _dateLabel(picked);
+              });
+            }
+
+            Future<void> save() async {
+              if (formKey.currentState?.validate() != true) return;
+              try {
+                final adminService = ref.read(adminServiceProvider);
+                await adminService.updateAccountProfile(
+                  userId: account.id,
+                  username: usernameController.text,
+                  fullName: fullNameController.text,
+                  email: emailController.text,
+                  phone: phoneController.text,
+                  country: countryController.text,
+                  countryCode: countryCodeController.text,
+                  description: descriptionController.text,
+                  gender: gender == 'prefer_not_to_say' ? '' : gender,
+                  dateOfBirth: dateOfBirth,
+                  isBusy: isBusy,
+                  emailVerified: emailVerified,
+                  phoneVerified: phoneVerified,
+                  emailNotifications: emailNotifications,
+                  phoneNotifications: phoneNotifications,
+                  appLanguage: languageController.text,
+                  currencyCode: currencyController.text,
+                  verificationStatus: verificationStatus,
+                );
+                if (role != account.role && role != UserRole.admin) {
+                  await adminService.updateAccountRole(
+                    userId: account.id,
+                    role: role,
+                  );
+                }
+                if (!context.mounted) return;
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(settings.t('Account updated.'))),
+                );
+              } catch (error) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(error.toString())),
+                );
+              }
+            }
+
+            final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 16),
+              child: Form(
+                key: formKey,
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    Text(
+                      settings.t('Edit account'),
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    _AdminTextField(
+                      controller: usernameController,
+                      label: settings.t('Username'),
+                      validator: (value) => (value ?? '').trim().isEmpty
+                          ? settings.t('Username is required')
+                          : null,
+                    ),
+                    _AdminTextField(
+                      controller: fullNameController,
+                      label: settings.t('Full name or business name'),
+                    ),
+                    _AdminTextField(
+                      controller: emailController,
+                      label: settings.t('Email'),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                        final email = (value ?? '').trim();
+                        if (email.isEmpty || email.contains('@')) return null;
+                        return settings.t('Enter a valid email');
+                      },
+                    ),
+                    _AdminTextField(
+                      controller: phoneController,
+                      label: settings.t('Phone'),
+                      keyboardType: TextInputType.phone,
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _AdminTextField(
+                            controller: countryController,
+                            label: settings.t('Country'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 120,
+                          child: _AdminTextField(
+                            controller: countryCodeController,
+                            label: settings.t('Code'),
+                            keyboardType: TextInputType.phone,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _AdminTextField(
+                            controller: languageController,
+                            label: settings.t('Language'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 120,
+                          child: _AdminTextField(
+                            controller: currencyController,
+                            label: settings.t('Currency'),
+                            textCapitalization: TextCapitalization.characters,
+                          ),
+                        ),
+                      ],
+                    ),
+                    DropdownButtonFormField<UserRole>(
+                      initialValue: role,
+                      decoration:
+                          InputDecoration(labelText: settings.t('Role')),
+                      items: UserRole.values
+                          .where((item) =>
+                              item != UserRole.admin || account.role == item)
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item,
+                              enabled: item != UserRole.admin,
+                              child: Text(settings.t(item.name)),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: account.role == UserRole.admin
+                          ? null
+                          : (value) => setSheetState(() {
+                                if (value != null) role = value;
+                              }),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<VerificationStatus>(
+                      initialValue: verificationStatus,
+                      decoration: InputDecoration(
+                        labelText: settings.t('Verification status'),
+                      ),
+                      items: VerificationStatus.values
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item,
+                              child: Text(settings.t(item.name)),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (value) => setSheetState(() {
+                        if (value != null) verificationStatus = value;
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: gender,
+                      decoration:
+                          InputDecoration(labelText: settings.t('Gender')),
+                      items: const [
+                        'prefer_not_to_say',
+                        'female',
+                        'male',
+                        'non_binary',
+                      ]
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item,
+                              child: Text(settings.t(item)),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (value) => setSheetState(() {
+                        if (value != null) gender = value;
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: dateController,
+                      readOnly: true,
+                      decoration: InputDecoration(
+                        labelText: settings.t('Date of birth'),
+                        suffixIcon: IconButton(
+                          tooltip: settings.t('Pick date'),
+                          onPressed: pickDate,
+                          icon: const Icon(Icons.calendar_month_outlined),
+                        ),
+                      ),
+                      onTap: pickDate,
+                    ),
+                    const SizedBox(height: 12),
+                    _AdminTextField(
+                      controller: descriptionController,
+                      label: settings.t('Description'),
+                      minLines: 3,
+                      maxLines: 5,
+                    ),
+                    const Divider(height: 28),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: emailVerified,
+                      onChanged: (value) =>
+                          setSheetState(() => emailVerified = value),
+                      title: Text(settings.t('Email verified')),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: phoneVerified,
+                      onChanged: (value) =>
+                          setSheetState(() => phoneVerified = value),
+                      title: Text(settings.t('Phone verified')),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: emailNotifications,
+                      onChanged: (value) =>
+                          setSheetState(() => emailNotifications = value),
+                      title: Text(settings.t('Email alerts')),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: phoneNotifications,
+                      onChanged: (value) =>
+                          setSheetState(() => phoneNotifications = value),
+                      title: Text(settings.t('App/phone alerts')),
+                    ),
+                    if (role == UserRole.artisan)
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: isBusy,
+                        onChanged: (value) =>
+                            setSheetState(() => isBusy = value),
+                        title: Text(settings.t('Mark artisan as busy')),
+                        subtitle: Text(
+                          settings.t('Off means available for bookings.'),
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: save,
+                      icon: const Icon(Icons.save_outlined),
+                      label: Text(settings.t('Save changes')),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    usernameController.dispose();
+    fullNameController.dispose();
+    emailController.dispose();
+    phoneController.dispose();
+    countryController.dispose();
+    countryCodeController.dispose();
+    languageController.dispose();
+    currencyController.dispose();
+    descriptionController.dispose();
+    dateController.dispose();
   }
 
   Future<void> _confirmResetData(
@@ -914,6 +1324,42 @@ class _AccountTile extends ConsumerWidget {
         SnackBar(content: Text(error.toString())),
       );
     }
+  }
+}
+
+class _AdminTextField extends StatelessWidget {
+  const _AdminTextField({
+    required this.controller,
+    required this.label,
+    this.keyboardType,
+    this.textCapitalization = TextCapitalization.none,
+    this.validator,
+    this.minLines,
+    this.maxLines = 1,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final TextInputType? keyboardType;
+  final TextCapitalization textCapitalization;
+  final String? Function(String?)? validator;
+  final int? minLines;
+  final int? maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextFormField(
+        controller: controller,
+        keyboardType: keyboardType,
+        textCapitalization: textCapitalization,
+        validator: validator,
+        minLines: minLines,
+        maxLines: maxLines,
+        decoration: InputDecoration(labelText: label),
+      ),
+    );
   }
 }
 

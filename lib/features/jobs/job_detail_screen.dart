@@ -713,6 +713,12 @@ bool _isJobLocked(JobFeedItem job, JobBid? acceptedBid) {
       job.status == 'completed';
 }
 
+bool _canChatForAcceptedWork(JobFeedItem job, JobBid bid) {
+  return bid.status == 'accepted' &&
+      job.workStatus != 'completed' &&
+      job.status != 'completed';
+}
+
 class _LockedJobCard extends StatelessWidget {
   const _LockedJobCard({required this.settings});
 
@@ -776,15 +782,17 @@ class _AcceptedBidPanel extends ConsumerWidget {
               const SizedBox(height: 8),
               Text(bid.message),
             ],
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => _openAcceptedChat(context, ref),
-                icon: const Icon(Icons.chat_bubble_outline),
-                label: Text(settings.t('Chat')),
+            if (_canChatForAcceptedWork(job, bid)) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _openAcceptedChat(context, ref),
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: Text(settings.t('Chat')),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -873,15 +881,17 @@ class _DirectBidForOwner extends ConsumerWidget {
                   'This offer has been accepted and can no longer be changed.',
                 ),
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () => _openAcceptedChat(context, ref),
-                  icon: const Icon(Icons.chat_bubble_outline),
-                  label: Text(settings.t('Chat')),
+              if (_canChatForAcceptedWork(job, bid)) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _openAcceptedChat(context, ref),
+                    icon: const Icon(Icons.chat_bubble_outline),
+                    label: Text(settings.t('Chat')),
+                  ),
                 ),
-              )
+              ],
             ] else
               Wrap(
                 spacing: 8,
@@ -1645,9 +1655,7 @@ class _BidForm extends StatelessWidget {
                       : const Icon(Icons.send),
                   label: Text(
                     settings.t(
-                      existingBid == null
-                          ? 'Send bid and open chat'
-                          : 'Update bid and open chat',
+                      existingBid == null ? 'Send bid' : 'Update bid',
                     ),
                   ),
                 ),
@@ -1801,32 +1809,23 @@ class _BidTile extends ConsumerWidget {
               ),
             ],
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: bid.status == 'accepted'
-                        ? () => _openChat(context, ref)
-                        : null,
-                    icon: const Icon(Icons.chat_bubble_outline),
-                    label: Text(
-                      settings.t(
-                        bid.status == 'accepted' ? 'Chat' : 'Chat after accept',
-                      ),
-                    ),
-                  ),
+            if (_canChatForAcceptedWork(job, bid))
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _openChat(context, ref),
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: Text(settings.t('Chat')),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: bid.status == 'accepted'
-                        ? null
-                        : () => _acceptBid(context, ref),
-                    child: Text(settings.t('Accept')),
-                  ),
+              )
+            else if (bid.status != 'accepted')
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => _acceptBid(context, ref),
+                  child: Text(settings.t('Accept')),
                 ),
-              ],
-            ),
+              ),
             if (bid.status == 'accepted' &&
                 user != null &&
                 job.workStatus == 'completed') ...[

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../../config/constants.dart';
+import '../../services/app_launch_service.dart';
 
 class AdMobBannerSlot extends StatefulWidget {
   const AdMobBannerSlot({super.key});
@@ -12,8 +13,7 @@ class AdMobBannerSlot extends StatefulWidget {
 }
 
 class _AdMobBannerSlotState extends State<AdMobBannerSlot> {
-  static const _testBannerAdUnitId =
-      'ca-app-pub-3940256099942544/6300978111';
+  static const _testBannerAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
 
   BannerAd? _ad;
   bool _isLoaded = false;
@@ -21,6 +21,7 @@ class _AdMobBannerSlotState extends State<AdMobBannerSlot> {
   @override
   void initState() {
     super.initState();
+    if (!AppLaunchService.canShowAds) return;
     _loadAd();
   }
 

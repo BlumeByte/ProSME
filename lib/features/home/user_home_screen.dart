@@ -33,22 +33,11 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
   bool _showOpeningBanner = true;
   late final PageController _bannerController;
   Timer? _bannerTimer;
-  late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
     _bannerController = PageController();
-    _pages = [
-      ListingFeedScreen(
-        onOpenChatTab: () => _openTab(1),
-        onOpenUploadTab: () => _openTab(2),
-        onLeaveHomeContent: _hideOpeningBanner,
-      ),
-      const ChatListScreen(),
-      const JobsScreen(showAppBar: false),
-      const ProfileScreen(),
-    ];
     _startBannerTimer();
   }
 
@@ -80,6 +69,23 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     final settings = ref.watch(appSettingsControllerProvider);
     final currentIndex = user == null && _currentIndex > 0 ? 0 : _currentIndex;
     final banners = _buildBanners(settings);
+    final pages = [
+      ListingFeedScreen(
+        openingBanner: _shouldShowBanner
+            ? _BannerSlider(
+                controller: _bannerController,
+                banners: banners,
+                currentIndex: _bannerIndex,
+                onPageChanged: (index) => setState(() => _bannerIndex = index),
+              )
+            : null,
+        onOpenUploadTab: () => _openTab(2),
+        onLeaveHomeContent: _hideOpeningBanner,
+      ),
+      const ChatListScreen(),
+      const JobsScreen(showAppBar: false),
+      const ProfileScreen(),
+    ];
 
     return PopScope(
       canPop: false,
@@ -112,15 +118,8 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
             : null,
         body: Column(
           children: [
-            if (_shouldShowBanner)
-              _BannerSlider(
-                controller: _bannerController,
-                banners: banners,
-                currentIndex: _bannerIndex,
-                onPageChanged: (index) => setState(() => _bannerIndex = index),
-              ),
             Expanded(
-              child: IndexedStack(index: currentIndex, children: _pages),
+              child: IndexedStack(index: currentIndex, children: pages),
             ),
             if (currentIndex == 0) const AdMobBannerSlot(),
           ],

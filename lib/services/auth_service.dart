@@ -52,6 +52,10 @@ abstract class AuthService {
     UserRole role = UserRole.customer,
     String? gender,
     DateTime? dateOfBirth,
+    String? country,
+    String? countryCode,
+    String? appLanguage,
+    String? currencyCode,
   });
   Future<void> requestSignupEmailOtp(String email);
   Future<AppUser> verifySignupEmailOtp(String email, String code);
@@ -123,6 +127,10 @@ class MockAuthService implements AuthService {
     UserRole role = UserRole.customer,
     String? gender,
     DateTime? dateOfBirth,
+    String? country,
+    String? countryCode,
+    String? appLanguage,
+    String? currencyCode,
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
     final normalizedUsername = (username ?? '').trim().toLowerCase();
@@ -153,6 +161,10 @@ class MockAuthService implements AuthService {
       verificationStatus: VerificationStatus.pending,
       gender: gender ?? '',
       dateOfBirth: dateOfBirth,
+      country: country ?? 'Ghana',
+      countryCode: countryCode ?? '+233',
+      appLanguage: appLanguage ?? 'English',
+      currencyCode: currencyCode ?? 'GHS',
       createdAt: DateTime.now(),
     );
     _accountsByEmail[normalizedEmail] = _currentUser!;
@@ -479,8 +491,10 @@ class SupabaseAuthService implements AuthService {
       // saved profile value during an auth refresh.
       'phone': existingProfile?['phone'] ?? user.phone ?? '',
       'avatar_url': avatarUrl,
-      'country': existingProfile?['country'] ?? 'Ghana',
-      'country_code': existingProfile?['country_code'] ?? '+233',
+      'country': existingProfile?['country'] ?? metadata['country'] ?? 'Ghana',
+      'country_code': existingProfile?['country_code'] ??
+          metadata['country_code'] ??
+          '+233',
       'description': existingProfile?['description'] ?? '',
       'gender': gender.isEmpty ? null : gender,
       'date_of_birth': dateOfBirth.isEmpty ? null : dateOfBirth,
@@ -494,8 +508,12 @@ class SupabaseAuthService implements AuthService {
           existingProfile?['blocked_email_notification_types'] ?? const [],
       'blocked_phone_notification_types':
           existingProfile?['blocked_phone_notification_types'] ?? const [],
-      'app_language': existingProfile?['app_language'] ?? 'English',
-      'currency_code': existingProfile?['currency_code'] ?? 'GHS',
+      'app_language': existingProfile?['app_language'] ??
+          metadata['app_language'] ??
+          'English',
+      'currency_code': existingProfile?['currency_code'] ??
+          metadata['currency_code'] ??
+          'GHS',
       'role': role,
       'verification_status': (existingProfile?['verification_status'] ??
               VerificationStatus.pending.name)
@@ -738,6 +756,10 @@ class SupabaseAuthService implements AuthService {
     UserRole role = UserRole.customer,
     String? gender,
     DateTime? dateOfBirth,
+    String? country,
+    String? countryCode,
+    String? appLanguage,
+    String? currencyCode,
   }) async {
     final normalizedUsername = (username ?? email.split('@').first).trim();
     if (!isStrongPassword(password)) {
@@ -755,6 +777,10 @@ class SupabaseAuthService implements AuthService {
         'role': role.name,
         'gender': gender,
         'date_of_birth': dateOfBirth?.toIso8601String().split('T').first,
+        'country': country ?? 'Ghana',
+        'country_code': countryCode ?? '+233',
+        'app_language': appLanguage ?? 'English',
+        'currency_code': currencyCode ?? 'GHS',
       },
     );
 

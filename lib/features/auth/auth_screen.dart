@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/widgets/safe_back_button.dart';
 import '../../config/constants.dart';
+import '../../core/utils/country_preferences.dart';
+import '../../core/utils/location_data.dart';
 import '../../models/app_user.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../routes/route_names.dart';
@@ -29,6 +31,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   bool _isCreateAccountMode = false;
   UserRole _selectedRole = UserRole.customer;
   String _selectedGender = 'prefer_not_to_say';
+  CountryOption _selectedCountry = countryByName('Ghana');
+  List<CountryOption> _countries = kCountries;
   DateTime? _dateOfBirth;
 
   String get _username => _usernameController.text.trim();
@@ -56,6 +60,36 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       _dateOfBirthController.text =
           '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
     });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCountries();
+  }
+
+  Future<void> _loadCountries() async {
+    try {
+      final countries = await loadWorldCountries();
+      if (!mounted) return;
+      setState(() {
+        _countries = countries;
+        _selectedCountry = countries.firstWhere(
+          (country) => country.code == _selectedCountry.code,
+          orElse: () => _selectedCountry,
+        );
+      });
+    } catch (_) {
+      // Keep bundled country fallback.
+    }
+  }
+
+  Future<void> _selectCountry(CountryOption country) async {
+    setState(() => _selectedCountry = country);
+    final defaults = preferencesForCountry(country);
+    final settings = ref.read(appSettingsControllerProvider.notifier);
+    await settings.setLanguage(defaults.language);
+    await settings.setCurrencyCode(defaults.currencyCode);
   }
 
   String _friendlyError(Object error) {
@@ -87,6 +121,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
     if (message.contains('verify your email')) {
       return 'Account created. Check your email to verify, then sign in.';
+    }
+    if (message.contains('confirmation') && message.contains('email')) {
+      return 'Account email could not be sent. Please try again later or contact Support.';
+    }
+    if (message.contains('smtp') || message.contains('email service')) {
+      return 'Account email service is not available right now. Please contact Support.';
     }
     if (message.contains('google sign-in') ||
         message.contains('unsupported provider') ||
@@ -286,6 +326,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (_dateOfBirth == null) {
       return 'Date of birth is required.';
     }
+    if (_selectedCountry.name.trim().isEmpty) {
+      return 'Country is required.';
+    }
     if (!_isAdult(_dateOfBirth!)) {
       return 'You must be at least 18 years old to create an account.';
     }
@@ -457,6 +500,25 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       },
               ),
               const SizedBox(height: 12),
+              DropdownButtonFormField<CountryOption>(
+                initialValue: _selectedCountry,
+                decoration: InputDecoration(labelText: settings.t('Country')),
+                items: _countries
+                    .map(
+                      (country) => DropdownMenuItem(
+                        value: country,
+                        child: Text(country.name),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: _isLoading
+                    ? null
+                    : (country) {
+                        if (country == null) return;
+                        _selectCountry(country);
+                      },
+              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: _dateOfBirthController,
                 readOnly: true,
@@ -521,6 +583,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                             role: _selectedRole,
                             gender: _selectedGender,
                             dateOfBirth: _dateOfBirth,
+                            country: _selectedCountry.name,
+                            countryCode: _selectedCountry.dialCode,
+                            appLanguage: settings.language,
+                            currencyCode: settings.currencyCode,
                           ),
                           authService: authService,
                         );

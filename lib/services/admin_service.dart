@@ -8,8 +8,25 @@ class PlatformAccount {
   const PlatformAccount({
     required this.id,
     required this.name,
+    required this.username,
+    required this.fullName,
     required this.email,
     required this.phone,
+    required this.photoUrl,
+    required this.country,
+    required this.countryCode,
+    required this.description,
+    required this.gender,
+    required this.dateOfBirth,
+    required this.isBusy,
+    required this.emailVerified,
+    required this.phoneVerified,
+    required this.emailNotifications,
+    required this.phoneNotifications,
+    required this.blockedEmailNotificationTypes,
+    required this.blockedPhoneNotificationTypes,
+    required this.appLanguage,
+    required this.currencyCode,
     required this.role,
     required this.verificationStatus,
     required this.tenantId,
@@ -18,8 +35,25 @@ class PlatformAccount {
 
   final String id;
   final String name;
+  final String username;
+  final String fullName;
   final String email;
   final String phone;
+  final String photoUrl;
+  final String country;
+  final String countryCode;
+  final String description;
+  final String gender;
+  final DateTime? dateOfBirth;
+  final bool isBusy;
+  final bool emailVerified;
+  final bool phoneVerified;
+  final bool emailNotifications;
+  final bool phoneNotifications;
+  final Set<String> blockedEmailNotificationTypes;
+  final Set<String> blockedPhoneNotificationTypes;
+  final String appLanguage;
+  final String currencyCode;
   final UserRole role;
   final VerificationStatus verificationStatus;
   final String tenantId;
@@ -199,7 +233,7 @@ class AdminService {
     final rows = await _supabase
         .from('profiles')
         .select(
-          'id,username,full_name,email,phone,role,verification_status,tenant_id,created_at',
+          'id,username,full_name,email,phone,avatar_url,country,country_code,description,gender,date_of_birth,is_busy,email_verified,phone_verified,email_notifications,phone_notifications,blocked_email_notification_types,blocked_phone_notification_types,app_language,currency_code,role,verification_status,tenant_id,created_at',
         )
         .order('created_at', ascending: false);
     return (rows as List<dynamic>)
@@ -299,6 +333,53 @@ class AdminService {
     final client = _supabase;
     if (client == null) return;
     await client.from('profiles').update({'role': role.name}).eq('id', userId);
+  }
+
+  Future<void> updateAccountProfile({
+    required String userId,
+    required String username,
+    required String fullName,
+    required String email,
+    required String phone,
+    required String country,
+    required String countryCode,
+    required String description,
+    required String gender,
+    required DateTime? dateOfBirth,
+    required bool isBusy,
+    required bool emailVerified,
+    required bool phoneVerified,
+    required bool emailNotifications,
+    required bool phoneNotifications,
+    required String appLanguage,
+    required String currencyCode,
+    required VerificationStatus verificationStatus,
+  }) async {
+    final client = _supabase;
+    if (client == null) return;
+    await client.from('profiles').update({
+      'username': username.trim(),
+      'full_name': fullName.trim(),
+      'email': email.trim(),
+      'phone': phone.trim(),
+      'country': country.trim().isEmpty ? 'Ghana' : country.trim(),
+      'country_code': countryCode.trim().isEmpty ? '+233' : countryCode.trim(),
+      'description': description.trim(),
+      'gender': gender.trim().isEmpty ? null : gender.trim(),
+      'date_of_birth': dateOfBirth?.toIso8601String().split('T').first,
+      'is_busy': isBusy,
+      'email_verified': emailVerified,
+      'phone_verified': phoneVerified,
+      'email_notifications': emailNotifications,
+      'phone_notifications': phoneNotifications,
+      'app_language':
+          appLanguage.trim().isEmpty ? 'English' : appLanguage.trim(),
+      'currency_code': currencyCode.trim().isEmpty
+          ? 'GHS'
+          : currencyCode.trim().toUpperCase(),
+      'verification_status': verificationStatus.name,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', userId);
   }
 
   Future<void> resetAccountData({required String userId}) async {
@@ -758,11 +839,39 @@ String? _uuidOrNull(String value) {
 PlatformAccount _accountFromRow(Map<String, dynamic> row) {
   final roleName = (row['role'] ?? '').toString();
   final statusName = (row['verification_status'] ?? '').toString();
+  final username = (row['username'] ?? '').toString();
+  final fullName = (row['full_name'] ?? '').toString();
+  final displayName = username.trim().isNotEmpty
+      ? username
+      : fullName.trim().isNotEmpty
+          ? fullName
+          : 'Unnamed';
   return PlatformAccount(
     id: (row['id'] ?? '').toString(),
-    name: (row['username'] ?? row['full_name'] ?? 'Unnamed').toString(),
+    name: displayName,
+    username: username,
+    fullName: fullName,
     email: (row['email'] ?? '').toString(),
     phone: (row['phone'] ?? '').toString(),
+    photoUrl: (row['avatar_url'] ?? '').toString(),
+    country: (row['country'] ?? 'Ghana').toString(),
+    countryCode: (row['country_code'] ?? '+233').toString(),
+    description: (row['description'] ?? '').toString(),
+    gender: (row['gender'] ?? '').toString(),
+    dateOfBirth: DateTime.tryParse((row['date_of_birth'] ?? '').toString()),
+    isBusy: _boolFromAny(row['is_busy']),
+    emailVerified: _boolFromAny(row['email_verified']),
+    phoneVerified: _boolFromAny(row['phone_verified']),
+    emailNotifications:
+        _boolFromAny(row['email_notifications'], fallback: true),
+    phoneNotifications:
+        _boolFromAny(row['phone_notifications'], fallback: true),
+    blockedEmailNotificationTypes:
+        _stringSetFromAny(row['blocked_email_notification_types']),
+    blockedPhoneNotificationTypes:
+        _stringSetFromAny(row['blocked_phone_notification_types']),
+    appLanguage: (row['app_language'] ?? 'English').toString(),
+    currencyCode: (row['currency_code'] ?? 'GHS').toString(),
     role: UserRole.values.firstWhere(
       (role) => role.name == roleName,
       orElse: () => UserRole.customer,
@@ -807,4 +916,19 @@ List<dynamic> _listFromAny(dynamic value) {
     return value;
   }
   return const [];
+}
+
+Set<String> _stringSetFromAny(dynamic value) {
+  return _listFromAny(value)
+      .map((item) => item.toString())
+      .where((item) => item.trim().isNotEmpty)
+      .toSet();
+}
+
+bool _boolFromAny(dynamic value, {bool fallback = false}) {
+  if (value is bool) return value;
+  final normalized = value?.toString().toLowerCase();
+  if (normalized == 'true') return true;
+  if (normalized == 'false') return false;
+  return fallback;
 }
