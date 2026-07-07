@@ -444,18 +444,30 @@ class _ListingImageCarouselState extends State<_ListingImageCarousel> {
               left: 8,
               top: 0,
               bottom: 0,
-              child: IconButton.filledTonal(
-                onPressed: canGoPrevious ? () => _goTo(_index - 1) : null,
-                icon: const Icon(Icons.chevron_left),
+              child: Center(
+                child: SizedBox.square(
+                  dimension: 42,
+                  child: IconButton.filledTonal(
+                    onPressed: canGoPrevious ? () => _goTo(_index - 1) : null,
+                    icon: const Icon(Icons.chevron_left, size: 24),
+                    padding: EdgeInsets.zero,
+                  ),
+                ),
               ),
             ),
             Positioned(
               right: 8,
               top: 0,
               bottom: 0,
-              child: IconButton.filledTonal(
-                onPressed: canGoNext ? () => _goTo(_index + 1) : null,
-                icon: const Icon(Icons.chevron_right),
+              child: Center(
+                child: SizedBox.square(
+                  dimension: 42,
+                  child: IconButton.filledTonal(
+                    onPressed: canGoNext ? () => _goTo(_index + 1) : null,
+                    icon: const Icon(Icons.chevron_right, size: 24),
+                    padding: EdgeInsets.zero,
+                  ),
+                ),
               ),
             ),
             Positioned(

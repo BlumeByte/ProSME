@@ -655,37 +655,25 @@ class SupabaseJobsRepository implements JobsRepository {
     required double amount,
     String message = '',
   }) async {
-    final job = await createJob(
-      title: title,
-      description: description,
-      location: location,
-      budget: amount,
-      createdBy: customerId,
-      requestType: 'direct',
-      targetArtisanId: artisanId,
-    );
     try {
-      final row = await _client
-          .from('job_bids')
-          .insert({
-            'job_id': job.id,
-            'artisan_id': artisanId,
-            'amount': amount,
-            'message': message,
-            'created_by_user_id': customerId,
-            'status': 'pending',
-          })
-          .select()
-          .single();
-      return (job: job, bid: _mapBid(row));
+      final response = await _client.rpc(
+        'create_direct_booking_offer',
+        params: {
+          'p_artisan_id': artisanId,
+          'p_title': title,
+          'p_description': description,
+          'p_location': location,
+          'p_amount': amount,
+          'p_message': message,
+        },
+      );
+      final payload = Map<String, dynamic>.from(response as Map);
+      final job = _mapJob(Map<String, dynamic>.from(payload['job'] as Map));
+      final bid = _mapBid(Map<String, dynamic>.from(payload['bid'] as Map));
+      return (job: job, bid: bid);
     } catch (error, stackTrace) {
-      debugPrint('Direct booking bid insert failed: $error');
+      debugPrint('Direct booking offer failed: $error');
       debugPrintStack(stackTrace: stackTrace);
-      try {
-        await _client.from('jobs').delete().eq('id', job.id);
-      } catch (cleanupError) {
-        debugPrint('Direct booking cleanup failed: $cleanupError');
-      }
       rethrow;
     }
   }
