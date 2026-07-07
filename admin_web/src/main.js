@@ -169,8 +169,7 @@ const artisanImages = {
     'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80',
   verification:
     'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?auto=format&fit=crop&w=1200&q=80',
-  chat:
-    'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80',
+  chat: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80',
   invoices:
     'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1200&q=80',
   account:
@@ -281,11 +280,7 @@ const dateInputValue = (date) =>
   ].join('-');
 const adultCutoffDate = () => {
   const today = new Date();
-  return new Date(
-    today.getFullYear() - 18,
-    today.getMonth(),
-    today.getDate(),
-  );
+  return new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
 };
 const adultCutoffInputValue = () => dateInputValue(adultCutoffDate());
 const isAdultDate = (value) => {
@@ -370,7 +365,8 @@ function installGoogleTracking() {
 
 async function trackPublicPageView() {
   const path = window.location.pathname;
-  if (!publicRoutes.has(path) || path === '/login' || path === '/signup') return;
+  if (!publicRoutes.has(path) || path === '/login' || path === '/signup')
+    return;
   if (lastTrackedPath === path) return;
   lastTrackedPath = path;
 
@@ -766,7 +762,9 @@ async function refreshData() {
       'email_outbox',
       supabase
         .from('email_outbox')
-        .select('id,to_email,subject,sent_at,attempt_count,last_error,created_at')
+        .select(
+          'id,to_email,subject,sent_at,attempt_count,last_error,created_at',
+        )
         .order('created_at', { ascending: false })
         .limit(200),
     ),
@@ -898,6 +896,7 @@ async function signUp(event) {
   const fullName = normalize(form.get('full_name')) || email.split('@')[0];
   const gender = lower(form.get('gender')) || 'prefer_not_to_say';
   const dateOfBirth = normalize(form.get('date_of_birth'));
+  const phone = normalize(form.get('phone'));
 
   if (!validEmail(email)) {
     state.error = 'Enter a complete email address.';
@@ -919,23 +918,29 @@ async function signUp(event) {
   state.error = '';
   render();
 
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: { full_name: fullName, role, gender, date_of_birth: dateOfBirth },
-      emailRedirectTo: authRedirectUrl('/login'),
+  const { data, error } = await supabase.functions.invoke('public-signup', {
+    body: {
+      email,
+      password,
+      full_name: fullName,
+      username: fullName,
+      role,
+      gender,
+      date_of_birth: dateOfBirth,
+      phone,
+      redirectTo: authRedirectUrl('/login'),
     },
   });
 
-  if (error) {
+  if (error || data?.ok !== true) {
     state.busy = false;
-    state.error = error.message;
+    state.error =
+      data?.error || error?.message || 'Account could not be created.';
     render();
     return;
   }
 
-  state.pendingConfirmationEmail = data.session ? '' : email;
+  state.pendingConfirmationEmail = email;
   if (state.pendingConfirmationEmail) {
     window.localStorage.setItem(
       'prosme_pending_confirmation_email',
@@ -945,21 +950,9 @@ async function signUp(event) {
     window.localStorage.removeItem('prosme_pending_confirmation_email');
   }
 
-  if (data.session?.user) {
-    await supabase.from('profiles').upsert({
-      id: data.session.user.id,
-      email,
-      full_name: fullName,
-      role,
-      gender,
-      date_of_birth: dateOfBirth,
-      verification_status: 'pending',
-    });
-  }
-
   state.busy = false;
-  state.notice = data.session
-    ? 'Account created. Your web and mobile account now use the same ProSME login.'
+  state.notice = data?.phoneOtpSent
+    ? 'Check your email to confirm your account. We also sent an SMS OTP to your phone.'
     : 'Check your email to confirm your account, then sign in.';
   state.authMode = 'login';
   navigate('/login');
@@ -968,7 +961,8 @@ async function signUp(event) {
 async function resendConfirmationEmail() {
   const email = normalize(state.pendingConfirmationEmail).toLowerCase();
   if (!validEmail(email)) {
-    state.error = 'Enter your email and create the account again to request confirmation.';
+    state.error =
+      'Enter your email and create the account again to request confirmation.';
     render();
     return;
   }
@@ -977,17 +971,18 @@ async function resendConfirmationEmail() {
   state.notice = '';
   render();
 
-  const { error } = await supabase.auth.resend({
-    type: 'signup',
-    email,
-    options: {
-      emailRedirectTo: authRedirectUrl('/login'),
+  const { data, error } = await supabase.functions.invoke('public-signup', {
+    body: {
+      action: 'resend',
+      email,
+      redirectTo: authRedirectUrl('/login'),
     },
   });
 
   state.busy = false;
-  if (error) {
-    state.error = error.message;
+  if (error || data?.ok !== true) {
+    state.error =
+      data?.error || error?.message || 'Confirmation email could not be sent.';
   } else {
     state.notice = `Confirmation email resent to ${email}.`;
   }
@@ -1137,7 +1132,8 @@ async function updateProfile(id) {
 
 async function updateRole(userId, role) {
   if (!['customer', 'artisan'].includes(role)) {
-    state.error = 'Accounts can only be set to user or artisan from this dashboard.';
+    state.error =
+      'Accounts can only be set to user or artisan from this dashboard.';
     render();
     return;
   }
@@ -1175,8 +1171,7 @@ async function deleteAccount(userId, email) {
 
 async function resetAccountData(userId, email) {
   if (state.session?.user?.id === userId) {
-    state.error =
-      'You cannot reset the Admin Account you are currently using.';
+    state.error = 'You cannot reset the Admin Account you are currently using.';
     render();
     return;
   }
@@ -1258,7 +1253,8 @@ async function deleteTableRow(table, id) {
 
 async function createAccount(role) {
   if (!['customer', 'artisan'].includes(role)) {
-    state.error = 'Accounts can only be created as user or artisan from this dashboard.';
+    state.error =
+      'Accounts can only be created as user or artisan from this dashboard.';
     render();
     return;
   }
@@ -1277,7 +1273,9 @@ async function createAccount(role) {
       'prefer_not_to_say',
     ),
   );
-  const dateOfBirth = normalize(window.prompt('Date of birth (YYYY-MM-DD)', ''));
+  const dateOfBirth = normalize(
+    window.prompt('Date of birth (YYYY-MM-DD)', ''),
+  );
   if (!['female', 'male', 'non_binary', 'prefer_not_to_say'].includes(gender)) {
     state.error = 'Enter a supported gender value.';
     render();
@@ -1646,11 +1644,7 @@ function dashboardStats() {
       state.data.jobs.length,
       `${publicJobs.length} public - ${directJobs.length} direct`,
     ],
-    [
-      'Open jobs',
-      openJobs.length,
-      `${bidsByStatus.pending || 0} pending bids`,
-    ],
+    ['Open jobs', openJobs.length, `${bidsByStatus.pending || 0} pending bids`],
     [
       'Direct offers',
       directJobs.length,
@@ -1663,7 +1657,11 @@ function dashboardStats() {
     ],
     ['Reports', reports.length, `${unread.length} unread admin notices`],
     ['Visitors 24h', visitorCount, `${recentVisits.length} page views`],
-    ['Email queue', pendingEmails.length, `${failedEmails.length} failed sends`],
+    [
+      'Email queue',
+      pendingEmails.length,
+      `${failedEmails.length} failed sends`,
+    ],
     ['Rejected verification', rejected.length, 'Retry lock handled in app'],
   ];
 }
@@ -1798,17 +1796,15 @@ function renderOverview() {
 }
 
 function pendingVerifications() {
-  return state.data.profiles.filter(
-    (profile) => {
-      const subscription = subscriptionForUser(profile.id);
-      return (
-        ['customer', 'artisan'].includes(profile.role) &&
-        profile.verification_status === 'pending' &&
-        subscription?.status === 'paid_pending_review' &&
-        (profile.national_id_front_url || profile.national_id_back_url)
-      );
-    },
-  );
+  return state.data.profiles.filter((profile) => {
+    const subscription = subscriptionForUser(profile.id);
+    return (
+      ['customer', 'artisan'].includes(profile.role) &&
+      profile.verification_status === 'pending' &&
+      subscription?.status === 'paid_pending_review' &&
+      (profile.national_id_front_url || profile.national_id_back_url)
+    );
+  });
 }
 
 function subscriptionForUser(userId) {
@@ -2971,7 +2967,8 @@ function renderAboutPage() {
     ${smeBanner({
       image: artisanImages.textile,
       eyebrow: 'About ProSME',
-      title: 'Digital tools for artisans, service teams, and the customers who rely on them.',
+      title:
+        'Digital tools for artisans, service teams, and the customers who rely on them.',
       body: 'The platform is designed around practical SME workflows: find work, prove identity, organize jobs, and keep communication traceable.',
     })}
     ${smeScene({
@@ -3020,13 +3017,15 @@ function renderFeaturesPage() {
     ${smeBanner({
       image: artisanImages.craft,
       eyebrow: 'SME workflows',
-      title: 'From first request to paid work, each tab supports a real service step.',
+      title:
+        'From first request to paid work, each tab supports a real service step.',
       body: 'Customers can search and request help; artisans can manage listings, bids, verification, messages, bookings, and profile trust signals.',
     })}
     ${smeScene({
       image: artisanImages.support,
       eyebrow: 'Layered controls',
-      title: 'Every role gets the right surface without losing the shared record.',
+      title:
+        'Every role gets the right surface without losing the shared record.',
       body: 'Customers see requests and accepted work. Artisans see listings, bids, verification, and payments. Admins see the review controls that keep the marketplace accountable.',
     })}
     <section class="site-section feature-list">
@@ -3073,9 +3072,18 @@ function renderPolicyPage(type) {
       image: artisanImages.records,
       body: 'Use ProSME to request, offer, manage, and track legitimate services. Users are responsible for accurate account details, lawful documents, fair communication, and honoring accepted job terms.',
       cards: [
-        ['Marketplace role', 'ProSME helps customers and artisans discover, message, negotiate, and record service requests. Private work agreements remain the responsibility of the customer and artisan unless a separate written contract says otherwise.'],
-        ['User conduct', 'Accounts may be limited when activity appears fraudulent, unsafe, abusive, misleading, unlawful, or harmful to marketplace trust.'],
-        ['Service records', 'Requests, bids, invoices, wallet records, messages, reports, and verification decisions may be kept to support safety, disputes, and account history.'],
+        [
+          'Marketplace role',
+          'ProSME helps customers and artisans discover, message, negotiate, and record service requests. Private work agreements remain the responsibility of the customer and artisan unless a separate written contract says otherwise.',
+        ],
+        [
+          'User conduct',
+          'Accounts may be limited when activity appears fraudulent, unsafe, abusive, misleading, unlawful, or harmful to marketplace trust.',
+        ],
+        [
+          'Service records',
+          'Requests, bids, invoices, wallet records, messages, reports, and verification decisions may be kept to support safety, disputes, and account history.',
+        ],
       ],
     },
     '/privacy': {
@@ -3084,9 +3092,18 @@ function renderPolicyPage(type) {
       image: artisanImages.planning,
       body: 'ProSME uses account, profile, job, bid, chat, verification, notification, and payment reference data to operate the service. Payment card or bank details are handled by Paystack.',
       cards: [
-        ['Data collected', 'Profile details, listings, requests, bids, messages, verification documents, reports, notifications, payment references, and account activity help operate the marketplace.'],
-        ['How it is used', 'Data supports authentication, service matching, artisan verification, safety review, support, alerts, dispute context, abuse prevention, and transaction records.'],
-        ['User choices', 'Users can update profile details, request account deletion, report unsafe activity, block chats, and contact Blumebyte about data access or correction.'],
+        [
+          'Data collected',
+          'Profile details, listings, requests, bids, messages, verification documents, reports, notifications, payment references, and account activity help operate the marketplace.',
+        ],
+        [
+          'How it is used',
+          'Data supports authentication, service matching, artisan verification, safety review, support, alerts, dispute context, abuse prevention, and transaction records.',
+        ],
+        [
+          'User choices',
+          'Users can update profile details, request account deletion, report unsafe activity, block chats, and contact Blumebyte about data access or correction.',
+        ],
       ],
     },
     '/security': {
@@ -3095,9 +3112,18 @@ function renderPolicyPage(type) {
       image: artisanImages.verification,
       body: 'Passwords, recovery links, and verification emails use protected account services. Admin tools run through server functions, and service keys are not exposed in browser code.',
       cards: [
-        ['Account protection', 'Email verification, password recovery, and configured sign-in providers protect access to customer, artisan, and admin accounts.'],
-        ['Access controls', 'Database access rules restrict private data and limit verification, report, and admin review tools to authorized accounts.'],
-        ['Incident response', 'Report suspicious behavior or security concerns through Support or Blumebyte contact so the team can review account and platform activity.'],
+        [
+          'Account protection',
+          'Email verification, password recovery, and configured sign-in providers protect access to customer, artisan, and admin accounts.',
+        ],
+        [
+          'Access controls',
+          'Database access rules restrict private data and limit verification, report, and admin review tools to authorized accounts.',
+        ],
+        [
+          'Incident response',
+          'Report suspicious behavior or security concerns through Support or Blumebyte contact so the team can review account and platform activity.',
+        ],
       ],
     },
     '/cookies': {
@@ -3106,9 +3132,18 @@ function renderPolicyPage(type) {
       image: artisanImages.account,
       body: 'The web app uses browser storage and secure session cookies or tokens to keep users signed in and route them to the correct customer, artisan, or admin experience.',
       cards: [
-        ['Session storage', 'Local browser storage helps keep the account session active and remembers the right web experience after login.'],
-        ['Functional use', 'Cookies and tokens support authentication, navigation, security checks, and continuity between public pages and the account portal.'],
-        ['User control', 'Users can clear browser storage or sign out to remove the local session from the current device.'],
+        [
+          'Session storage',
+          'Local browser storage helps keep the account session active and remembers the right web experience after login.',
+        ],
+        [
+          'Functional use',
+          'Cookies and tokens support authentication, navigation, security checks, and continuity between public pages and the account portal.',
+        ],
+        [
+          'User control',
+          'Users can clear browser storage or sign out to remove the local session from the current device.',
+        ],
       ],
     },
   };
@@ -3182,6 +3217,10 @@ function renderAuthPage(mode = state.authMode) {
               <label>
                 Date of birth
                 <input name="date_of_birth" type="date" max="${adultCutoffInputValue()}" required />
+              </label>
+              <label>
+                Phone number (optional)
+                <input name="phone" type="tel" autocomplete="tel" placeholder="+233256122555" />
               </label>`
             : ''
         }
@@ -3235,7 +3274,9 @@ function renderPortal() {
   const publicRequests = state.data.jobs.filter(
     (job) => (job.request_type || 'public') !== 'direct',
   );
-  const visibleJobs = isArtisan ? [...directRequests, ...publicRequests] : ownJobs;
+  const visibleJobs = isArtisan
+    ? [...directRequests, ...publicRequests]
+    : ownJobs;
   const walletTotal = state.data.walletTransactions.reduce(
     (sum, item) => sum + Number(item.amount || 0),
     0,

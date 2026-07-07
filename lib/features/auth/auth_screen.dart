@@ -27,6 +27,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _dateOfBirthController = TextEditingController();
+  final _phoneController = TextEditingController();
   bool _isLoading = false;
   bool _isCreateAccountMode = false;
   UserRole _selectedRole = UserRole.customer;
@@ -38,6 +39,23 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   String get _username => _usernameController.text.trim();
   String get _email => _emailController.text.trim();
   String get _password => _passwordController.text;
+  String get _phone {
+    final value = _phoneController.text.trim();
+    if (value.isEmpty) return '';
+    final compact = value.replaceAll(RegExp(r'[\s()-]'), '');
+    if (compact.startsWith('+')) return compact;
+    final dialDigits = _selectedCountry.dialCode.replaceFirst('+', '');
+    if (compact.startsWith(dialDigits) && compact.length > dialDigits.length) {
+      return '+$compact';
+    }
+    if (compact.startsWith('0') && compact.length > 1) {
+      return '${_selectedCountry.dialCode}${compact.substring(1)}';
+    }
+    if (RegExp(r'^\d{8,14}$').hasMatch(compact)) {
+      return '${_selectedCountry.dialCode}$compact';
+    }
+    return compact;
+  }
 
   bool _isAdult(DateTime value) {
     final today = DateTime.now();
@@ -332,6 +350,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (!_isAdult(_dateOfBirth!)) {
       return 'You must be at least 18 years old to create an account.';
     }
+    if (_phone.isNotEmpty && !RegExp(r'^\+[1-9]\d{7,14}$').hasMatch(_phone)) {
+      return 'Enter phone with country code, for example +233256122555.';
+    }
     return null;
   }
 
@@ -397,6 +418,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _dateOfBirthController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -529,6 +551,15 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 onTap: _isLoading ? null : _pickDateOfBirth,
               ),
               const SizedBox(height: 12),
+              TextField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  labelText: settings.t('Phone number (optional)'),
+                  hintText: '${_selectedCountry.dialCode}256122555',
+                ),
+              ),
+              const SizedBox(height: 12),
             ],
             TextField(
               controller: _emailController,
@@ -583,6 +614,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                             role: _selectedRole,
                             gender: _selectedGender,
                             dateOfBirth: _dateOfBirth,
+                            phone: _phone,
                             country: _selectedCountry.name,
                             countryCode: _selectedCountry.dialCode,
                             appLanguage: settings.language,

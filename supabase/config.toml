@@ -28,15 +28,15 @@ max_frequency = "1m0s"
 
 [auth.email.template.confirmation]
 subject = "Verify your ProSME account"
-content_path = "./templates/confirm-signup.html"
+content_path = "./supabase/templates/confirm-signup.html"
 
 [auth.email.template.recovery]
 subject = "Reset your ProSME password"
-content_path = "./templates/recovery.html"
+content_path = "./supabase/templates/recovery.html"
 
 [auth.email.template.magic_link]
 subject = "Sign in to ProSME"
-content_path = "./templates/magic-link.html"
+content_path = "./supabase/templates/magic-link.html"
 
 [auth.mfa]
 max_enrolled_factors = 5
@@ -65,6 +65,11 @@ entrypoint = "./functions/send-email-outbox/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/account-verification/index.ts"
+
+[functions.public-signup]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/public-signup/index.ts"
 
 [functions.admin-dashboard]
 enabled = true

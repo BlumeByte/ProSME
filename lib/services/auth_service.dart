@@ -52,6 +52,7 @@ abstract class AuthService {
     UserRole role = UserRole.customer,
     String? gender,
     DateTime? dateOfBirth,
+    String? phone,
     String? country,
     String? countryCode,
     String? appLanguage,
@@ -127,6 +128,7 @@ class MockAuthService implements AuthService {
     UserRole role = UserRole.customer,
     String? gender,
     DateTime? dateOfBirth,
+    String? phone,
     String? country,
     String? countryCode,
     String? appLanguage,
@@ -155,7 +157,7 @@ class MockAuthService implements AuthService {
       role: role,
       name: username!.trim(),
       fullName: username.trim(),
-      phone: '',
+      phone: (phone ?? '').trim(),
       email: email.trim(),
       photoUrl: '',
       verificationStatus: VerificationStatus.pending,
@@ -756,6 +758,7 @@ class SupabaseAuthService implements AuthService {
     UserRole role = UserRole.customer,
     String? gender,
     DateTime? dateOfBirth,
+    String? phone,
     String? country,
     String? countryCode,
     String? appLanguage,
@@ -767,34 +770,37 @@ class SupabaseAuthService implements AuthService {
         'Password must be at least 8 characters with uppercase, lowercase, number, and special character.',
       );
     }
-    final response = await _supabase.auth.signUp(
-      email: email.trim(),
-      password: password,
-      emailRedirectTo: _emailVerificationRedirectTo,
-      data: {
+    final response = await _supabase.functions.invoke(
+      'public-signup',
+      body: {
+        'email': email.trim(),
+        'password': password,
         'full_name': normalizedUsername,
         'username': normalizedUsername,
         'role': role.name,
         'gender': gender,
         'date_of_birth': dateOfBirth?.toIso8601String().split('T').first,
+        'phone': (phone ?? '').trim(),
         'country': country ?? 'Ghana',
         'country_code': countryCode ?? '+233',
         'app_language': appLanguage ?? 'English',
         'currency_code': currencyCode ?? 'GHS',
+        'redirectTo': _emailVerificationRedirectTo,
       },
     );
-
-    if (response.session == null && _supabase.auth.currentUser == null) {
-      throw const PendingEmailVerificationException();
-    }
-
-    final user = response.user ?? _supabase.auth.currentUser;
-    if (user == null) {
+    final data = response.data;
+    final payload = data is Map ? Map<String, dynamic>.from(data) : {};
+    if (response.status < 200 || response.status >= 300) {
       throw StateError(
-        'Sign-up completed but no active session was returned. Please sign in.',
+        (payload['error'] ?? 'Account could not be created.').toString(),
       );
     }
-    return _resolveUser(user);
+    if (payload['ok'] != true) {
+      throw StateError(
+        (payload['error'] ?? 'Account could not be created.').toString(),
+      );
+    }
+    throw const PendingEmailVerificationException();
   }
 
   String get _emailVerificationRedirectTo => kIsWeb
@@ -807,11 +813,24 @@ class SupabaseAuthService implements AuthService {
     if (!_isValidEmailAddress(normalized)) {
       throw StateError('Enter a valid email address.');
     }
-    await _supabase.auth.resend(
-      email: normalized,
-      type: OtpType.signup,
-      emailRedirectTo: _emailVerificationRedirectTo,
+    final response = await _supabase.functions.invoke(
+      'public-signup',
+      body: {
+        'action': 'resend',
+        'email': normalized,
+        'redirectTo': _emailVerificationRedirectTo,
+      },
     );
+    final data = response.data;
+    final payload = data is Map ? Map<String, dynamic>.from(data) : {};
+    if (response.status < 200 ||
+        response.status >= 300 ||
+        payload['ok'] != true) {
+      throw StateError(
+        (payload['error'] ?? 'Confirmation email could not be sent.')
+            .toString(),
+      );
+    }
   }
 
   @override

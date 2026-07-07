@@ -664,15 +664,30 @@ class SupabaseJobsRepository implements JobsRepository {
       requestType: 'direct',
       targetArtisanId: artisanId,
     );
-    final bid = await createBid(
-      jobId: job.id,
-      artisanId: artisanId,
-      amount: amount,
-      message: message,
-      createdByUserId: customerId,
-      status: 'pending',
-    );
-    return (job: job, bid: bid);
+    try {
+      final row = await _client
+          .from('job_bids')
+          .insert({
+            'job_id': job.id,
+            'artisan_id': artisanId,
+            'amount': amount,
+            'message': message,
+            'created_by_user_id': customerId,
+            'status': 'pending',
+          })
+          .select()
+          .single();
+      return (job: job, bid: _mapBid(row));
+    } catch (error, stackTrace) {
+      debugPrint('Direct booking bid insert failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      try {
+        await _client.from('jobs').delete().eq('id', job.id);
+      } catch (cleanupError) {
+        debugPrint('Direct booking cleanup failed: $cleanupError');
+      }
+      rethrow;
+    }
   }
 
   @override
