@@ -164,10 +164,9 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                     ),
                     const SizedBox(height: 24),
                     PrimaryButton(
-                      label: settings.t(
-                        _loading ? 'Updating password...' : 'Update password',
-                      ),
+                      label: settings.t('Update password'),
                       icon: Icons.check,
+                      isLoading: _loading,
                       onPressed: _loading ? null : _updatePassword,
                     ),
                     const SizedBox(height: 12),

@@ -583,14 +583,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               ),
             const SizedBox(height: 16),
             PrimaryButton(
-              label: _isLoading
-                  ? settings.t(_isCreateAccountMode
-                      ? 'Creating account...'
-                      : 'Signing in...')
-                  : settings.t(_isCreateAccountMode
-                      ? 'Create account'
-                      : 'Email Sign in'),
+              label: settings.t(
+                _isCreateAccountMode ? 'Create account' : 'Email Sign in',
+              ),
               icon: Icons.email,
+              isLoading: _isLoading,
               onPressed: _isLoading
                   ? null
                   : () {
@@ -634,6 +631,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               PrimaryButton(
                 label: settings.t('Google Sign in'),
                 icon: Icons.login,
+                isLoading: _isLoading,
                 onPressed: _isLoading
                     ? null
                     : () => _signIn(
