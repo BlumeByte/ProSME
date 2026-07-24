@@ -22,7 +22,7 @@ class AuthScreen extends ConsumerStatefulWidget {
 
 class _AuthScreenState extends ConsumerState<AuthScreen> {
   static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-  static final RegExp _usernamePattern = RegExp(r'^[a-zA-Z0-9_]{3,20}$');
+  static final RegExp _usernamePattern = RegExp(r'^[a-zA-Z0-9_ ]{3,50}$');
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -30,13 +30,15 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _phoneController = TextEditingController();
   bool _isLoading = false;
   bool _isCreateAccountMode = false;
+  bool _obscurePassword = true;
   UserRole _selectedRole = UserRole.customer;
   String _selectedGender = 'prefer_not_to_say';
   CountryOption _selectedCountry = countryByName('Ghana');
   List<CountryOption> _countries = kCountries;
   DateTime? _dateOfBirth;
 
-  String get _username => _usernameController.text.trim();
+  String get _username =>
+      _usernameController.text.trim().replaceAll(RegExp(r'\s+'), ' ');
   String get _email => _emailController.text.trim();
   String get _password => _passwordController.text;
   String get _phone {
@@ -339,7 +341,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       return 'Please enter a username.';
     }
     if (!_usernamePattern.hasMatch(_username)) {
-      return 'Username must be 3-20 characters (letters, numbers, underscores).';
+      return 'Username must be 3-50 characters (letters, numbers, spaces, underscores).';
     }
     if (_dateOfBirth == null) {
       return 'Date of birth is required.';
@@ -427,225 +429,252 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     final authService = ref.watch(authServiceProvider);
     final settings = ref.watch(appSettingsControllerProvider);
     final title = _isCreateAccountMode ? 'Create account' : 'Sign in';
-    return Scaffold(
-      appBar: AppBar(
-        leading: const SafeBackButton(),
-        title: Text(settings.t(title)),
-        actions: [
-          TextButton.icon(
-            onPressed: _isLoading ? null : () => context.go(RouteNames.home),
-            icon: const Icon(Icons.home_outlined),
-            label: Text(settings.t('Home')),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            const Icon(Icons.lock_outline, size: 64),
-            const SizedBox(height: 16),
-            SegmentedButton<bool>(
-              segments: [
-                ButtonSegment<bool>(
-                  value: false,
-                  label: Text(settings.t('Sign in')),
-                ),
-                ButtonSegment<bool>(
-                  value: true,
-                  label: Text(settings.t('Create account')),
-                ),
-              ],
-              selected: {_isCreateAccountMode},
-              onSelectionChanged: _isLoading
-                  ? null
-                  : (selection) {
-                      setState(() {
-                        _isCreateAccountMode = selection.first;
-                      });
-                    },
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        context.go(RouteNames.home);
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: const SafeBackButton(),
+          title: Text(settings.t(title)),
+          actions: [
+            TextButton.icon(
+              onPressed: _isLoading ? null : () => context.go(RouteNames.home),
+              icon: const Icon(Icons.home_outlined),
+              label: Text(settings.t('Home')),
             ),
-            const SizedBox(height: 16),
-            if (_isCreateAccountMode) ...[
-              SegmentedButton<UserRole>(
+          ],
+        ),
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              const Icon(Icons.lock_outline, size: 64),
+              const SizedBox(height: 16),
+              SegmentedButton<bool>(
                 segments: [
-                  ButtonSegment<UserRole>(
-                    value: UserRole.customer,
-                    icon: const Icon(Icons.person_outline),
-                    label: Text(settings.t('User')),
+                  ButtonSegment<bool>(
+                    value: false,
+                    label: Text(settings.t('Sign in')),
                   ),
-                  ButtonSegment<UserRole>(
-                    value: UserRole.artisan,
-                    icon: const Icon(Icons.handyman_outlined),
-                    label: Text(settings.t('Artisan')),
+                  ButtonSegment<bool>(
+                    value: true,
+                    label: Text(settings.t('Create account')),
                   ),
                 ],
-                selected: {_selectedRole},
+                selected: {_isCreateAccountMode},
                 onSelectionChanged: _isLoading
                     ? null
                     : (selection) {
-                        setState(() => _selectedRole = selection.first);
+                        setState(() {
+                          _isCreateAccountMode = selection.first;
+                        });
                       },
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _usernameController,
-                decoration: InputDecoration(labelText: settings.t('Username')),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedGender,
-                decoration: InputDecoration(labelText: settings.t('Gender')),
-                items: [
-                  DropdownMenuItem(
-                    value: 'female',
-                    child: Text(settings.t('Female')),
-                  ),
-                  DropdownMenuItem(
-                    value: 'male',
-                    child: Text(settings.t('Male')),
-                  ),
-                  DropdownMenuItem(
-                    value: 'non_binary',
-                    child: Text(settings.t('Non-binary')),
-                  ),
-                  DropdownMenuItem(
-                    value: 'prefer_not_to_say',
-                    child: Text(settings.t('Prefer not to say')),
-                  ),
-                ],
-                onChanged: _isLoading
-                    ? null
-                    : (value) {
-                        if (value == null) return;
-                        setState(() => _selectedGender = value);
-                      },
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<CountryOption>(
-                initialValue: _selectedCountry,
-                decoration: InputDecoration(labelText: settings.t('Country')),
-                items: _countries
-                    .map(
-                      (country) => DropdownMenuItem(
-                        value: country,
-                        child: Text(country.name),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: _isLoading
-                    ? null
-                    : (country) {
-                        if (country == null) return;
-                        _selectCountry(country);
-                      },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _dateOfBirthController,
-                readOnly: true,
-                decoration: InputDecoration(
-                  labelText: settings.t('Date of birth'),
-                  suffixIcon: const Icon(Icons.calendar_today_outlined),
-                ),
-                onTap: _isLoading ? null : _pickDateOfBirth,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: settings.t('Phone number (optional)'),
-                  hintText: '${_selectedCountry.dialCode}256122555',
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            TextField(
-              controller: _emailController,
-              decoration: InputDecoration(labelText: settings.t('Email')),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              decoration: InputDecoration(labelText: settings.t('Password')),
-            ),
-            if (!_isCreateAccountMode)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: _isLoading
+              const SizedBox(height: 16),
+              if (_isCreateAccountMode) ...[
+                SegmentedButton<UserRole>(
+                  segments: [
+                    ButtonSegment<UserRole>(
+                      value: UserRole.customer,
+                      icon: const Icon(Icons.person_outline),
+                      label: Text(settings.t('User')),
+                    ),
+                    ButtonSegment<UserRole>(
+                      value: UserRole.artisan,
+                      icon: const Icon(Icons.handyman_outlined),
+                      label: Text(settings.t('Artisan')),
+                    ),
+                  ],
+                  selected: {_selectedRole},
+                  onSelectionChanged: _isLoading
                       ? null
-                      : () => _showForgotPasswordDialog(authService),
-                  child: Text(settings.t('Forgot password?')),
+                      : (selection) {
+                          setState(() => _selectedRole = selection.first);
+                        },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _usernameController,
+                  decoration:
+                      InputDecoration(labelText: settings.t('Username')),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedGender,
+                  decoration: InputDecoration(labelText: settings.t('Gender')),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'female',
+                      child: Text(settings.t('Female')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'male',
+                      child: Text(settings.t('Male')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'non_binary',
+                      child: Text(settings.t('Non-binary')),
+                    ),
+                    DropdownMenuItem(
+                      value: 'prefer_not_to_say',
+                      child: Text(settings.t('Prefer not to say')),
+                    ),
+                  ],
+                  onChanged: _isLoading
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          setState(() => _selectedGender = value);
+                        },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<CountryOption>(
+                  initialValue: _selectedCountry,
+                  decoration: InputDecoration(labelText: settings.t('Country')),
+                  items: _countries
+                      .map(
+                        (country) => DropdownMenuItem(
+                          value: country,
+                          child: Text(country.name),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: _isLoading
+                      ? null
+                      : (country) {
+                          if (country == null) return;
+                          _selectCountry(country);
+                        },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _dateOfBirthController,
+                  readOnly: true,
+                  decoration: InputDecoration(
+                    labelText: settings.t('Date of birth'),
+                    suffixIcon: const Icon(Icons.calendar_today_outlined),
+                  ),
+                  onTap: _isLoading ? null : _pickDateOfBirth,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: settings.t('Phone number (optional)'),
+                    hintText: '${_selectedCountry.dialCode}256122555',
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              TextField(
+                controller: _emailController,
+                decoration: InputDecoration(labelText: settings.t('Email')),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                decoration: InputDecoration(
+                  labelText: settings.t('Password'),
+                  suffixIcon: IconButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            );
+                          },
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
+                    tooltip: settings.t(
+                      _obscurePassword ? 'Show password' : 'Hide password',
+                    ),
+                  ),
                 ),
               ),
-            const SizedBox(height: 16),
-            PrimaryButton(
-              label: settings.t(
-                _isCreateAccountMode ? 'Create account' : 'Email Sign in',
-              ),
-              icon: Icons.email,
-              isLoading: _isLoading,
-              onPressed: _isLoading
-                  ? null
-                  : () {
-                      final validation = _isCreateAccountMode
-                          ? _validateSignUp()
-                          : _validateEmailPassword();
-                      if (validation != null) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(
-                          SnackBar(content: Text(settings.t(validation))),
-                        );
-                        return;
-                      }
-                      if (_isCreateAccountMode) {
-                        _signIn(
-                          () => authService.signUpWithEmail(
-                            _email,
-                            _password,
-                            username: _username,
-                            role: _selectedRole,
-                            gender: _selectedGender,
-                            dateOfBirth: _dateOfBirth,
-                            phone: _phone,
-                            country: _selectedCountry.name,
-                            countryCode: _selectedCountry.dialCode,
-                            appLanguage: settings.language,
-                            currencyCode: settings.currencyCode,
-                          ),
-                          authService: authService,
-                        );
-                        return;
-                      }
-                      _signIn(
-                        () => authService.signInWithEmail(_email, _password),
-                      );
-                    },
-            ),
-            if (!_isCreateAccountMode) ...[
+              if (!_isCreateAccountMode)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () => _showForgotPasswordDialog(authService),
+                    child: Text(settings.t('Forgot password?')),
+                  ),
+                ),
               const SizedBox(height: 16),
               PrimaryButton(
-                label: settings.t('Google Sign in'),
-                icon: Icons.login,
+                label: settings.t(
+                  _isCreateAccountMode ? 'Create account' : 'Email Sign in',
+                ),
+                icon: Icons.email,
                 isLoading: _isLoading,
                 onPressed: _isLoading
                     ? null
-                    : () => _signIn(
-                          authService.signInWithGoogle,
-                          forceRoleSelection: true,
-                        ),
+                    : () {
+                        final validation = _isCreateAccountMode
+                            ? _validateSignUp()
+                            : _validateEmailPassword();
+                        if (validation != null) {
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(
+                            SnackBar(content: Text(settings.t(validation))),
+                          );
+                          return;
+                        }
+                        if (_isCreateAccountMode) {
+                          _signIn(
+                            () => authService.signUpWithEmail(
+                              _email,
+                              _password,
+                              username: _username,
+                              role: _selectedRole,
+                              gender: _selectedGender,
+                              dateOfBirth: _dateOfBirth,
+                              phone: _phone,
+                              country: _selectedCountry.name,
+                              countryCode: _selectedCountry.dialCode,
+                              appLanguage: settings.language,
+                              currencyCode: settings.currencyCode,
+                            ),
+                            authService: authService,
+                          );
+                          return;
+                        }
+                        _signIn(
+                          () => authService.signInWithEmail(_email, _password),
+                        );
+                      },
               ),
+              if (!_isCreateAccountMode) ...[
+                const SizedBox(height: 16),
+                PrimaryButton(
+                  label: settings.t('Google Sign in'),
+                  icon: Icons.login,
+                  isLoading: _isLoading,
+                  onPressed: _isLoading
+                      ? null
+                      : () => _signIn(
+                            authService.signInWithGoogle,
+                            forceRoleSelection: true,
+                          ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => context.go(RouteNames.home),
+                child: Text(settings.t('Back to homepage')),
+              )
             ],
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () => context.go(RouteNames.home),
-              child: Text(settings.t('Back to homepage')),
-            )
-          ],
+          ),
         ),
       ),
     );

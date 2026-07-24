@@ -42,7 +42,7 @@ class SmePageBanner extends StatelessWidget {
       child: Container(
         height: height,
         width: double.infinity,
-        margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        margin: const EdgeInsets.fromLTRB(0, 12, 0, 8),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),

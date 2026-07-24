@@ -30,7 +30,7 @@ class AppLaunchService {
   static bool get canShowAds {
     final installAt = _firstInstallAt;
     if (installAt == null) return false;
-    return DateTime.now().difference(installAt) >= const Duration(days: 3);
+    return DateTime.now().difference(installAt) >= const Duration(days: 2);
   }
 
   static Future<void> markWelcomeSeen() async {
