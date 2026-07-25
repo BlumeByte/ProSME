@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/app_colors.dart';
 import '../../config/constants.dart';
 import '../../core/utils/currency.dart';
 import '../../core/utils/service_categories.dart';
@@ -24,6 +25,7 @@ class ArtisanProfileScreen extends ConsumerWidget {
     final settings = ref.watch(appSettingsControllerProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final currencyCode = settings.currencyCode;
+    final colors = Theme.of(context).appColors;
     final bids = ref.watch(artisanBidsProvider(artisanId)).valueOrNull ??
         const <JobBid>[];
     final ratings = ref.watch(artisanRatingsProvider(artisanId)).valueOrNull ??
@@ -102,8 +104,8 @@ class ArtisanProfileScreen extends ConsumerWidget {
                           ),
                           if (isVerified) ...[
                             const SizedBox(width: 6),
-                            const Icon(Icons.verified,
-                                color: Colors.blue, size: 20),
+                            Icon(Icons.verified,
+                                color: colors.verified, size: 20),
                           ],
                         ],
                       ),
@@ -117,8 +119,8 @@ class ArtisanProfileScreen extends ConsumerWidget {
                           settings.t(isBusy ? 'Unavailable' : 'Available'),
                         ),
                         backgroundColor: isBusy
-                            ? Colors.red.withValues(alpha: 0.12)
-                            : Colors.green.withValues(alpha: 0.12),
+                            ? colors.cancelled.withValues(alpha: 0.12)
+                            : colors.verified.withValues(alpha: 0.12),
                       ),
                       const SizedBox(height: 12),
                       Wrap(

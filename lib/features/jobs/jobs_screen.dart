@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../config/app_colors.dart';
 import '../../config/constants.dart';
 import '../../core/utils/currency.dart';
 import '../../core/utils/location_data.dart';
@@ -394,7 +395,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                     alignment: Alignment.centerRight,
                     padding: const EdgeInsets.only(right: 20),
                     decoration: BoxDecoration(
-                      color: Colors.red.shade700,
+                      color: Theme.of(context).appColors.error,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.delete, color: Colors.white),

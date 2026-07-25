@@ -7,9 +7,10 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../config/app_colors.dart';
+import '../../config/constants.dart';
 import '../../core/widgets/loading_state.dart';
 import '../../core/widgets/safe_back_button.dart';
-import '../../config/constants.dart';
 import '../../models/chat_models.dart';
 import '../../models/wallet_transaction.dart';
 import '../../routes/route_names.dart';
@@ -607,7 +608,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   ),
                   if (verified) ...[
                     const SizedBox(width: 6),
-                    const Icon(Icons.verified, color: Colors.blue, size: 18),
+                    Icon(
+                      Icons.verified,
+                      color: Theme.of(context).appColors.verified,
+                      size: 18,
+                    ),
                   ],
                 ],
               ),
@@ -757,10 +762,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.error_outline,
                             size: 48,
-                            color: Colors.red,
+                            color: Theme.of(context).appColors.error,
                           ),
                           const SizedBox(height: 16),
                           Text(

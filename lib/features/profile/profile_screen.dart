@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
+import '../../config/app_colors.dart';
 import '../../config/constants.dart';
 import '../../core/utils/currency.dart';
 import '../../core/utils/location_data.dart';
@@ -33,6 +34,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final settings = ref.watch(appSettingsControllerProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final authService = ref.read(authServiceProvider);
+    final colors = Theme.of(context).appColors;
     if (user == null) {
       return ListView(
         padding: const EdgeInsets.all(20),
@@ -82,7 +84,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           SwitchListTile(
             secondary: Icon(
               user.isBusy ? Icons.block : Icons.check_circle_outline,
-              color: user.isBusy ? Colors.red : Colors.green,
+              color: user.isBusy ? colors.cancelled : colors.success,
             ),
             title: Text(settings.t('Mark services unavailable')),
             subtitle: Text(
@@ -247,10 +249,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           onTap: () => authService.signOut(),
         ),
         ListTile(
-          leading: const Icon(Icons.delete_forever, color: Colors.red),
+          leading: Icon(Icons.delete_forever, color: colors.error),
           title: Text(
             settings.t('Delete account'),
-            style: const TextStyle(color: Colors.red),
+            style: TextStyle(color: colors.error),
           ),
           onTap: () => _confirmDeleteAccount(context, authService),
         ),
@@ -1226,17 +1228,17 @@ Future<void> _showAppSettingsSheet(
                         ButtonSegment(
                           value: ThemeMode.system,
                           icon: const Icon(Icons.settings_suggest_outlined),
-                          label: _SegmentLabel(settings.t('System')),
+                          label: _SegmentLabel(settings.t('System Default')),
                         ),
                         ButtonSegment(
                           value: ThemeMode.light,
                           icon: const Icon(Icons.light_mode_outlined),
-                          label: _SegmentLabel(settings.t('Light')),
+                          label: _SegmentLabel(settings.t('Light Mode')),
                         ),
                         ButtonSegment(
                           value: ThemeMode.dark,
                           icon: const Icon(Icons.dark_mode_outlined),
-                          label: _SegmentLabel(settings.t('Dark')),
+                          label: _SegmentLabel(settings.t('Dark Mode')),
                         ),
                       ],
                       selected: {themeMode},

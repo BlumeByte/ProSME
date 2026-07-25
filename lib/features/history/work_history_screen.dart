@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../config/app_colors.dart';
 import '../../core/utils/currency.dart';
 import '../../core/widgets/loading_state.dart';
 import '../../core/widgets/safe_back_button.dart';
@@ -166,11 +167,12 @@ class _BidHistoryList extends ConsumerWidget {
         final amountLabel = accepted
             ? settings.t('Accepted bid amount')
             : settings.t('Bid amount');
+        final colors = Theme.of(context).appColors;
         return Card(
           child: ListTile(
             leading: Icon(
               accepted ? Icons.check_circle_outline : Icons.cancel_outlined,
-              color: accepted ? Colors.green : Colors.red,
+              color: accepted ? colors.success : colors.cancelled,
             ),
             title: Text(item.jobTitle),
             subtitle: Text(

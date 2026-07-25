@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/app_colors.dart';
 import '../../config/constants.dart';
 import '../../core/utils/currency.dart';
 import '../../models/wallet_transaction.dart';
@@ -663,10 +664,11 @@ class _ReportTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(appSettingsControllerProvider);
+    final colors = Theme.of(context).appColors;
     final statusColor = switch (report.status) {
-      'open' => Colors.orange,
-      'resolved' => Colors.green,
-      'dismissed' => Colors.grey,
+      'open' => colors.warning,
+      'resolved' => colors.success,
+      'dismissed' => colors.neutralStatus,
       _ => Theme.of(context).colorScheme.primary,
     };
     return Card(

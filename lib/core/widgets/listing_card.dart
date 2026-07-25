@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../config/app_colors.dart';
 import '../utils/currency.dart';
 import '../../models/listing.dart';
 
@@ -20,6 +21,7 @@ class ListingCard extends StatelessWidget {
     final hasArtisanName = listing.artisanName?.trim().isNotEmpty ?? false;
     final displayArtisan =
         hasArtisanName ? listing.artisanName! : listing.artisanId;
+    final colors = Theme.of(context).appColors;
 
     return InkWell(
       onTap: onTap,
@@ -32,9 +34,12 @@ class ListingCard extends StatelessWidget {
                   ? Container(
                       width: 96,
                       height: 96,
-                      color: Colors.grey.shade200,
+                      color: colors.surfaceAlt,
                       alignment: Alignment.center,
-                      child: const Icon(Icons.image_not_supported_outlined),
+                      child: Icon(
+                        Icons.image_not_supported_outlined,
+                        color: colors.textMuted,
+                      ),
                     )
                   : Image.network(
                       imageUrl,
@@ -44,9 +49,12 @@ class ListingCard extends StatelessWidget {
                       errorBuilder: (_, __, ___) => Container(
                         width: 96,
                         height: 96,
-                        color: Colors.grey.shade200,
+                        color: colors.surfaceAlt,
                         alignment: Alignment.center,
-                        child: const Icon(Icons.image_not_supported_outlined),
+                        child: Icon(
+                          Icons.image_not_supported_outlined,
+                          color: colors.textMuted,
+                        ),
                       ),
                     ),
             ),
@@ -76,9 +84,9 @@ class ListingCard extends StatelessWidget {
               ),
             ),
             if (listing.verifiedOnly)
-              const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Icon(Icons.verified, color: Colors.green),
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Icon(Icons.verified, color: colors.verified),
               ),
           ],
         ),

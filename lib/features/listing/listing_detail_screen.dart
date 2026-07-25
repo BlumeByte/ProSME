@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../config/app_colors.dart';
 import '../../config/constants.dart';
 import '../../core/utils/currency.dart';
 import '../../core/utils/formatters.dart';
@@ -28,6 +29,7 @@ class ListingDetailScreen extends ConsumerWidget {
     final user = ref.watch(authStateProvider).valueOrNull;
     final settings = ref.watch(appSettingsControllerProvider);
     final currencyCode = settings.currencyCode;
+    final colors = Theme.of(context).appColors;
 
     // Watch saved IDs in real-time when the user is logged in.
     final savedIds = user == null
@@ -116,8 +118,8 @@ class ListingDetailScreen extends ConsumerWidget {
                             ),
                           ),
                           if (listingData.verifiedOnly)
-                            const Icon(Icons.verified,
-                                color: Colors.blue, size: 18),
+                            Icon(Icons.verified,
+                                color: colors.verified, size: 18),
                         ],
                       ),
                       subtitle: Text(isBusy
@@ -403,15 +405,16 @@ class _ListingImageCarouselState extends State<_ListingImageCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).appColors;
     if (widget.images.isEmpty) {
       return Container(
         height: 220,
         decoration: BoxDecoration(
-          color: Colors.grey.shade200,
+          color: colors.surfaceAlt,
           borderRadius: BorderRadius.circular(16),
         ),
         alignment: Alignment.center,
-        child: const Icon(Icons.image_outlined, size: 48),
+        child: Icon(Icons.image_outlined, size: 48, color: colors.textMuted),
       );
     }
 
@@ -432,9 +435,12 @@ class _ListingImageCarouselState extends State<_ListingImageCarousel> {
                 fit: BoxFit.cover,
                 width: double.infinity,
                 errorBuilder: (_, __, ___) => Container(
-                  color: Colors.grey.shade200,
+                  color: colors.surfaceAlt,
                   alignment: Alignment.center,
-                  child: const Icon(Icons.image_not_supported_outlined),
+                  child: Icon(
+                    Icons.image_not_supported_outlined,
+                    color: colors.textMuted,
+                  ),
                 ),
               ),
             ),

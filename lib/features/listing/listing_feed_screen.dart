@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../config/app_colors.dart';
 import '../../core/utils/currency.dart';
 import '../../core/utils/location_data.dart';
 import '../../core/utils/service_categories.dart';
@@ -1455,7 +1456,8 @@ class _ProfessionalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final unavailableColor = Colors.red.shade700;
+    final colors = Theme.of(context).appColors;
+    final unavailableColor = colors.cancelled;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
@@ -1502,21 +1504,22 @@ class _ProfessionalCard extends StatelessWidget {
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.withValues(alpha: 0.12),
+                                  color:
+                                      colors.verified.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(999),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.verified,
-                                        size: 14, color: Colors.blue),
+                                    Icon(Icons.verified,
+                                        size: 14, color: colors.verified),
                                     const SizedBox(width: 4),
                                     Text(
                                       settings.t('Verified'),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w600,
-                                        color: Colors.blue,
+                                        color: colors.verified,
                                       ),
                                     ),
                                   ],

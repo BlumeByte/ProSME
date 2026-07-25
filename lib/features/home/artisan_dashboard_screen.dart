@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/app_colors.dart';
 import '../../config/constants.dart';
 import '../../core/utils/currency.dart';
 import '../../routes/route_names.dart';
@@ -48,6 +49,7 @@ class _ArtisanDashboardScreenState
     final listingsAsync = ref.watch(listingServiceProvider).watchListings();
     final status = user?.verificationStatus ?? VerificationStatus.pending;
     final isVerified = status == VerificationStatus.verified;
+    final colors = Theme.of(context).appColors;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -88,7 +90,7 @@ class _ArtisanDashboardScreenState
           child: ListTile(
             leading: Icon(
               isVerified ? Icons.verified : Icons.verified_outlined,
-              color: isVerified ? Colors.green : Colors.orange,
+              color: isVerified ? colors.verified : colors.pending,
             ),
             title: Text(settings
                 .t(isVerified ? 'Verified artisan' : 'Verification needed')),

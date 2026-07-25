@@ -49,7 +49,7 @@ const String kOAuthJwksEndpoint = '$kSupabaseUrl/auth/v1/.well-known/jwks.json';
 const String kOAuthOidcDiscoveryEndpoint =
     '$kSupabaseUrl/auth/v1/.well-known/openid-configuration';
 
-const Color kPrimaryGreen = Color(0xFF1E7F3E);
+const Color kPrimaryGreen = Color(0xFF0F6B4A);
 const List<String> kSupportedLanguages = [
   'English',
   'French',

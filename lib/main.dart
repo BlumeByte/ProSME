@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'app.dart';
+import 'config/app_colors.dart';
 import 'config/supabase_options.dart';
 import 'routes/route_names.dart';
 import 'services/app_launch_service.dart';
@@ -46,19 +47,20 @@ class _AppErrorFallback extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const colors = AppColors.light;
     return Material(
-      color: const Color(0xFFF8FAFC),
+      color: colors.background,
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
+              Text(
                 'Processing, please wait. If this takes too long, restart ProSME.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Color(0xFF0F172A),
+                  color: colors.textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),

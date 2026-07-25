@@ -122,3 +122,8 @@ app.*.symbols
 !/dev/ci/**/Gemfile.lock
 
 .vercel
+.codex_flutter_sdk/
+.dart-tool/
+.flutter
+.flutter_tool_state
+.pub-cache/
