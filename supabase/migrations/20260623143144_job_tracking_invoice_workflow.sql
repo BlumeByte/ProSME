@@ -8,6 +8,28 @@ add column if not exists status_updated_at timestamptz not null default timezone
 alter table public.jobs
 drop constraint if exists jobs_work_status_check;
 
+update public.jobs
+set work_status = case
+  when lower(btrim(coalesce(work_status, ''))) in (
+    'open',
+    'accepted',
+    'in_progress',
+    'completed',
+    'cancelled'
+  ) then lower(btrim(work_status))
+  when status = 'completed' then 'completed'
+  when status = 'cancelled' then 'cancelled'
+  when accepted_bid_id is not null then 'accepted'
+  else 'open'
+end
+where lower(btrim(coalesce(work_status, ''))) not in (
+  'open',
+  'accepted',
+  'in_progress',
+  'completed',
+  'cancelled'
+);
+
 alter table public.jobs
 add constraint jobs_work_status_check
 check (work_status in ('open', 'accepted', 'in_progress', 'completed', 'cancelled'));

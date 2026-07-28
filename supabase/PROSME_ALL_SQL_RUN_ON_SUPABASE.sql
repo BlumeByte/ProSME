@@ -2728,6 +2728,28 @@ add column if not exists status_updated_at timestamptz not null default timezone
 alter table public.jobs
 drop constraint if exists jobs_work_status_check;
 
+update public.jobs
+set work_status = case
+  when lower(btrim(coalesce(work_status, ''))) in (
+    'open',
+    'accepted',
+    'in_progress',
+    'completed',
+    'cancelled'
+  ) then lower(btrim(work_status))
+  when status = 'completed' then 'completed'
+  when status = 'cancelled' then 'cancelled'
+  when accepted_bid_id is not null then 'accepted'
+  else 'open'
+end
+where lower(btrim(coalesce(work_status, ''))) not in (
+  'open',
+  'accepted',
+  'in_progress',
+  'completed',
+  'cancelled'
+);
+
 alter table public.jobs
 add constraint jobs_work_status_check
 check (work_status in ('open', 'accepted', 'in_progress', 'completed', 'cancelled'));
@@ -4294,6 +4316,23 @@ with check (
     where p.id = (select auth.uid())
   ), '')
 );
+
+-- ============================================================================
+-- Migration: 20260728000000_repair_jobs_insert_rls.sql
+-- ============================================================================
+
+grant select, insert, update, delete on public.jobs to authenticated;
+
+drop policy if exists "Users can create jobs" on public.jobs;
+drop policy if exists "Verified artisans can create jobs" on public.jobs;
+drop policy if exists "Users and artisans can create jobs" on public.jobs;
+drop policy if exists "Users can create own jobs" on public.jobs;
+
+create policy "Users can create own jobs"
+on public.jobs
+for insert
+to authenticated
+with check (created_by = (select auth.uid()));
 
 drop policy if exists "Users can refresh own unpaid verification subscriptions"
 on public.verification_subscriptions;
