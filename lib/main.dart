@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -21,14 +22,27 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   FlutterError.onError = FlutterError.presentError;
   ErrorWidget.builder = (details) => const _AppErrorFallback();
-  try {
-    await initSupabase();
-  } catch (_) {}
+
+  // Supabase owns the authenticated session for every platform. Do not fall
+  // back to an in-memory mock when initialization has a transient problem;
+  // doing so makes users appear signed out and causes data created in that
+  // session to disappear after restart.
+  await initSupabase();
+
+  // Load the lightweight local state needed for the first frame. Supabase
+  // session restoration is already complete at this point, so returning users
+  // can be routed directly to their authenticated home screen.
   await LocalDbService.instance.init();
   await AppLaunchService.init();
   await ThemeModeController.init();
   await AppSettingsController.init();
-  await MobileAds.instance.initialize();
+
+  runApp(const ProviderScope(child: ProSMEApp()));
+
+  // Non-critical startup work must never delay the first usable frame.
+  if (!kIsWeb) {
+    unawaited(MobileAds.instance.initialize());
+  }
   unawaited(NotificationService().initialize());
   unawaited(AnalyticsService.trackAppOpen());
   if (shouldUseSupabase()) {
@@ -39,7 +53,6 @@ Future<void> main() async {
       ),
     );
   }
-  runApp(const ProviderScope(child: ProSMEApp()));
 }
 
 class _AppErrorFallback extends StatelessWidget {
