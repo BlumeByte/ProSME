@@ -5,13 +5,15 @@ import '../config/supabase_options.dart';
 import '../models/listing.dart';
 import 'auth_service.dart';
 import 'chat_service.dart';
+import 'realtime_chat_service.dart';
 import 'listing_service.dart';
+import 'realtime_listing_service.dart';
 import 'payment_service.dart';
 import 'admin_service.dart';
 import 'db_service.dart';
 import 'saved_service.dart';
 
-/// Exposes the global [SupabaseClient] as a Riverpod provider.
+/// Exposes the single global [SupabaseClient] used by Android, iOS and web.
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
   return supabaseClient;
 });
@@ -33,21 +35,33 @@ bool hasSupabaseCredentials() {
 
 bool shouldUseSupabase() => isSupabaseInitialized() && hasSupabaseCredentials();
 
+/// A single long-lived authentication service is shared by every consumer.
+/// This prevents multiple auth subscriptions from independently resolving the
+/// same profile during startup/token refresh and reduces unnecessary requests.
 final authServiceProvider = Provider<AuthService>((ref) {
   if (!shouldUseSupabase()) {
     return MockAuthService();
   }
-  return SupabaseAuthService(Supabase.instance.client);
+  return SupabaseAuthService(ref.watch(supabaseClientProvider));
 });
 
-/// A Supabase-backed [AuthService] provider.
-/// Switch [authServiceProvider] to use this when you want Supabase Auth.
 final supabaseAuthServiceProvider = Provider<AuthService>((ref) {
   return SupabaseAuthService(ref.watch(supabaseClientProvider));
 });
 
+/// Riverpod shares this stream across the router and UI. Returning users get
+/// the restored Supabase session rather than a new in-memory auth state.
 final authStateProvider = StreamProvider((ref) {
-  return ref.watch(authServiceProvider).authStateChanges();
+  return ref.watch(authServiceProvider).authStateChanges().distinct(
+        (previous, next) =>
+            previous?.id == next?.id &&
+            previous?.role == next?.role &&
+            previous?.name == next?.name &&
+            previous?.fullName == next?.fullName &&
+            previous?.photoUrl == next?.photoUrl &&
+            previous?.verificationStatus == next?.verificationStatus &&
+            previous?.isBusy == next?.isBusy,
+      );
 });
 
 final passwordRecoveryActiveProvider = StateProvider<bool>((ref) => false);
@@ -56,10 +70,14 @@ final listingServiceProvider = Provider<ListingService>((ref) {
   if (!shouldUseSupabase()) {
     return MockListingService();
   }
-  return SupabaseListingService(
-    Supabase.instance.client,
+  final service = RealtimeListingService(
+    ref.watch(supabaseClientProvider),
     ref.watch(localDbProvider),
   );
+  ref.onDispose(() {
+    service.dispose();
+  });
+  return service;
 });
 
 final listingsStreamProvider = StreamProvider<List<Listing>>((ref) {
@@ -70,15 +88,19 @@ final chatServiceProvider = Provider<ChatService>((ref) {
   if (!shouldUseSupabase()) {
     return MockChatService();
   }
-  return SupabaseChatService(
-    Supabase.instance.client,
+  final service = RealtimeChatService(
+    ref.watch(supabaseClientProvider),
     ref.watch(localDbProvider),
   );
+  ref.onDispose(() {
+    service.dispose();
+  });
+  return service;
 });
 
 final paymentServiceProvider = Provider((ref) {
   if (shouldUseSupabase()) {
-    return PaymentService(Supabase.instance.client);
+    return PaymentService(ref.watch(supabaseClientProvider));
   }
   return const PaymentService();
 });
@@ -92,7 +114,7 @@ final verificationSubscriptionProvider =
 
 final adminServiceProvider = Provider((ref) {
   if (shouldUseSupabase()) {
-    return AdminService(Supabase.instance.client);
+    return AdminService(ref.watch(supabaseClientProvider));
   }
   return const AdminService();
 });
@@ -104,7 +126,7 @@ final savedServiceProvider = Provider<SavedService>((ref) {
     return MockSavedService();
   }
   return SupabaseSavedService(
-    Supabase.instance.client,
+    ref.watch(supabaseClientProvider),
     ref.watch(localDbProvider),
   );
 });

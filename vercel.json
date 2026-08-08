@@ -1,8 +1,10 @@
 {
-  "buildCommand": "npm --prefix admin_web install && npm --prefix admin_web run build",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "bash scripts/build_vercel.sh",
   "outputDirectory": "admin_web/dist",
-  "framework": "vite",
   "rewrites": [
+    { "source": "/app", "destination": "/app/index.html" },
+    { "source": "/app/(.*)", "destination": "/app/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

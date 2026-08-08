@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'app.dart';
 import 'config/app_colors.dart';
 import 'config/supabase_options.dart';
@@ -13,6 +12,7 @@ import 'services/app_settings_controller.dart';
 import 'services/analytics_service.dart';
 import 'services/chat_sync_service.dart';
 import 'services/db_service.dart';
+import 'services/mobile_ads_initializer.dart';
 import 'services/notification_service.dart';
 import 'services/service_providers.dart';
 import 'services/theme_mode_controller.dart';
@@ -21,14 +21,27 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   FlutterError.onError = FlutterError.presentError;
   ErrorWidget.builder = (details) => const _AppErrorFallback();
-  try {
-    await initSupabase();
-  } catch (_) {}
-  await LocalDbService.instance.init();
-  await AppLaunchService.init();
-  await ThemeModeController.init();
-  await AppSettingsController.init();
-  await MobileAds.instance.initialize();
+
+  // Supabase owns the authenticated session for every platform. Do not fall
+  // back to an in-memory mock when initialization has a transient problem;
+  // doing so makes users appear signed out and causes data created in that
+  // session to disappear after restart.
+  await initSupabase();
+
+  // Load independent local state in parallel so startup is not slowed by a
+  // chain of SharedPreferences reads. Supabase session restoration has already
+  // completed before this point.
+  await Future.wait<void>([
+    LocalDbService.instance.init(),
+    AppLaunchService.init(),
+    ThemeModeController.init(),
+    AppSettingsController.init(),
+  ]);
+
+  runApp(const ProviderScope(child: ProSMEApp()));
+
+  // Non-critical startup work must never delay the first usable frame.
+  unawaited(initializeMobileAds());
   unawaited(NotificationService().initialize());
   unawaited(AnalyticsService.trackAppOpen());
   if (shouldUseSupabase()) {
@@ -39,7 +52,6 @@ Future<void> main() async {
       ),
     );
   }
-  runApp(const ProviderScope(child: ProSMEApp()));
 }
 
 class _AppErrorFallback extends StatelessWidget {

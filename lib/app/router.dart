@@ -41,19 +41,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
     });
   }
-  final authStream = ref.watch(authServiceProvider).authStateChanges();
-  final refreshListenable = StreamRouterRefresh(authStream);
+
+  // Share the single Riverpod auth stream with the rest of the app instead of
+  // opening a second AuthService subscription just for GoRouter. This removes
+  // duplicate profile reads/upserts during startup and token refresh.
+  final authAsync = ref.watch(authStateProvider);
   ref.onDispose(() {
-    refreshListenable.dispose();
     unawaited(recoverySubscription?.cancel());
   });
 
   return GoRouter(
     initialLocation: RouteNames.onboarding,
-    refreshListenable: refreshListenable,
     errorBuilder: (context, state) => RouterErrorScreen(error: state.error),
     redirect: (context, state) {
-      final authState = ref.read(authStateProvider).valueOrNull;
+      final authState = authAsync.valueOrNull;
       final isLoggedIn = authState != null;
       final fullPath = state.fullPath ?? state.matchedLocation;
       final isOnboarding = fullPath == RouteNames.onboarding;
@@ -71,6 +72,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (isRecovering && fullPath != RouteNames.resetPassword) {
         return RouteNames.resetPassword;
       }
+
+      // While a persisted session is being restored, avoid redirecting an
+      // existing user to auth/onboarding prematurely.
+      if (authAsync.isLoading) return null;
 
       if (!isLoggedIn && !AppLaunchService.hasSeenWelcome && !isOnboarding) {
         return RouteNames.onboarding;
@@ -244,14 +249,23 @@ class _AuthCallbackScreenState extends ConsumerState<AuthCallbackScreen> {
   }
 
   Future<void> _finishCallback() async {
-    await Future<void>.delayed(const Duration(seconds: 2));
+    await Future<void>.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
     final isRecovering = ref.read(passwordRecoveryActiveProvider);
     if (isRecovering) {
       context.go(RouteNames.resetPassword);
       return;
     }
-    final authState = ref.read(authStateProvider).valueOrNull;
+
+    AppUser? authState = ref.read(authStateProvider).valueOrNull;
+    if (authState == null) {
+      try {
+        authState = await ref.read(authStateProvider.future);
+      } catch (_) {
+        // The auth screen will display the normal recovery path.
+      }
+    }
+    if (!mounted) return;
     context.go(authState == null ? RouteNames.auth : _homeForRole(authState));
   }
 
@@ -284,22 +298,6 @@ String _homeForRole(AppUser? user) {
     case UserRole.customer:
     default:
       return RouteNames.home;
-  }
-}
-
-class StreamRouterRefresh extends ChangeNotifier {
-  StreamRouterRefresh(Stream<dynamic> stream) {
-    _subscription = stream.asBroadcastStream().listen((_) {
-      notifyListeners();
-    });
-  }
-
-  late final StreamSubscription<dynamic> _subscription;
-
-  @override
-  void dispose() {
-    _subscription.cancel();
-    super.dispose();
   }
 }
 
