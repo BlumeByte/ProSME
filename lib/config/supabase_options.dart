@@ -1,14 +1,21 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'constants.dart';
 
-/// Initializes the Supabase client.
+/// Initializes the single Supabase client shared by Android, iOS and web.
 ///
-/// Call [initSupabase] once in [main] before [runApp].
-/// After initialization the client is available via [Supabase.instance.client].
+/// `supabase_flutter` persists the authenticated session using its platform
+/// local storage implementation. Keeping auto refresh and PKCE enabled gives
+/// every client the same durable login/session behavior and lets web/mobile
+/// share one backend identity.
 Future<void> initSupabase() async {
   await Supabase.initialize(
     url: kSupabaseUrl,
     anonKey: kSupabaseAnonKey,
+    authOptions: const FlutterAuthClientOptions(
+      authFlowType: AuthFlowType.pkce,
+      autoRefreshToken: true,
+      detectSessionInUri: true,
+    ),
   );
 }
 
