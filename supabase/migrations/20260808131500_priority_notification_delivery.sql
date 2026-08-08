@@ -104,7 +104,7 @@ begin
     return;
   end if;
 
-  if target_profile.email_notifications
+  if (target_profile.email_notifications or notification_type = 'account')
      and coalesce(target_profile.email, '') <> ''
      and not public.prosme_blocks_notification_type(
        target_profile.blocked_email_notification_types,
@@ -136,6 +136,18 @@ begin
   end if;
 end;
 $$;
+
+-- Default existing accounts before the account-change trigger exists, so the
+-- migration itself does not generate user-facing security alerts.
+update public.profiles
+set blocked_email_notification_types = (
+  select array_agg(distinct value order by value)
+  from unnest(coalesce(blocked_email_notification_types, '{}'::text[]) || array['chat','payment','verification','support','system']::text[]) value
+),
+blocked_phone_notification_types = (
+  select array_agg(distinct value order by value)
+  from unnest(coalesce(blocked_phone_notification_types, '{}'::text[]) || array['chat','payment','verification','support','system']::text[]) value
+);
 
 -- Every priority in-app notification becomes the single source of truth for
 -- outbound email/SMS. This keeps work-progress and accepted-bid alerts aligned
@@ -270,18 +282,6 @@ after update of email, phone, username, email_notifications, phone_notifications
   blocked_email_notification_types, blocked_phone_notification_types
 on public.profiles
 for each row execute function public.notify_profile_account_setting_change();
-
--- Default existing accounts to the requested priority categories while still
--- preserving any explicit user opt-outs for the priority categories.
-update public.profiles
-set blocked_email_notification_types = (
-  select array_agg(distinct value order by value)
-  from unnest(coalesce(blocked_email_notification_types, '{}'::text[]) || array['chat','payment','verification','support','system']::text[]) value
-),
-blocked_phone_notification_types = (
-  select array_agg(distinct value order by value)
-  from unnest(coalesce(blocked_phone_notification_types, '{}'::text[]) || array['chat','payment','verification','support','system']::text[]) value
-);
 
 revoke all on function public.prosme_is_priority_notification_type(text)
 from public, anon, authenticated;
