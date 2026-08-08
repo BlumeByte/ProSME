@@ -18,6 +18,35 @@
     <meta property="og:type" content="website" />
     <title>ProSME - Verified artisans and SME service tools</title>
     <link rel="icon" type="image/png" href="/prosme_logo.png" />
+    <script>
+      // Customers and artisans use the same Flutter application on web and
+      // mobile. Keep the existing Vite portal available for administrators
+      // through /login?admin=1 while routing normal login/signup into /app/.
+      (() => {
+        const params = new URLSearchParams(window.location.search);
+        const adminMode = params.get('admin') === '1';
+        const path = window.location.pathname;
+        if (!adminMode && (path === '/login' || path === '/signup' || path === '/auth')) {
+          window.location.replace('/app/#/auth');
+          return;
+        }
+
+        document.addEventListener(
+          'click',
+          (event) => {
+            if (adminMode) return;
+            const target = event.target.closest?.(
+              '[data-link="/login"], [data-link="/signup"]',
+            );
+            if (!target) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            window.location.assign('/app/#/auth');
+          },
+          true,
+        );
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>
