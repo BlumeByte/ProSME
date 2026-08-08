@@ -100,7 +100,6 @@ begin
     concat_ws(' ', email_subject, email_body, sms_body)
   );
 
-  -- Routine email/SMS delivery is intentionally restricted to priority events.
   if not public.prosme_is_priority_notification_type(notification_type) then
     return;
   end if;
@@ -120,6 +119,8 @@ begin
     );
   end if;
 
+  -- Existing "phone notifications" are SMS delivery. In-app device alerts are
+  -- handled separately by the mobile client while it is active.
   if target_profile.phone_notifications
      and coalesce(target_profile.phone, '') <> ''
      and not public.prosme_blocks_notification_type(
@@ -136,8 +137,142 @@ begin
 end;
 $$;
 
+-- Every priority in-app notification becomes the single source of truth for
+-- outbound email/SMS. This keeps work-progress and accepted-bid alerts aligned
+-- and prevents each feature from implementing delivery differently.
+create or replace function public.deliver_priority_admin_notification()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  notification_type text;
+begin
+  if new.related_user_id is null then
+    return new;
+  end if;
+
+  notification_type := public.prosme_notification_type(
+    concat_ws(' ', new.type, new.title, new.body)
+  );
+
+  if public.prosme_is_priority_notification_type(notification_type) then
+    perform public.queue_profile_notification(
+      new.related_user_id,
+      new.title,
+      new.body,
+      new.body
+    );
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists admin_notifications_priority_delivery
+on public.admin_notifications;
+create trigger admin_notifications_priority_delivery
+after insert on public.admin_notifications
+for each row execute function public.deliver_priority_admin_notification();
+
+-- New bids must appear in the in-app feed first. The delivery trigger above
+-- then sends the allowed email/SMS exactly once.
+create or replace function public.queue_bid_created_notifications()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  owner_id uuid;
+  job_title text;
+begin
+  select created_by, title
+  into owner_id, job_title
+  from public.jobs
+  where id = new.job_id;
+
+  if owner_id is not null and owner_id <> new.artisan_id then
+    insert into public.admin_notifications (
+      type,
+      title,
+      body,
+      actor_id,
+      related_user_id,
+      related_table,
+      related_id
+    ) values (
+      'bid_created',
+      'New ProSME bid',
+      'A professional submitted a bid for "' || coalesce(job_title, 'your job') || '".',
+      new.artisan_id,
+      owner_id,
+      'job_bids',
+      new.id
+    );
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.queue_bid_created_notifications()
+from public, anon, authenticated;
+
+drop trigger if exists job_bids_queue_notifications on public.job_bids;
+create trigger job_bids_queue_notifications
+after insert on public.job_bids
+for each row execute function public.queue_bid_created_notifications();
+
+-- Notify a user when important account settings change. Ordinary bio/portfolio
+-- edits are intentionally excluded to avoid email noise.
+create or replace function public.notify_profile_account_setting_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if old.email is distinct from new.email
+     or old.phone is distinct from new.phone
+     or old.username is distinct from new.username
+     or old.email_notifications is distinct from new.email_notifications
+     or old.phone_notifications is distinct from new.phone_notifications
+     or old.blocked_email_notification_types is distinct from new.blocked_email_notification_types
+     or old.blocked_phone_notification_types is distinct from new.blocked_phone_notification_types then
+    insert into public.admin_notifications (
+      type,
+      title,
+      body,
+      actor_id,
+      related_user_id,
+      related_table,
+      related_id
+    ) values (
+      'account_settings_changed',
+      'Account settings changed',
+      'Your ProSME account settings were updated. If you did not make this change, review your account security.',
+      new.id,
+      new.id,
+      'profiles',
+      new.id
+    );
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_account_setting_change_notification
+on public.profiles;
+create trigger profiles_account_setting_change_notification
+after update of email, phone, username, email_notifications, phone_notifications,
+  blocked_email_notification_types, blocked_phone_notification_types
+on public.profiles
+for each row execute function public.notify_profile_account_setting_change();
+
 -- Default existing accounts to the requested priority categories while still
--- preserving explicit user opt-outs for those categories.
+-- preserving any explicit user opt-outs for the priority categories.
 update public.profiles
 set blocked_email_notification_types = (
   select array_agg(distinct value order by value)
@@ -150,11 +285,13 @@ blocked_phone_notification_types = (
 
 revoke all on function public.prosme_is_priority_notification_type(text)
 from public, anon, authenticated;
-
 revoke all on function public.prosme_notification_type(text)
 from public, anon, authenticated;
-
 revoke all on function public.queue_profile_notification(uuid, text, text, text)
+from public, anon, authenticated;
+revoke all on function public.deliver_priority_admin_notification()
+from public, anon, authenticated;
+revoke all on function public.notify_profile_account_setting_change()
 from public, anon, authenticated;
 
 commit;
