@@ -21,31 +21,41 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
-      - name: Verify production Supabase credentials
+      - name: Credential preflight
+        id: preflight
         shell: bash
         run: |
-          set -euo pipefail
-          test -n "${SUPABASE_ACCESS_TOKEN:-}" || { echo "SUPABASE_ACCESS_TOKEN is not configured"; exit 1; }
+          reason="ok"
+          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then reason="SUPABASE_ACCESS_TOKEN missing"; fi
+          if [ "$reason" = "ok" ] && [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then reason="SUPABASE_DB_PASSWORD missing"; fi
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          if [ "$reason" != "ok" ]; then
+            echo "$reason"
+            exit 1
+          fi
       - name: Link ProSME production project
+        if: steps.preflight.outcome == 'success'
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
       - name: Preview pending migrations
+        if: steps.preflight.outcome == 'success'
         run: supabase db push --dry-run
       - name: Apply pending migrations
+        if: steps.preflight.outcome == 'success'
         run: supabase db push
       - name: Publish Supabase migration status
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
+            const reason = '${{ steps.preflight.outputs.reason }}';
+            const ok = '${{ job.status }}' === 'success';
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: context.sha,
-              state: '${{ job.status }}' === 'success' ? 'success' : 'failure',
+              state: ok ? 'success' : 'failure',
               context: 'Supabase Migration',
-              description: '${{ job.status }}' === 'success'
-                ? 'Production migrations applied successfully'
-                : 'Production migration job failed'
+              description: ok ? 'Production migrations applied successfully' : (reason && reason !== 'ok' ? reason : 'Supabase link or db push failed')
             })
 
   smoke-production:
@@ -54,56 +64,48 @@ jobs:
       contents: read
       statuses: write
     steps:
-      - name: Wait for production deployment and verify public site
+      - name: Wait for the deployed ProSME web app
+        id: smoke
         shell: bash
         run: |
           set -euo pipefail
           base="https://prosme.blumebyte.com"
-          for attempt in $(seq 1 30); do
-            if curl -fsSL --connect-timeout 10 --max-time 30 "$base" -o /tmp/home.html; then
+          ready=0
+          for attempt in $(seq 1 36); do
+            home_ok=0; app_ok=0; login_ok=0
+            if curl -fsSL --connect-timeout 10 --max-time 30 "$base" -o /tmp/home.html && grep -qi "ProSME" /tmp/home.html; then home_ok=1; fi
+            if curl -fsSL --connect-timeout 10 --max-time 30 "$base/app/" -o /tmp/app.html && grep -Eq "flutter|flutter_bootstrap|main.dart.js" /tmp/app.html; then app_ok=1; fi
+            if curl -fsSL --connect-timeout 10 --max-time 30 "$base/login" -o /tmp/login.html && grep -q "/app/#/auth" /tmp/login.html; then login_ok=1; fi
+            if [ "$home_ok" -eq 1 ] && [ "$app_ok" -eq 1 ] && [ "$login_ok" -eq 1 ]; then
+              ready=1
               break
-            fi
-            if [ "$attempt" -eq 30 ]; then
-              echo "Production site did not become reachable"
-              exit 1
             fi
             sleep 10
           done
-          grep -qi "ProSME" /tmp/home.html
-
-      - name: Verify shared Flutter web app is deployed
-        shell: bash
-        run: |
-          set -euo pipefail
-          base="https://prosme.blumebyte.com"
-          curl -fsSL --retry 5 --retry-delay 5 "$base/app/" -o /tmp/app.html
-          grep -Eq "flutter|flutter_bootstrap|main.dart.js" /tmp/app.html
-          curl -fsSL --retry 5 --retry-delay 5 "$base/login" -o /tmp/login.html
-          grep -q "/app/#/auth" /tmp/login.html
-
-      - name: Basic response-time check
-        shell: bash
-        run: |
-          set -euo pipefail
-          total=$(curl -sS -o /dev/null -w '%{time_total}' https://prosme.blumebyte.com/)
+          if [ "$ready" -ne 1 ]; then
+            echo "reason=home/app/login route verification failed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          total=$(curl -sS -o /dev/null -w '%{time_total}' "$base/")
+          echo "Homepage response: ${total}s"
           python3 - <<PY
           total=float('$total')
-          print(f'Production homepage response: {total:.3f}s')
           if total > 5.0:
               raise SystemExit('Homepage response exceeded 5 seconds')
           PY
+          echo "reason=ok" >> "$GITHUB_OUTPUT"
       - name: Publish production smoke status
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
+            const reason = '${{ steps.smoke.outputs.reason }}';
+            const ok = '${{ job.status }}' === 'success';
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: context.sha,
-              state: '${{ job.status }}' === 'success' ? 'success' : 'failure',
+              state: ok ? 'success' : 'failure',
               context: 'Production Smoke',
-              description: '${{ job.status }}' === 'success'
-                ? 'Live ProSME routes and performance passed'
-                : 'Live ProSME smoke test failed'
+              description: ok ? 'Live ProSME home, login and Flutter web app passed' : (reason || 'Live ProSME smoke test failed')
             })
