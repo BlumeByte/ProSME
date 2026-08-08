@@ -26,13 +26,10 @@ jobs:
         shell: bash
         run: |
           reason="ok"
-          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then reason="SUPABASE_ACCESS_TOKEN missing"; fi
-          if [ "$reason" = "ok" ] && [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then reason="SUPABASE_DB_PASSWORD missing"; fi
+          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then reason="access-token-missing"; fi
+          if [ "$reason" = "ok" ] && [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then reason="db-password-missing"; fi
           echo "reason=$reason" >> "$GITHUB_OUTPUT"
-          if [ "$reason" != "ok" ]; then
-            echo "$reason"
-            exit 1
-          fi
+          [ "$reason" = "ok" ] || exit 1
       - name: Link ProSME production project
         if: steps.preflight.outcome == 'success'
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
@@ -49,13 +46,16 @@ jobs:
           script: |
             const reason = '${{ steps.preflight.outputs.reason }}';
             const ok = '${{ job.status }}' === 'success';
+            const contextName = ok
+              ? 'Supabase Migration'
+              : `Supabase Migration - ${reason && reason !== 'ok' ? reason : 'link-or-push-failed'}`;
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: context.sha,
               state: ok ? 'success' : 'failure',
-              context: 'Supabase Migration',
-              description: ok ? 'Production migrations applied successfully' : (reason && reason !== 'ok' ? reason : 'Supabase link or db push failed')
+              context: contextName,
+              description: ok ? 'Production migrations applied successfully' : 'Production migration needs attention'
             })
 
   smoke-production:
@@ -64,42 +64,32 @@ jobs:
       contents: read
       statuses: write
     steps:
-      - name: Wait for the deployed ProSME web app
+      - name: Allow Vercel production deployment to settle
+        run: sleep 90
+      - name: Verify live home, login and Flutter web app
         id: smoke
         shell: bash
         run: |
           set -euo pipefail
           base="https://prosme.blumebyte.com"
-          ready=0
-          for attempt in $(seq 1 36); do
-            home_ok=0; app_ok=0; login_ok=0
-            if curl -fsSL --connect-timeout 10 --max-time 30 "$base" -o /tmp/home.html && grep -qi "ProSME" /tmp/home.html; then home_ok=1; fi
-            if curl -fsSL --connect-timeout 10 --max-time 30 "$base/app/" -o /tmp/app.html && grep -Eq "flutter|flutter_bootstrap|main.dart.js" /tmp/app.html; then app_ok=1; fi
-            if curl -fsSL --connect-timeout 10 --max-time 30 "$base/login" -o /tmp/login.html && grep -q "/app/#/auth" /tmp/login.html; then login_ok=1; fi
-            if [ "$home_ok" -eq 1 ] && [ "$app_ok" -eq 1 ] && [ "$login_ok" -eq 1 ]; then
-              ready=1
-              break
-            fi
-            sleep 10
+          for route in "/" "/app/" "/login"; do
+            curl -fsSL --retry 6 --retry-all-errors --retry-delay 10 --connect-timeout 10 --max-time 30 "$base$route" -o "/tmp/$(echo "$route" | tr '/' '_' | sed 's/^_$/home/').html"
           done
-          if [ "$ready" -ne 1 ]; then
-            echo "reason=home/app/login route verification failed" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
+          grep -qi "ProSME" /tmp/home.html
+          grep -Eq "flutter|flutter_bootstrap|main.dart.js" /tmp/_app_.html
+          grep -q "/app/#/auth" /tmp/_login.html
           total=$(curl -sS -o /dev/null -w '%{time_total}' "$base/")
-          echo "Homepage response: ${total}s"
           python3 - <<PY
           total=float('$total')
+          print(f'Production homepage response: {total:.3f}s')
           if total > 5.0:
               raise SystemExit('Homepage response exceeded 5 seconds')
           PY
-          echo "reason=ok" >> "$GITHUB_OUTPUT"
       - name: Publish production smoke status
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
-            const reason = '${{ steps.smoke.outputs.reason }}';
             const ok = '${{ job.status }}' === 'success';
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
@@ -107,5 +97,5 @@ jobs:
               sha: context.sha,
               state: ok ? 'success' : 'failure',
               context: 'Production Smoke',
-              description: ok ? 'Live ProSME home, login and Flutter web app passed' : (reason || 'Live ProSME smoke test failed')
+              description: ok ? 'Live home, login and Flutter web app passed' : 'Live route or performance verification failed'
             })
