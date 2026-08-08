@@ -65,37 +65,59 @@ jobs:
       statuses: write
     steps:
       - name: Allow Vercel production deployment to settle
-        run: sleep 90
-      - name: Verify live home, login and Flutter web app
-        id: smoke
+        run: sleep 60
+      - name: Probe production routes
+        id: probe
         shell: bash
         run: |
-          set -euo pipefail
+          set +e
           base="https://prosme.blumebyte.com"
-          for route in "/" "/app/" "/login"; do
-            curl -fsSL --retry 6 --retry-all-errors --retry-delay 10 --connect-timeout 10 --max-time 30 "$base$route" -o "/tmp/$(echo "$route" | tr '/' '_' | sed 's/^_$/home/').html"
-          done
-          grep -qi "ProSME" /tmp/home.html
-          grep -Eq "flutter|flutter_bootstrap|main.dart.js" /tmp/_app_.html
-          grep -q "/app/#/auth" /tmp/_login.html
-          total=$(curl -sS -o /dev/null -w '%{time_total}' "$base/")
+          home=fail; app=fail; login=fail; perf=fail
+
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --connect-timeout 10 --max-time 30 "$base/" -o /tmp/home.html
+          if [ $? -eq 0 ] && grep -qi "ProSME" /tmp/home.html; then home=ok; fi
+
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --connect-timeout 10 --max-time 30 "$base/app/" -o /tmp/app.html
+          if [ $? -eq 0 ] && grep -Eq "flutter|flutter_bootstrap|main.dart.js" /tmp/app.html; then app=ok; fi
+
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --connect-timeout 10 --max-time 30 "$base/login" -o /tmp/login.html
+          if [ $? -eq 0 ] && grep -q "/app/#/auth" /tmp/login.html; then login=ok; fi
+
+          total=$(curl -sS --connect-timeout 10 --max-time 30 -o /dev/null -w '%{time_total}' "$base/" 2>/dev/null)
           python3 - <<PY
-          total=float('$total')
+          try:
+              total=float('${total:-999}')
+          except Exception:
+              total=999
           print(f'Production homepage response: {total:.3f}s')
-          if total > 5.0:
-              raise SystemExit('Homepage response exceeded 5 seconds')
+          raise SystemExit(0 if total <= 5.0 else 1)
           PY
-      - name: Publish production smoke status
+          if [ $? -eq 0 ]; then perf=ok; fi
+
+          echo "home=$home" >> "$GITHUB_OUTPUT"
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "login=$login" >> "$GITHUB_OUTPUT"
+          echo "perf=$perf" >> "$GITHUB_OUTPUT"
+
+          if [ "$home" != ok ] || [ "$app" != ok ] || [ "$login" != ok ] || [ "$perf" != ok ]; then exit 1; fi
+      - name: Publish detailed production statuses
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
-            const ok = '${{ job.status }}' === 'success';
-            await github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: context.sha,
-              state: ok ? 'success' : 'failure',
-              context: 'Production Smoke',
-              description: ok ? 'Live home, login and Flutter web app passed' : 'Live route or performance verification failed'
-            })
+            const checks = [
+              ['Production Home', '${{ steps.probe.outputs.home }}', 'Homepage reachable and branded'],
+              ['Production Flutter App', '${{ steps.probe.outputs.app }}', 'Shared Flutter web app deployed at /app/'],
+              ['Production Login Route', '${{ steps.probe.outputs.login }}', 'Login routes users into shared app auth'],
+              ['Production Performance', '${{ steps.probe.outputs.perf }}', 'Homepage responds within 5 seconds'],
+            ];
+            for (const [contextName, result, description] of checks) {
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: context.sha,
+                state: result === 'ok' ? 'success' : 'failure',
+                context: contextName,
+                description
+              });
+            }
