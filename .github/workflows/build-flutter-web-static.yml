@@ -1,0 +1,61 @@
+name: Build Flutter web static bundle
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/**'
+      - 'web/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/build-flutter-web-static.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Verify Flutter web build secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_ANON_KEY:-}" || { echo "SUPABASE_ANON_KEY is missing"; exit 1; }
+      - name: Install Flutter dependencies
+        run: flutter pub get
+      - name: Build shared Flutter web app
+        run: |
+          flutter build web --release --base-href /app/ \
+            --dart-define="SUPABASE_URL=https://wbnvifrzckjttyxhmlcf.supabase.co" \
+            --dart-define="SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}" \
+            --dart-define="PASSWORD_RECOVERY_REDIRECT_URL=https://prosme.blumebyte.com/reset-password" \
+            --dart-define="EMAIL_VERIFICATION_REDIRECT_URL=https://prosme.blumebyte.com/auth"
+      - name: Publish static bundle for admin_web Vercel root
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf admin_web/public/app
+          mkdir -p admin_web/public/app
+          cp -R build/web/. admin_web/public/app/
+          git config user.name "prosme-ci"
+          git config user.email "actions@users.noreply.github.com"
+          git add -f admin_web/public/app
+          if git diff --cached --quiet; then
+            echo "Flutter web bundle already current"
+            exit 0
+          fi
+          git commit -m "Build Flutter web static bundle [skip flutter-web-static]"
+          git push origin HEAD:main
