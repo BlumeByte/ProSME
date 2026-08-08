@@ -28,13 +28,15 @@ Future<void> main() async {
   // session to disappear after restart.
   await initSupabase();
 
-  // Load the lightweight local state needed for the first frame. Supabase
-  // session restoration is already complete at this point, so returning users
-  // can be routed directly to their authenticated home screen.
-  await LocalDbService.instance.init();
-  await AppLaunchService.init();
-  await ThemeModeController.init();
-  await AppSettingsController.init();
+  // Load independent local state in parallel so startup is not slowed by a
+  // chain of SharedPreferences reads. Supabase session restoration has already
+  // completed before this point.
+  await Future.wait<void>([
+    LocalDbService.instance.init(),
+    AppLaunchService.init(),
+    ThemeModeController.init(),
+    AppSettingsController.init(),
+  ]);
 
   runApp(const ProviderScope(child: ProSMEApp()));
 
