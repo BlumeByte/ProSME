@@ -5,6 +5,7 @@ import '../config/supabase_options.dart';
 import '../models/listing.dart';
 import 'auth_service.dart';
 import 'chat_service.dart';
+import 'realtime_chat_service.dart';
 import 'listing_service.dart';
 import 'realtime_listing_service.dart';
 import 'payment_service.dart';
@@ -73,7 +74,9 @@ final listingServiceProvider = Provider<ListingService>((ref) {
     ref.watch(supabaseClientProvider),
     ref.watch(localDbProvider),
   );
-  ref.onDispose(() => service.dispose());
+  ref.onDispose(() {
+    service.dispose();
+  });
   return service;
 });
 
@@ -85,10 +88,14 @@ final chatServiceProvider = Provider<ChatService>((ref) {
   if (!shouldUseSupabase()) {
     return MockChatService();
   }
-  return SupabaseChatService(
+  final service = RealtimeChatService(
     ref.watch(supabaseClientProvider),
     ref.watch(localDbProvider),
   );
+  ref.onDispose(() {
+    service.dispose();
+  });
+  return service;
 });
 
 final paymentServiceProvider = Provider((ref) {
