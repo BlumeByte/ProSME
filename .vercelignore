@@ -4,7 +4,7 @@
 .idea/
 .vscode/
 android/
-assets/
+/assets/
 build/
 ios/
 lib/

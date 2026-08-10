@@ -63,7 +63,7 @@ jobs:
         run: |
           set +e
           base="https://prosme.blumebyte.com"
-          home=fail; app=fail; index=fail; bootstrap=fail; login=fail; perf=fail
+          home=fail; app=fail; index=fail; bootstrap=fail; font_manifest=fail; asset_manifest=fail; login=fail; perf=fail
 
           curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --connect-timeout 10 --max-time 30 "$base/" -o /tmp/home.html
           if [ $? -eq 0 ] && grep -qi "ProSME" /tmp/home.html; then home=ok; fi
@@ -76,6 +76,12 @@ jobs:
 
           curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --connect-timeout 10 --max-time 30 "$base/app/flutter_bootstrap.js" -o /tmp/flutter_bootstrap.js
           if [ $? -eq 0 ] && grep -Eq "flutter|FlutterLoader|_flutter" /tmp/flutter_bootstrap.js; then bootstrap=ok; fi
+
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --connect-timeout 10 --max-time 30 "$base/app/assets/FontManifest.json" -o /tmp/font_manifest.json
+          if [ $? -eq 0 ] && python3 -m json.tool /tmp/font_manifest.json >/dev/null 2>&1 && grep -q "MaterialIcons" /tmp/font_manifest.json; then font_manifest=ok; fi
+
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --connect-timeout 10 --max-time 30 "$base/app/assets/AssetManifest.bin.json" -o /tmp/asset_manifest.json
+          if [ $? -eq 0 ] && python3 -m json.tool /tmp/asset_manifest.json >/dev/null 2>&1 && grep -q "prosme_logo.png" /tmp/asset_manifest.json; then asset_manifest=ok; fi
 
           curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --connect-timeout 10 --max-time 30 "$base/login" -o /tmp/login.html
           if [ $? -eq 0 ] && grep -q "/app/#/auth" /tmp/login.html; then login=ok; fi
@@ -93,10 +99,12 @@ jobs:
           echo "app=$app" >> "$GITHUB_OUTPUT"
           echo "index=$index" >> "$GITHUB_OUTPUT"
           echo "bootstrap=$bootstrap" >> "$GITHUB_OUTPUT"
+          echo "font_manifest=$font_manifest" >> "$GITHUB_OUTPUT"
+          echo "asset_manifest=$asset_manifest" >> "$GITHUB_OUTPUT"
           echo "login=$login" >> "$GITHUB_OUTPUT"
           echo "perf=$perf" >> "$GITHUB_OUTPUT"
 
-          if [ "$home" != ok ] || [ "$app" != ok ] || [ "$index" != ok ] || [ "$bootstrap" != ok ] || [ "$login" != ok ] || [ "$perf" != ok ]; then exit 1; fi
+          if [ "$home" != ok ] || [ "$app" != ok ] || [ "$index" != ok ] || [ "$bootstrap" != ok ] || [ "$font_manifest" != ok ] || [ "$asset_manifest" != ok ] || [ "$login" != ok ] || [ "$perf" != ok ]; then exit 1; fi
       - name: Publish detailed production statuses
         if: always()
         uses: actions/github-script@v7
@@ -107,6 +115,8 @@ jobs:
               ['Production Flutter App', '${{ steps.probe.outputs.app }}'],
               ['Production Flutter Index', '${{ steps.probe.outputs.index }}'],
               ['Production Flutter Bootstrap', '${{ steps.probe.outputs.bootstrap }}'],
+              ['Production Flutter Font Manifest', '${{ steps.probe.outputs.font_manifest }}'],
+              ['Production Flutter Asset Manifest', '${{ steps.probe.outputs.asset_manifest }}'],
               ['Production Login Route', '${{ steps.probe.outputs.login }}'],
               ['Production Performance', '${{ steps.probe.outputs.perf }}'],
             ];
