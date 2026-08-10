@@ -448,11 +448,41 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           ],
         ),
         body: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              const Icon(Icons.lock_outline, size: 64),
-              const SizedBox(height: 16),
+          child: LayoutBuilder(
+            builder: (context, constraints) => Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 640,
+                  minHeight: constraints.maxHeight,
+                ),
+                child: AutofillGroup(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 32,
+                    ),
+                    children: [
+                      const Icon(Icons.lock_outline, size: 56),
+                      const SizedBox(height: 12),
+                      Text(
+                        settings.t(title),
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        settings.t(
+                          _isCreateAccountMode
+                              ? 'Create one account for ProSME on web and mobile.'
+                              : 'Welcome back. Sign in to continue your work.',
+                        ),
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 20),
               SegmentedButton<bool>(
                 segments: [
                   ButtonSegment<bool>(
@@ -498,6 +528,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _usernameController,
+                  autofillHints: const [AutofillHints.newUsername],
+                  textInputAction: TextInputAction.next,
                   decoration:
                       InputDecoration(labelText: settings.t('Username')),
                 ),
@@ -552,6 +584,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _dateOfBirthController,
+                  autofillHints: const [AutofillHints.birthday],
                   readOnly: true,
                   decoration: InputDecoration(
                     labelText: settings.t('Date of birth'),
@@ -562,7 +595,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _phoneController,
+                  autofillHints: const [AutofillHints.telephoneNumber],
                   keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
                   decoration: InputDecoration(
                     labelText: settings.t('Phone number (optional)'),
                     hintText: '${_selectedCountry.dialCode}256122555',
@@ -572,12 +607,19 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               ],
               TextField(
                 controller: _emailController,
+                autofillHints: const [AutofillHints.email],
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
                 decoration: InputDecoration(labelText: settings.t('Email')),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _passwordController,
+                autofillHints: _isCreateAccountMode
+                    ? const [AutofillHints.newPassword]
+                    : const [AutofillHints.password],
                 obscureText: _obscurePassword,
+                textInputAction: TextInputAction.done,
                 decoration: InputDecoration(
                   labelText: settings.t('Password'),
                   suffixIcon: IconButton(
@@ -673,7 +715,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 onPressed: () => context.go(RouteNames.home),
                 child: Text(settings.t('Back to homepage')),
               )
-            ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
