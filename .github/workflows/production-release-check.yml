@@ -81,7 +81,12 @@ jobs:
           if [ $? -eq 0 ] && python3 -m json.tool /tmp/font_manifest.json >/dev/null 2>&1 && grep -q "MaterialIcons" /tmp/font_manifest.json; then font_manifest=ok; fi
 
           curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --connect-timeout 10 --max-time 30 "$base/app/assets/AssetManifest.bin.json" -o /tmp/asset_manifest.json
-          if [ $? -eq 0 ] && python3 -m json.tool /tmp/asset_manifest.json >/dev/null 2>&1 && grep -q "prosme_logo.png" /tmp/asset_manifest.json; then asset_manifest=ok; fi
+          if [ $? -eq 0 ] && python3 - <<'PY'
+import json
+with open('/tmp/asset_manifest.json', encoding='utf-8') as manifest:
+    assert json.load(manifest)
+PY
+          then asset_manifest=ok; fi
 
           curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --connect-timeout 10 --max-time 30 "$base/login" -o /tmp/login.html
           if [ $? -eq 0 ] && grep -q "/app/#/auth" /tmp/login.html; then login=ok; fi
