@@ -85,7 +85,7 @@ class InvoicePdfService {
               ],
             ],
             headerDecoration: const pw.BoxDecoration(color: PdfColors.blue900),
-            headerStyle: pw.TextStyle(
+            headerStyle: const pw.TextStyle(
               color: PdfColors.white,
               fontWeight: pw.FontWeight.bold,
             ),
@@ -104,11 +104,11 @@ class InvoicePdfService {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(t('Total').toUpperCase(),
-                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      style: const pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                   pw.Text(
                     _money(transaction.amount,
                         currencyCode ?? transaction.currency),
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    style: const pw.TextStyle(fontWeight: pw.FontWeight.bold),
                   ),
                 ],
               ),
@@ -153,7 +153,7 @@ class InvoicePdfService {
           pw.SizedBox(height: 8),
           pw.Text(
             '${t('Accepted work total')}: ${_money(total, transactions.isEmpty ? 'GHS' : transactions.first.currency)}',
-            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            style: const pw.TextStyle(fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 18),
           pw.TableHelper.fromTextArray(
@@ -279,7 +279,7 @@ class InvoicePdfService {
               children: [
                 pw.Text(
                   'ProSME',
-                  style: pw.TextStyle(
+                  style: const pw.TextStyle(
                     fontSize: 22,
                     fontWeight: pw.FontWeight.bold,
                     color: PdfColors.blue900,
@@ -292,7 +292,7 @@ class InvoicePdfService {
         ),
         pw.Text(
           title,
-          style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+          style: const pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
         ),
       ],
     );
@@ -309,7 +309,7 @@ class InvoicePdfService {
       children: [
         pw.Text(
           label,
-          style: pw.TextStyle(
+          style: const pw.TextStyle(
             color: PdfColors.blue900,
             fontSize: 9,
             fontWeight: pw.FontWeight.bold,
