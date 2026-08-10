@@ -180,7 +180,7 @@ class InvoicePdfService {
                 )
                 .toList(growable: false),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.blue900),
-            headerStyle: pw.TextStyle(
+            headerStyle: const pw.TextStyle(
               color: PdfColors.white,
               fontWeight: pw.FontWeight.bold,
             ),
