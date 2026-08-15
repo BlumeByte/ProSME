@@ -62,7 +62,7 @@ class SupabaseSavedService implements SavedService {
   final LocalDbService? _localDb;
   final Map<String, StreamController<List<String>>> _controllers = {};
   final Map<String, List<String>> _latestByUser = {};
-  final Map<String, Timer> _refreshTimers = {};
+  final Set<String> _startedUsers = {};
 
   @override
   Stream<List<String>> watchSavedListingIds(String userId) {
@@ -72,10 +72,10 @@ class SupabaseSavedService implements SavedService {
         List<String>.unmodifiable(_latestByUser[userId] ?? const []),
       );
       final subscription = _controllerFor(userId).stream.listen(
-            controller.add,
-            onError: controller.addError,
-            onDone: controller.close,
-          );
+        controller.add,
+        onError: controller.addError,
+        onDone: controller.close,
+      );
       controller.onCancel = subscription.cancel;
     });
   }
@@ -88,17 +88,13 @@ class SupabaseSavedService implements SavedService {
   }
 
   void _ensureUserStarted(String userId) {
-    if (_refreshTimers.containsKey(userId)) return;
+    if (!_startedUsers.add(userId)) return;
     unawaited(() async {
       final cached =
           await _localDb?.loadCachedSavedListingIds(userId) ?? const [];
       _emitSavedIds(userId, cached, force: true);
       await _refreshSavedIds(userId);
     }());
-    _refreshTimers[userId] = Timer.periodic(
-      const Duration(seconds: 12),
-      (_) => unawaited(_refreshSavedIds(userId)),
-    );
   }
 
   Future<void> _refreshSavedIds(String userId) async {
@@ -141,7 +137,8 @@ class SupabaseSavedService implements SavedService {
   @override
   Future<void> saveListing(String userId, String listingId) async {
     await _localDb?.addCachedSavedListingId(userId, listingId);
-    final local = await _localDb?.loadCachedSavedListingIds(userId) ??
+    final local =
+        await _localDb?.loadCachedSavedListingIds(userId) ??
         {...?_latestByUser[userId], listingId}.toList();
     _emitSavedIds(userId, local, force: true);
     try {
@@ -163,7 +160,8 @@ class SupabaseSavedService implements SavedService {
   @override
   Future<void> unsaveListing(String userId, String listingId) async {
     await _localDb?.removeCachedSavedListingId(userId, listingId);
-    final local = await _localDb?.loadCachedSavedListingIds(userId) ??
+    final local =
+        await _localDb?.loadCachedSavedListingIds(userId) ??
         (_latestByUser[userId] ?? const <String>[])
             .where((id) => id != listingId)
             .toList();

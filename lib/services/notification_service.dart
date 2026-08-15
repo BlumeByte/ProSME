@@ -8,12 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_settings_controller.dart';
 import 'service_providers.dart';
 
-const _priorityNotificationTypes = <String>{
-  'bid',
-  'booking',
-  'job',
-  'account',
-};
+const _priorityNotificationTypes = <String>{'bid', 'booking', 'job', 'account'};
 
 class NotificationService {
   factory NotificationService() => _instance;
@@ -29,8 +24,9 @@ class NotificationService {
 
   Future<void> initialize({bool requestPermission = false}) async {
     if (!_initialized) {
-      const androidSettings =
-          AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
       const settings = InitializationSettings(
         android: androidSettings,
         iOS: DarwinInitializationSettings(),
@@ -52,12 +48,9 @@ class NotificationService {
         await android?.requestNotificationsPermission() ?? true;
     final ios = _plugin.resolvePlatformSpecificImplementation<
         IOSFlutterLocalNotificationsPlugin>();
-    final iosGranted = await ios?.requestPermissions(
-          alert: true,
-          badge: true,
-          sound: true,
-        ) ??
-        true;
+    final iosGranted =
+        await ios?.requestPermissions(alert: true, badge: true, sound: true) ??
+            true;
     return androidGranted && iosGranted;
   }
 
@@ -105,20 +98,23 @@ final foregroundNotificationListenerProvider = Provider<void>((ref) {
   final notificationService = NotificationService();
   unawaited(notificationService.requestPermissions());
 
-  final channel = client.channel('prosme_app_notifications_${user.id}');
+  final channel = client.channel(
+    'prosme:user:${user.id}',
+    opts: const RealtimeChannelConfig(private: true),
+  );
   try {
     channel
-        .onPostgresChanges(
-      event: PostgresChangeEvent.insert,
-      schema: 'public',
-      table: 'admin_notifications',
-      filter: PostgresChangeFilter(
-        type: PostgresChangeFilterType.eq,
-        column: 'related_user_id',
-        value: user.id,
-      ),
+        .onBroadcast(
+      event: 'notification_insert',
       callback: (payload) {
-        final record = payload.newRecord;
+        final nested = payload['payload'];
+        final envelope = nested is Map
+            ? Map<String, dynamic>.from(nested)
+            : Map<String, dynamic>.from(payload);
+        final rawRecord = envelope['record'];
+        if (rawRecord is! Map) return;
+        final record = Map<String, dynamic>.from(rawRecord);
+        if ((record['related_user_id'] ?? '').toString() != user.id) return;
         final settings = ref.read(appSettingsControllerProvider);
         final rawType = (record['type'] ?? 'system').toString();
         final type = normalizeNotificationType(rawType);

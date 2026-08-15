@@ -7,12 +7,12 @@ import '../models/listing.dart';
 import 'db_service.dart';
 import 'listing_service.dart';
 
-/// Optimized, cache-first and realtime listing service shared by mobile/web.
+/// Cache-first listing service shared by mobile/web.
 ///
-/// The old service refreshed every 30 seconds and hydrated profile/rating/bid
-/// data sequentially. This service emits cached data immediately, subscribes
-/// to Supabase Realtime for cross-device updates and runs hydration queries in
-/// parallel to reduce perceived loading time.
+/// A global Postgres Changes subscription does not scale for a public feed:
+/// every listing write must be authorized and fanned out to every connected
+/// user. The feed is therefore loaded once per app session, capped to 100 rows,
+/// and refreshed after local writes or an explicit [fetchListings] call.
 class RealtimeListingService implements ListingService {
   RealtimeListingService(this._supabase, this._localDb);
 
@@ -21,7 +21,6 @@ class RealtimeListingService implements ListingService {
   final StreamController<List<Listing>> _controller =
       StreamController<List<Listing>>.broadcast();
 
-  StreamSubscription<List<Map<String, dynamic>>>? _subscription;
   List<Listing> _latest = const [];
   bool _started = false;
   bool _refreshing = false;
@@ -55,32 +54,7 @@ class RealtimeListingService implements ListingService {
       debugPrint('Could not read cached listings: $error');
     }
 
-    _subscription = _supabase
-        .from('listings')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: false)
-        .limit(200)
-        .listen(
-      (rows) => unawaited(_hydrateAndEmit(rows)),
-      onError: (Object error, StackTrace stackTrace) {
-        debugPrint('Listings realtime stream failed: $error');
-        debugPrintStack(stackTrace: stackTrace);
-        unawaited(_refresh());
-      },
-    );
-  }
-
-  Future<void> _hydrateAndEmit(List<Map<String, dynamic>> rows) async {
-    try {
-      final hydrated = await _hydrateListings(
-        rows.map(Map<String, dynamic>.from).toList(growable: false),
-      );
-      await _localDb.cacheListings(hydrated);
-      _emit(hydrated);
-    } catch (error, stackTrace) {
-      debugPrint('Could not hydrate realtime listings: $error');
-      debugPrintStack(stackTrace: stackTrace);
-    }
+    await _refresh();
   }
 
   Future<void> _refresh() async {
@@ -179,8 +153,8 @@ class RealtimeListingService implements ListingService {
       };
       artisanAvatars = {
         for (final profile in profiles)
-          (profile['id'] ?? '').toString():
-              (profile['avatar_url'] ?? '').toString(),
+          (profile['id'] ?? '').toString(): (profile['avatar_url'] ?? '')
+              .toString(),
       };
       artisanBusy = {
         for (final profile in profiles)
@@ -229,33 +203,52 @@ class RealtimeListingService implements ListingService {
       debugPrintStack(stackTrace: stackTrace);
     }
 
-    return rows.map((row) {
-      final artisanId = (row['artisan_id'] ?? row['artisanId'])?.toString();
-      final hydrated = Map<String, dynamic>.from(row);
-      if (artisanId != null && artisanId.isNotEmpty) {
-        hydrated['artisanName'] = artisanNames[artisanId] ?? '';
-        hydrated['artisanPhotoUrl'] = artisanAvatars[artisanId] ?? '';
-        hydrated['artisanBusy'] = artisanBusy[artisanId] ?? false;
-        hydrated['verified_only'] = artisanVerified[artisanId] ?? false;
-        hydrated['ratingAverage'] = ratingAverages[artisanId] ?? 0;
-        hydrated['ratingCount'] = ratingCounts[artisanId] ?? 0;
-        hydrated['wonBidCount'] = wonBidCounts[artisanId] ?? 0;
-      }
-      return Listing.fromJson(hydrated);
-    }).toList(growable: false);
+    return rows
+        .map((row) {
+          final artisanId = (row['artisan_id'] ?? row['artisanId'])?.toString();
+          final hydrated = Map<String, dynamic>.from(row);
+          if (artisanId != null && artisanId.isNotEmpty) {
+            hydrated['artisanName'] = artisanNames[artisanId] ?? '';
+            hydrated['artisanPhotoUrl'] = artisanAvatars[artisanId] ?? '';
+            hydrated['artisanBusy'] = artisanBusy[artisanId] ?? false;
+            hydrated['verified_only'] = artisanVerified[artisanId] ?? false;
+            hydrated['ratingAverage'] = ratingAverages[artisanId] ?? 0;
+            hydrated['ratingCount'] = ratingCounts[artisanId] ?? 0;
+            hydrated['wonBidCount'] = wonBidCounts[artisanId] ?? 0;
+          }
+          return Listing.fromJson(hydrated);
+        })
+        .toList(growable: false);
   }
 
   @override
   Future<List<Listing>> fetchListings() async {
-    final List<dynamic> response = await _supabase
-        .from('listings')
-        .select()
-        .order('created_at', ascending: false)
-        .limit(200);
-    final rows = response
-        .map((value) => Map<String, dynamic>.from(value as Map))
-        .toList(growable: false);
-    final listings = await _hydrateListings(rows);
+    List<Listing> listings;
+    try {
+      final List<dynamic> response = await _supabase.rpc(
+        'get_listing_feed',
+        params: const {'p_limit': 100},
+      );
+      listings = response
+          .map(
+            (value) =>
+                Listing.fromJson(Map<String, dynamic>.from(value as Map)),
+          )
+          .toList(growable: false);
+    } catch (error) {
+      // Keep a rolling-deployment fallback while the database migration is
+      // propagating. This path is still bounded and batch-hydrated.
+      debugPrint('Optimized listing feed unavailable, using fallback: $error');
+      final List<dynamic> response = await _supabase
+          .from('listings')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(100);
+      final rows = response
+          .map((value) => Map<String, dynamic>.from(value as Map))
+          .toList(growable: false);
+      listings = await _hydrateListings(rows);
+    }
     await _localDb.cacheListings(listings);
     return listings;
   }
@@ -277,9 +270,7 @@ class RealtimeListingService implements ListingService {
         })
         .select()
         .single();
-    final hydrated = await _hydrateListings([
-      Map<String, dynamic>.from(row),
-    ]);
+    final hydrated = await _hydrateListings([Map<String, dynamic>.from(row)]);
     unawaited(_refresh());
     return hydrated.first;
   }
@@ -302,9 +293,7 @@ class RealtimeListingService implements ListingService {
         .eq('artisan_id', listing.artisanId)
         .select()
         .single();
-    final hydrated = await _hydrateListings([
-      Map<String, dynamic>.from(row),
-    ]);
+    final hydrated = await _hydrateListings([Map<String, dynamic>.from(row)]);
     unawaited(_refresh());
     return hydrated.first;
   }
@@ -318,7 +307,6 @@ class RealtimeListingService implements ListingService {
   }
 
   Future<void> dispose() async {
-    await _subscription?.cancel();
     await _controller.close();
   }
 }

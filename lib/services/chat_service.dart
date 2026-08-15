@@ -114,8 +114,9 @@ class MockChatService implements ChatService {
       () => <ChatMessage>[],
     );
     messages.add(message);
-    _messageControllers[message.threadId]
-        ?.add(List<ChatMessage>.from(messages));
+    _messageControllers[message.threadId]?.add(
+      List<ChatMessage>.from(messages),
+    );
 
     final ownerIds = _threadWatchers[message.threadId] ?? <String>{};
     ownerIds.add(message.senderId);
@@ -123,8 +124,9 @@ class MockChatService implements ChatService {
 
     for (final ownerId in ownerIds) {
       final threads = _threadsByUser.putIfAbsent(ownerId, () => <ChatThread>[]);
-      final index =
-          threads.indexWhere((thread) => thread.id == message.threadId);
+      final index = threads.indexWhere(
+        (thread) => thread.id == message.threadId,
+      );
       if (index == -1) {
         final updatedThread = ChatThread(
           id: message.threadId,
@@ -154,8 +156,9 @@ class MockChatService implements ChatService {
     final index = messages.indexWhere((item) => item.id == message.id);
     if (index == -1) return;
     messages[index] = message;
-    _messageControllers[message.threadId]
-        ?.add(List<ChatMessage>.from(messages));
+    _messageControllers[message.threadId]?.add(
+      List<ChatMessage>.from(messages),
+    );
     _refreshThreadSummaries(message.threadId);
   }
 
@@ -184,8 +187,10 @@ class MockChatService implements ChatService {
   }
 
   @override
-  Future<void> clearMessages(String threadId,
-      {String? clearedForUserId}) async {
+  Future<void> clearMessages(
+    String threadId, {
+    String? clearedForUserId,
+  }) async {
     _messagesByThread[threadId] = <ChatMessage>[];
     _messageControllers[threadId]?.add(const <ChatMessage>[]);
     _refreshThreadSummaries(threadId);
@@ -225,10 +230,15 @@ class MockChatService implements ChatService {
 }
 
 class SupabaseChatService implements ChatService {
-  SupabaseChatService(this._supabase, this._localDb);
+  SupabaseChatService(
+    this._supabase,
+    this._localDb, {
+    this.pollInterval = const Duration(minutes: 5),
+  });
 
   final SupabaseClient _supabase;
   final LocalDbService _localDb;
+  final Duration? pollInterval;
 
   @override
   Stream<List<ChatThread>> watchThreads(String userId) {
@@ -246,13 +256,18 @@ class SupabaseChatService implements ChatService {
             .from('threads')
             .select()
             .or('user_id.eq.$userId,artisan_id.eq.$userId')
-            .order('updated_at', ascending: false);
+            .order('updated_at', ascending: false)
+            .limit(100);
         final remoteThreads = await _hydrateThreads(
-            userId,
-            _dedupeThreads(rows
-                .map((row) =>
-                    ChatThread.fromJson(Map<String, dynamic>.from(row)))
-                .toList(growable: false)));
+          userId,
+          _dedupeThreads(
+            rows
+                .map(
+                  (row) => ChatThread.fromJson(Map<String, dynamic>.from(row)),
+                )
+                .toList(growable: false),
+          ),
+        );
         await _localDb.cacheThreadsForUser(userId, remoteThreads);
       } catch (error, stackTrace) {
         debugPrint('Failed to refresh chat threads: $error');
@@ -267,10 +282,10 @@ class SupabaseChatService implements ChatService {
             .distinct(_threadListsEqual)
             .listen(controller.add, onError: controller.addError);
         unawaited(refresh());
-        refreshTimer = Timer.periodic(
-          const Duration(seconds: 20),
-          (_) => unawaited(refresh()),
-        );
+        final interval = pollInterval;
+        if (interval != null) {
+          refreshTimer = Timer.periodic(interval, (_) => unawaited(refresh()));
+        }
       },
       onCancel: () async {
         refreshTimer?.cancel();
@@ -297,7 +312,9 @@ class SupabaseChatService implements ChatService {
   }
 
   Future<List<ChatThread>> _hydrateThreads(
-      String userId, List<ChatThread> threads) async {
+    String userId,
+    List<ChatThread> threads,
+  ) async {
     if (threads.isEmpty) return threads;
     final profileIds = <String>{};
     for (final thread in threads) {
@@ -333,16 +350,19 @@ class SupabaseChatService implements ChatService {
         return value.isEmpty ? null : value;
       }
 
-      final unreadRows = await _supabase
-          .from('messages')
-          .select('thread_id')
-          .neq('sender_id', userId)
-          .isFilter('read_at', null)
-          .inFilter('thread_id', threads.map((thread) => thread.id).toList());
       final unreadCounts = <String, int>{};
-      for (final row in unreadRows) {
-        final threadId = (row['thread_id'] ?? '').toString();
-        unreadCounts.update(threadId, (value) => value + 1, ifAbsent: () => 1);
+      try {
+        final List<dynamic> unreadRows = await _supabase.rpc(
+          'get_unread_thread_counts',
+          params: {'p_thread_ids': threads.map((thread) => thread.id).toList()},
+        );
+        for (final row in unreadRows) {
+          final value = Map<String, dynamic>.from(row as Map);
+          unreadCounts[(value['thread_id'] ?? '').toString()] =
+              (value['unread_count'] as num?)?.toInt() ?? 0;
+        }
+      } catch (error) {
+        debugPrint('Optimized unread counts unavailable: $error');
       }
 
       return threads
@@ -364,10 +384,7 @@ class SupabaseChatService implements ChatService {
   }
 
   @override
-  Stream<List<ChatMessage>> watchMessages(
-    String threadId, {
-    String? userId,
-  }) {
+  Stream<List<ChatMessage>> watchMessages(String threadId, {String? userId}) {
     late final StreamController<List<ChatMessage>> controller;
     StreamSubscription<List<ChatMessage>>? localSub;
     Timer? refreshTimer;
@@ -393,18 +410,18 @@ class SupabaseChatService implements ChatService {
             .from('messages')
             .select()
             .eq('thread_id', threadId)
-            .order('created_at');
+            .order('created_at', ascending: false)
+            .limit(200);
         final seen = <String>{};
-        final remoteMessages = rows
-            .map((row) => ChatMessage.fromJson(Map<String, dynamic>.from(row)))
-            .where((message) => seen.add(message.id))
-            .toList(growable: false)
-          ..sort(_compareMessages);
-        await _localDb.cacheMessages(
-          threadId,
-          remoteMessages,
-          emit: false,
-        );
+        final remoteMessages =
+            rows
+                .map(
+                  (row) => ChatMessage.fromJson(Map<String, dynamic>.from(row)),
+                )
+                .where((message) => seen.add(message.id))
+                .toList(growable: false)
+              ..sort(_compareMessages);
+        await _localDb.cacheMessages(threadId, remoteMessages, emit: false);
         await emitVisibleLocal();
       } catch (error, stackTrace) {
         debugPrint('Failed to refresh chat messages: $error');
@@ -419,10 +436,10 @@ class SupabaseChatService implements ChatService {
         }, onError: controller.addError);
         unawaited(emitVisibleLocal());
         unawaited(refresh());
-        refreshTimer = Timer.periodic(
-          const Duration(seconds: 12),
-          (_) => unawaited(refresh()),
-        );
+        final interval = pollInterval;
+        if (interval != null) {
+          refreshTimer = Timer.periodic(interval, (_) => unawaited(refresh()));
+        }
       },
       onCancel: () async {
         refreshTimer?.cancel();
@@ -483,16 +500,16 @@ class SupabaseChatService implements ChatService {
   Future<void> sendMessage(ChatMessage message) async {
     await _localDb.upsertMessage(message);
     try {
-      await ChatSyncService.syncPending(
-        supabase: _supabase,
-        localDb: _localDb,
-      );
+      await ChatSyncService.syncPending(supabase: _supabase, localDb: _localDb);
       final payload = message.toJson()..remove('updated_at');
       await _supabase.from('messages').upsert(payload, onConflict: 'id');
-      await _supabase.from('threads').update({
-        'last_message': message.threadPreview,
-        'updated_at': message.createdAt.toIso8601String(),
-      }).eq('id', message.threadId);
+      await _supabase
+          .from('threads')
+          .update({
+            'last_message': message.threadPreview,
+            'updated_at': message.createdAt.toIso8601String(),
+          })
+          .eq('id', message.threadId);
     } catch (_) {
       await _localDb.addPendingChatAction(
         LocalPendingChatAction(
@@ -522,12 +539,10 @@ class SupabaseChatService implements ChatService {
     try {
       await _supabase
           .from('messages')
-          .update({'content': updated.content}).eq('id', updated.id);
+          .update({'content': updated.content})
+          .eq('id', updated.id);
       await _refreshThreadSummary(updated.threadId);
-      await ChatSyncService.syncPending(
-        supabase: _supabase,
-        localDb: _localDb,
-      );
+      await ChatSyncService.syncPending(supabase: _supabase, localDb: _localDb);
     } catch (_) {
       await _localDb.addPendingChatAction(
         LocalPendingChatAction(
@@ -556,10 +571,7 @@ class SupabaseChatService implements ChatService {
     try {
       await _supabase.from('messages').delete().eq('id', messageId);
       await _refreshThreadSummary(threadId);
-      await ChatSyncService.syncPending(
-        supabase: _supabase,
-        localDb: _localDb,
-      );
+      await ChatSyncService.syncPending(supabase: _supabase, localDb: _localDb);
     } catch (_) {
       await _localDb.addPendingChatAction(
         LocalPendingChatAction(
@@ -583,8 +595,10 @@ class SupabaseChatService implements ChatService {
   }
 
   @override
-  Future<void> clearMessages(String threadId,
-      {String? clearedForUserId}) async {
+  Future<void> clearMessages(
+    String threadId, {
+    String? clearedForUserId,
+  }) async {
     final messages = await _localDb.loadMessages(threadId);
     if (clearedForUserId != null) {
       await _localDb.hideMessagesForUser(
@@ -598,10 +612,7 @@ class SupabaseChatService implements ChatService {
     try {
       await _supabase.from('messages').delete().eq('thread_id', threadId);
       await _refreshThreadSummary(threadId);
-      await ChatSyncService.syncPending(
-        supabase: _supabase,
-        localDb: _localDb,
-      );
+      await ChatSyncService.syncPending(supabase: _supabase, localDb: _localDb);
     } catch (_) {
       for (final message in messages) {
         await _localDb.addPendingChatAction(
@@ -674,11 +685,14 @@ class SupabaseChatService implements ChatService {
     final lastMessage = rows.isEmpty
         ? null
         : ChatMessage.fromJson(Map<String, dynamic>.from(rows.first as Map));
-    await _supabase.from('threads').update({
-      'last_message': lastMessage?.threadPreview ?? '',
-      'updated_at':
-          (lastMessage?.createdAt ?? DateTime.now()).toIso8601String(),
-    }).eq('id', threadId);
+    await _supabase
+        .from('threads')
+        .update({
+          'last_message': lastMessage?.threadPreview ?? '',
+          'updated_at': (lastMessage?.createdAt ?? DateTime.now())
+              .toIso8601String(),
+        })
+        .eq('id', threadId);
   }
 
   static bool _threadListsEqual(

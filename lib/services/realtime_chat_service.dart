@@ -11,7 +11,8 @@ import 'db_service.dart';
 /// while inserts/updates made on web or another phone arrive immediately.
 class RealtimeChatService implements ChatService {
   RealtimeChatService(this._supabase, this._localDb)
-      : _delegate = SupabaseChatService(_supabase, _localDb);
+      : _delegate =
+            SupabaseChatService(_supabase, _localDb, pollInterval: null);
 
   final SupabaseClient _supabase;
   final LocalDbService _localDb;
@@ -39,24 +40,25 @@ class RealtimeChatService implements ChatService {
   }
 
   void _retainThreadChannel(String userId) {
-    _threadWatchCounts.update(userId, (value) => value + 1,
-        ifAbsent: () => 1);
+    _threadWatchCounts.update(userId, (value) => value + 1, ifAbsent: () => 1);
     if (_threadChannels.containsKey(userId)) return;
 
-    final channel = _supabase.channel('prosme:threads:$userId');
+    final channel = _supabase.channel(
+      'prosme:user:$userId',
+      opts: const RealtimeChannelConfig(private: true),
+    );
+
+    void handleThreadChange(Map<String, dynamic> payload) {
+      final row = _broadcastRecord(payload);
+      if (row.isEmpty) return;
+      final thread = ChatThread.fromJson(row);
+      if (thread.userId != userId && thread.artisanId != userId) return;
+      unawaited(_localDb.upsertThreadForParticipants(thread));
+    }
+
     channel
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'threads',
-          callback: (payload) {
-            final row = payload.newRecord;
-            if (row.isEmpty) return;
-            final thread = ChatThread.fromJson(Map<String, dynamic>.from(row));
-            if (thread.userId != userId && thread.artisanId != userId) return;
-            unawaited(_localDb.upsertThreadForParticipants(thread));
-          },
-        )
+        .onBroadcast(event: 'thread_insert', callback: handleThreadChange)
+        .onBroadcast(event: 'thread_update', callback: handleThreadChange)
         .subscribe();
     _threadChannels[userId] = channel;
   }
@@ -73,10 +75,7 @@ class RealtimeChatService implements ChatService {
   }
 
   @override
-  Stream<List<ChatMessage>> watchMessages(
-    String threadId, {
-    String? userId,
-  }) {
+  Stream<List<ChatMessage>> watchMessages(String threadId, {String? userId}) {
     _retainMessageChannel(threadId);
     final base = _delegate.watchMessages(threadId, userId: userId);
     return Stream<List<ChatMessage>>.multi((controller) {
@@ -93,36 +92,38 @@ class RealtimeChatService implements ChatService {
   }
 
   void _retainMessageChannel(String threadId) {
-    _messageWatchCounts.update(threadId, (value) => value + 1,
-        ifAbsent: () => 1);
+    _messageWatchCounts.update(
+      threadId,
+      (value) => value + 1,
+      ifAbsent: () => 1,
+    );
     if (_messageChannels.containsKey(threadId)) return;
 
-    final channel = _supabase.channel('prosme:messages:$threadId');
+    final channel = _supabase.channel(
+      'prosme:thread:$threadId',
+      opts: const RealtimeChannelConfig(private: true),
+    );
+
+    void upsertMessage(Map<String, dynamic> payload) {
+      final row = _broadcastRecord(payload);
+      if (row.isEmpty || (row['thread_id'] ?? '').toString() != threadId) {
+        return;
+      }
+      unawaited(_localDb.upsertMessage(ChatMessage.fromJson(row)));
+    }
+
     channel
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'messages',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'thread_id',
-            value: threadId,
-          ),
+        .onBroadcast(event: 'message_insert', callback: upsertMessage)
+        .onBroadcast(event: 'message_update', callback: upsertMessage)
+        .onBroadcast(
+          event: 'message_delete',
           callback: (payload) {
-            if (payload.eventType == PostgresChangeEvent.delete) {
-              final id = (payload.oldRecord['id'] ?? '').toString();
-              if (id.isNotEmpty) {
-                unawaited(_localDb.deleteMessage(threadId, id));
-              }
-              return;
+            final row = _broadcastRecord(payload);
+            if ((row['thread_id'] ?? '').toString() != threadId) return;
+            final id = (row['id'] ?? '').toString();
+            if (id.isNotEmpty) {
+              unawaited(_localDb.deleteMessage(threadId, id));
             }
-            final row = payload.newRecord;
-            if (row.isEmpty) return;
-            unawaited(
-              _localDb.upsertMessage(
-                ChatMessage.fromJson(Map<String, dynamic>.from(row)),
-              ),
-            );
           },
         )
         .subscribe();
@@ -152,7 +153,8 @@ class RealtimeChatService implements ChatService {
       _delegate.createOrOpenThread(userId: userId, artisanId: artisanId);
 
   @override
-  Future<void> sendMessage(ChatMessage message) => _delegate.sendMessage(message);
+  Future<void> sendMessage(ChatMessage message) =>
+      _delegate.sendMessage(message);
 
   @override
   Future<void> updateMessage(ChatMessage message) =>
@@ -183,14 +185,8 @@ class RealtimeChatService implements ChatService {
       );
 
   @override
-  Future<void> clearMessages(
-    String threadId, {
-    String? clearedForUserId,
-  }) =>
-      _delegate.clearMessages(
-        threadId,
-        clearedForUserId: clearedForUserId,
-      );
+  Future<void> clearMessages(String threadId, {String? clearedForUserId}) =>
+      _delegate.clearMessages(threadId, clearedForUserId: clearedForUserId);
 
   @override
   Future<void> deleteThreadForUser({
@@ -200,14 +196,20 @@ class RealtimeChatService implements ChatService {
       _delegate.deleteThreadForUser(threadId: threadId, userId: userId);
 
   Future<void> dispose() async {
-    final channels = [
-      ..._threadChannels.values,
-      ..._messageChannels.values,
-    ];
+    final channels = [..._threadChannels.values, ..._messageChannels.values];
     _threadChannels.clear();
     _messageChannels.clear();
     for (final channel in channels) {
       await _supabase.removeChannel(channel);
     }
+  }
+
+  static Map<String, dynamic> _broadcastRecord(Map<String, dynamic> payload) {
+    final nested = payload['payload'];
+    final body = nested is Map
+        ? Map<String, dynamic>.from(nested)
+        : Map<String, dynamic>.from(payload);
+    final record = body['record'] ?? body['new'] ?? body['old_record'];
+    return record is Map ? Map<String, dynamic>.from(record) : const {};
   }
 }
