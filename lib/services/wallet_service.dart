@@ -27,7 +27,7 @@ class WalletService {
                 Map<String, dynamic>.from(row as Map),
               ))
           .toList(growable: false);
-      return _hydrateLegacyRows(items);
+      return await _hydrateLegacyRows(items);
     } on PostgrestException catch (error) {
       if (!_canUseBidFallback(error)) rethrow;
       return _loadAcceptedBidFallback(userId: userId, role: role);

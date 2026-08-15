@@ -684,7 +684,7 @@ class SupabaseAuthService implements AuthService {
 
     try {
       final user = await completer.future.timeout(timeout);
-      return _resolveUser(user);
+      return await _resolveUser(user);
     } on TimeoutException {
       throw StateError(
         'Google sign-in timed out. Please complete the sign-in flow and return to the app.',
