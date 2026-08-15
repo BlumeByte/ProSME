@@ -465,18 +465,32 @@ class _AdminWalletPanelState extends ConsumerState<_AdminWalletPanel> {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Row(
+            Text(
+              settings.t('Wallet tracking'),
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Expanded(
-                  child: Text(
-                    settings.t('Wallet tracking'),
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                ),
-                IconButton(
+                IconButton.outlined(
                   onPressed: () => _refresh(user.id, user.role),
                   icon: const Icon(Icons.refresh),
                   tooltip: settings.t('Refresh'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _confirmResetAllWallets(
+                    context,
+                    settings,
+                    user.id,
+                    user.role,
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  icon: const Icon(Icons.delete_sweep_outlined),
+                  label: Text(settings.t('Reset all wallets')),
                 ),
                 FilledButton.icon(
                   onPressed: () => context.push(RouteNames.wallet),
@@ -553,6 +567,85 @@ class _AdminWalletPanelState extends ConsumerState<_AdminWalletPanel> {
         );
       },
     );
+  }
+
+  Future<void> _confirmResetAllWallets(
+    BuildContext context,
+    AppSettings settings,
+    String adminId,
+    UserRole role,
+  ) async {
+    const phrase = 'RESET ALL WALLETS';
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => StatefulBuilder(
+            builder: (context, setDialogState) => AlertDialog(
+              title: Text(settings.t('Reset all wallets')),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    settings.t(
+                      'This permanently deletes every wallet transaction and invoice entry. User accounts and jobs are not deleted. An audit record will be kept.',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('${settings.t('Type to confirm')}: $phrase'),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    onChanged: (_) => setDialogState(() {}),
+                    decoration: InputDecoration(
+                      labelText: settings.t('Confirmation'),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: Text(settings.t('Cancel')),
+                ),
+                FilledButton(
+                  onPressed: controller.text == phrase
+                      ? () => Navigator.of(dialogContext).pop(true)
+                      : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  child: Text(settings.t('Reset all wallets')),
+                ),
+              ],
+            ),
+          ),
+        ) ??
+        false;
+    controller.dispose();
+    if (!confirmed || !mounted) return;
+
+    try {
+      final count =
+          await ref.read(adminServiceProvider).resetWallet(userId: null);
+      if (!mounted) return;
+      _refresh(adminId, role);
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${settings.t('Wallets reset. Transactions removed')}: $count',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    }
   }
 }
 
@@ -942,6 +1035,17 @@ class _AccountTile extends ConsumerWidget {
                     icon: const Icon(Icons.cleaning_services_outlined),
                     label: Text(settings.t('Reset data')),
                   ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: account.role == UserRole.admin
+                        ? null
+                        : () => _confirmResetWallet(context, ref, settings),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                    icon: const Icon(Icons.account_balance_wallet_outlined),
+                    label: Text(settings.t('Reset wallet')),
+                  ),
                 ],
               ),
             ),
@@ -1319,6 +1423,82 @@ class _AccountTile extends ConsumerWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(settings.t('Account data reset.'))),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    }
+  }
+
+  Future<void> _confirmResetWallet(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    const phrase = 'RESET USER WALLET';
+    final label = account.email.isEmpty ? account.id : account.email;
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => StatefulBuilder(
+            builder: (context, setDialogState) => AlertDialog(
+              title: Text(settings.t('Reset user wallet')),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${settings.t('This permanently deletes wallet transactions involving')} $label. ${settings.t('The account and jobs stay active. An audit record will be kept.')}',
+                  ),
+                  const SizedBox(height: 16),
+                  Text('${settings.t('Type to confirm')}: $phrase'),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    onChanged: (_) => setDialogState(() {}),
+                    decoration: InputDecoration(
+                      labelText: settings.t('Confirmation'),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: Text(settings.t('Cancel')),
+                ),
+                FilledButton(
+                  onPressed: controller.text == phrase
+                      ? () => Navigator.of(dialogContext).pop(true)
+                      : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  child: Text(settings.t('Reset wallet')),
+                ),
+              ],
+            ),
+          ),
+        ) ??
+        false;
+    controller.dispose();
+    if (!confirmed || !context.mounted) return;
+
+    try {
+      final count =
+          await ref.read(adminServiceProvider).resetWallet(userId: account.id);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${settings.t('Wallet reset. Transactions removed')}: $count',
+          ),
+        ),
       );
     } catch (error) {
       if (!context.mounted) return;

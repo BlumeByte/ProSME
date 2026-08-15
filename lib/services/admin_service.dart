@@ -402,6 +402,20 @@ class AdminService {
     }
   }
 
+  Future<int> resetWallet({String? userId}) async {
+    final client = _supabase;
+    if (client == null) return 0;
+    final response = await client.rpc(
+      'admin_reset_wallet',
+      params: {
+        'p_user_id': userId,
+        'p_confirmation':
+            userId == null ? 'RESET ALL WALLETS' : 'RESET USER WALLET',
+      },
+    );
+    return (response as num?)?.toInt() ?? 0;
+  }
+
   Future<void> submitArtisanVerification({
     required String userId,
     required String phone,
