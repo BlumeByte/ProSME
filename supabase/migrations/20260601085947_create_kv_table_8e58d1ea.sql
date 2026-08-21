@@ -1,0 +1,2 @@
+-- Migration-history placeholder for the original Supabase dashboard-created
+-- key/value table. The production migration has already been applied.
