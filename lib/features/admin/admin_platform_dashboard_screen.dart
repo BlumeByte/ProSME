@@ -11,6 +11,7 @@ import '../../services/app_settings_controller.dart';
 import '../../services/admin_service.dart';
 import '../../services/service_providers.dart';
 import '../../services/wallet_service.dart';
+import '../jobs/jobs_repository.dart';
 
 class AdminPlatformDashboardScreen extends ConsumerStatefulWidget {
   const AdminPlatformDashboardScreen({super.key});
@@ -61,11 +62,17 @@ class _AdminPlatformDashboardScreenState
         label: settings.t('Modules'),
       ),
     ];
-    final useBottomNav = MediaQuery.sizeOf(context).width < 720;
+    final width = MediaQuery.sizeOf(context).width;
+    final useBottomNav = width < 900;
     return Scaffold(
       appBar: AppBar(
         title: Text(settings.t('Admin Dashboard')),
         actions: [
+          IconButton(
+            tooltip: settings.t('Refresh'),
+            onPressed: () => setState(() {}),
+            icon: const Icon(Icons.refresh),
+          ),
           IconButton(
             tooltip: settings.t('Logout'),
             onPressed: () async {
@@ -81,11 +88,15 @@ class _AdminPlatformDashboardScreenState
           : Row(
               children: [
                 NavigationRail(
+                  extended: width >= 1280,
+                  minExtendedWidth: 220,
                   selectedIndex: _selectedIndex,
                   onDestinationSelected: (index) {
                     setState(() => _selectedIndex = index);
                   },
-                  labelType: NavigationRailLabelType.all,
+                  labelType: width >= 1280
+                      ? NavigationRailLabelType.none
+                      : NavigationRailLabelType.all,
                   destinations: destinations
                       .map(
                         (destination) => NavigationRailDestination(
@@ -96,7 +107,15 @@ class _AdminPlatformDashboardScreenState
                       .toList(growable: false),
                 ),
                 const VerticalDivider(width: 1),
-                Expanded(child: sections[_selectedIndex]),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1480),
+                      child: sections[_selectedIndex],
+                    ),
+                  ),
+                ),
               ],
             ),
       bottomNavigationBar: useBottomNav
@@ -480,6 +499,19 @@ class _AdminWalletPanelState extends ConsumerState<_AdminWalletPanel> {
                   tooltip: settings.t('Refresh'),
                 ),
                 OutlinedButton.icon(
+                  onPressed: () => _confirmResetMarketplace(
+                    context,
+                    settings,
+                    user.id,
+                    user.role,
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  icon: const Icon(Icons.restart_alt),
+                  label: Text(settings.t('Reset work and wallets')),
+                ),
+                OutlinedButton.icon(
                   onPressed: () => _confirmResetAllWallets(
                     context,
                     settings,
@@ -637,6 +669,91 @@ class _AdminWalletPanelState extends ConsumerState<_AdminWalletPanel> {
         SnackBar(
           content: Text(
             '${settings.t('Wallets reset. Transactions removed')}: $count',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    }
+  }
+
+  Future<void> _confirmResetMarketplace(
+    BuildContext context,
+    AppSettings settings,
+    String adminId,
+    UserRole role,
+  ) async {
+    const phrase = 'RESET MARKETPLACE WORK';
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => StatefulBuilder(
+            builder: (context, setDialogState) => AlertDialog(
+              title: Text(settings.t('Reset work and wallets')),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      settings.t(
+                        'This removes every wallet transaction and reopens accepted, active, completed, cancelled, or hidden jobs. Job posts, listing posts, account profiles, and bid records are preserved. An audit record will be kept.',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text('${settings.t('Type to confirm')}: $phrase'),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: controller,
+                      autofocus: true,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      onChanged: (_) => setDialogState(() {}),
+                      decoration: InputDecoration(
+                        labelText: settings.t('Confirmation'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: Text(settings.t('Cancel')),
+                ),
+                FilledButton(
+                  onPressed: controller.text == phrase
+                      ? () => Navigator.of(dialogContext).pop(true)
+                      : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  child: Text(settings.t('Reset work and wallets')),
+                ),
+              ],
+            ),
+          ),
+        ) ??
+        false;
+    controller.dispose();
+    if (!confirmed || !mounted) return;
+
+    try {
+      final result =
+          await ref.read(adminServiceProvider).resetMarketplaceWork();
+      if (!mounted) return;
+      ref.invalidate(jobsStreamProvider);
+      _refresh(adminId, role);
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${settings.t('Marketplace reset complete')}: '
+            '${result.walletTransactionsRemoved} ${settings.t('wallet entries removed')}, '
+            '${result.jobsReopened} ${settings.t('jobs reopened')}, '
+            '${result.bidRecordsPreserved} ${settings.t('bid records preserved')}.',
           ),
         ),
       );

@@ -12,7 +12,12 @@ const String kSupabaseUrl = String.fromEnvironment(
 const String kSupabaseAnonKeyPlaceholder = 'YOUR_SUPABASE_ANON_KEY';
 const String kSupabaseAnonKey = String.fromEnvironment(
   'SUPABASE_ANON_KEY',
-  defaultValue: kSupabaseAnonKeyPlaceholder,
+  // Supabase publishable keys are intentionally safe to ship in public web
+  // and mobile clients. Keeping the production publishable key as the
+  // fallback prevents locally signed Play builds from silently starting in
+  // mock mode when a build-time define is omitted. CI can still override this
+  // value for another environment.
+  defaultValue: 'sb_publishable_VMAWpbaLyyqtzswCoCB4xA_bcYVG2RA',
 );
 const String kGoogleOAuthRedirectUrl = String.fromEnvironment(
   'GOOGLE_OAUTH_REDIRECT_URL',

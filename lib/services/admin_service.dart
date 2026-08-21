@@ -126,6 +126,18 @@ class SupportNotice {
   final DateTime createdAt;
 }
 
+class MarketplaceResetResult {
+  const MarketplaceResetResult({
+    required this.walletTransactionsRemoved,
+    required this.jobsReopened,
+    required this.bidRecordsPreserved,
+  });
+
+  final int walletTransactionsRemoved;
+  final int jobsReopened;
+  final int bidRecordsPreserved;
+}
+
 class PlatformReport {
   const PlatformReport({
     required this.id,
@@ -414,6 +426,30 @@ class AdminService {
       },
     );
     return (response as num?)?.toInt() ?? 0;
+  }
+
+  Future<MarketplaceResetResult> resetMarketplaceWork() async {
+    final client = _supabase;
+    if (client == null) {
+      return const MarketplaceResetResult(
+        walletTransactionsRemoved: 0,
+        jobsReopened: 0,
+        bidRecordsPreserved: 0,
+      );
+    }
+    final response = await client.rpc(
+      'admin_reset_marketplace',
+      params: const {'p_confirmation': 'RESET MARKETPLACE WORK'},
+    );
+    final data = response is Map
+        ? Map<String, dynamic>.from(response)
+        : <String, dynamic>{};
+    return MarketplaceResetResult(
+      walletTransactionsRemoved:
+          (data['walletTransactionsRemoved'] as num?)?.toInt() ?? 0,
+      jobsReopened: (data['jobsReopened'] as num?)?.toInt() ?? 0,
+      bidRecordsPreserved: (data['bidRecordsPreserved'] as num?)?.toInt() ?? 0,
+    );
   }
 
   Future<void> submitArtisanVerification({

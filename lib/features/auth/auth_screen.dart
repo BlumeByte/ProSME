@@ -117,8 +117,13 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       return 'Account created. Click the verification link in your email, then sign in.';
     }
     final message = error.toString().toLowerCase();
-    if (message.contains('invalid login credentials')) {
+    if (message.contains('invalid login credentials') ||
+        message.contains('invalid email or password')) {
       return 'Invalid email or password.';
+    }
+    if (message.contains('refresh token') ||
+        message.contains('session') && message.contains('expired')) {
+      return 'Your saved session expired. Please sign in again.';
     }
     if (message.contains('email not confirmed') ||
         message.contains('email_not_confirmed') ||

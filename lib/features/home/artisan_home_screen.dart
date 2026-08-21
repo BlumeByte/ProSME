@@ -7,6 +7,7 @@ import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 import '../chat/chat_list_screen.dart';
+import '../jobs/jobs_repository.dart';
 import 'artisan_dashboard_screen.dart';
 import '../jobs/jobs_screen.dart';
 import '../listing/listing_manage_screen.dart';
@@ -57,51 +58,90 @@ class _ArtisanHomeScreenState extends ConsumerState<ArtisanHomeScreen> {
         }
         await _confirmExitApp();
       },
-      child: AppScaffold(
-        title: settings.t('Artisan Dashboard'),
-        actions: [
-          IconButton(
-            onPressed: () => setState(() => _currentIndex = 2),
-            icon: const Icon(Icons.search),
-            tooltip: settings.t('Search requests'),
-          ),
-        ],
-        body: IndexedStack(index: currentIndex, children: _pages),
-        bottomNavigationBar: StreamBuilder(
-          stream: user == null ? null : chatService.watchThreads(user.id),
-          builder: (context, snapshot) {
-            final unread = (snapshot.data ?? const [])
-                .fold<int>(0, (sum, thread) => sum + thread.unreadCount);
-            return BottomNavigationBar(
+      child: StreamBuilder(
+        stream: user == null ? null : chatService.watchThreads(user.id),
+        builder: (context, snapshot) {
+          final unread = (snapshot.data ?? const [])
+              .fold<int>(0, (sum, thread) => sum + thread.unreadCount);
+          final navigationItems = [
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.dashboard_outlined),
+              activeIcon: const Icon(Icons.dashboard),
+              label: settings.t('Artisan'),
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.store_outlined),
+              activeIcon: const Icon(Icons.store),
+              label: settings.t('Listings'),
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.work_outline),
+              activeIcon: const Icon(Icons.work),
+              label: settings.t('Jobs'),
+            ),
+            BottomNavigationBarItem(
+              icon: _NavIconWithBadge(
+                icon: Icons.chat_bubble_outline,
+                count: unread,
+              ),
+              activeIcon: _NavIconWithBadge(
+                icon: Icons.chat_bubble,
+                count: unread,
+              ),
+              label: settings.t('Chats'),
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.settings_outlined),
+              activeIcon: const Icon(Icons.settings),
+              label: settings.t('Settings'),
+            ),
+          ];
+          void selectDestination(int index) {
+            if (user == null && index > 0) {
+              context.go(RouteNames.auth);
+              return;
+            }
+            setState(() => _currentIndex = index);
+          }
+
+          return AppScaffold(
+            title: settings.t('Artisan Dashboard'),
+            actions: [
+              IconButton(
+                onPressed: () async {
+                  await ref.read(listingServiceProvider).fetchListings();
+                  ref.invalidate(listingsStreamProvider);
+                  ref.invalidate(jobsStreamProvider);
+                },
+                icon: const Icon(Icons.refresh),
+                tooltip: settings.t('Refresh'),
+              ),
+              IconButton(
+                onPressed: () => setState(() => _currentIndex = 2),
+                icon: const Icon(Icons.search),
+                tooltip: settings.t('Search requests'),
+              ),
+            ],
+            selectedIndex: currentIndex,
+            onDestinationSelected: selectDestination,
+            desktopDestinations: navigationItems
+                .map(
+                  (item) => NavigationRailDestination(
+                    icon: item.icon,
+                    selectedIcon: item.activeIcon,
+                    label: Text(item.label ?? ''),
+                  ),
+                )
+                .toList(growable: false),
+            body: IndexedStack(index: currentIndex, children: _pages),
+            bottomNavigationBar: BottomNavigationBar(
               currentIndex: currentIndex,
-              onTap: (index) {
-                if (user == null && index > 0) {
-                  context.go(RouteNames.auth);
-                  return;
-                }
-                setState(() => _currentIndex = index);
-              },
+              onTap: selectDestination,
               type: BottomNavigationBarType.fixed,
-              items: [
-                BottomNavigationBarItem(
-                    icon: const Icon(Icons.dashboard),
-                    label: settings.t('Artisan')),
-                BottomNavigationBarItem(
-                    icon: const Icon(Icons.store),
-                    label: settings.t('Listings')),
-                BottomNavigationBarItem(
-                    icon: const Icon(Icons.work), label: settings.t('Jobs')),
-                BottomNavigationBarItem(
-                  icon: _NavIconWithBadge(icon: Icons.chat, count: unread),
-                  label: settings.t('Chats'),
-                ),
-                BottomNavigationBarItem(
-                    icon: const Icon(Icons.settings),
-                    label: settings.t('Settings')),
-              ],
-            );
-          },
-        ),
+              items: navigationItems,
+            ),
+          );
+        },
       ),
     );
   }

@@ -97,69 +97,100 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
         }
         await _confirmExitApp();
       },
-      child: AppScaffold(
-        title: currentIndex == 0
-            ? settings.t('ProSME   Find Professionals')
-            : settings.t('ProSME'),
-        actions: currentIndex == 0
-            ? [
-                IconButton(
-                  onPressed: () {
-                    if (user == null) {
-                      context.go(RouteNames.auth);
-                      return;
-                    }
-                    _openTab(3);
-                  },
-                  icon: const Icon(Icons.person_outline),
-                  tooltip: settings.t('Profile'),
-                ),
-              ]
-            : null,
-        body: Column(
-          children: [
-            Expanded(
-              child: IndexedStack(index: currentIndex, children: pages),
+      child: StreamBuilder(
+        stream: user == null ? null : chatService.watchThreads(user.id),
+        builder: (context, snapshot) {
+          final unread = (snapshot.data ?? const [])
+              .fold<int>(0, (sum, thread) => sum + thread.unreadCount);
+          _notifyOnUnreadChat(unread, settings);
+          final navigationItems = [
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.home_outlined),
+              activeIcon: const Icon(Icons.home),
+              label: settings.t('Home'),
             ),
-            if (currentIndex == 0) const AdMobBannerSlot(),
-          ],
-        ),
-        bottomNavigationBar: StreamBuilder(
-          stream: user == null ? null : chatService.watchThreads(user.id),
-          builder: (context, snapshot) {
-            final unread = (snapshot.data ?? const [])
-                .fold<int>(0, (sum, thread) => sum + thread.unreadCount);
-            _notifyOnUnreadChat(unread, settings);
-            return BottomNavigationBar(
-              currentIndex: currentIndex,
-              onTap: (index) {
-                if (user == null && index > 0) {
-                  context.go(RouteNames.auth);
-                  return;
-                }
-                _openTab(index);
-              },
-              type: BottomNavigationBarType.fixed,
-              items: [
-                BottomNavigationBarItem(
-                    icon: const Icon(Icons.home), label: settings.t('Home')),
-                BottomNavigationBarItem(
-                  icon: _NavIconWithBadge(
-                    icon: Icons.chat_bubble_outline,
-                    count: unread,
+            BottomNavigationBarItem(
+              icon: _NavIconWithBadge(
+                icon: Icons.chat_bubble_outline,
+                count: unread,
+              ),
+              activeIcon: _NavIconWithBadge(
+                icon: Icons.chat_bubble,
+                count: unread,
+              ),
+              label: settings.t('Chat'),
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.calendar_month_outlined),
+              activeIcon: const Icon(Icons.calendar_month),
+              label: settings.t('Bookings'),
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.person_outline),
+              activeIcon: const Icon(Icons.person),
+              label: settings.t('Profile'),
+            ),
+          ];
+          void selectDestination(int index) {
+            if (user == null && index > 0) {
+              context.go(RouteNames.auth);
+              return;
+            }
+            _openTab(index);
+          }
+
+          return AppScaffold(
+            title: currentIndex == 0
+                ? settings.t('ProSME   Find Professionals')
+                : settings.t('ProSME'),
+            actions: [
+              IconButton(
+                onPressed: () async {
+                  await ref.read(listingServiceProvider).fetchListings();
+                  ref.invalidate(listingsStreamProvider);
+                },
+                icon: const Icon(Icons.refresh),
+                tooltip: settings.t('Refresh'),
+              ),
+              IconButton(
+                onPressed: () {
+                  if (user == null) {
+                    context.go(RouteNames.auth);
+                    return;
+                  }
+                  _openTab(3);
+                },
+                icon: const Icon(Icons.person_outline),
+                tooltip: settings.t('Profile'),
+              ),
+            ],
+            selectedIndex: currentIndex,
+            onDestinationSelected: selectDestination,
+            desktopDestinations: navigationItems
+                .map(
+                  (item) => NavigationRailDestination(
+                    icon: item.icon,
+                    selectedIcon: item.activeIcon,
+                    label: Text(item.label ?? ''),
                   ),
-                  label: settings.t('Chat'),
+                )
+                .toList(growable: false),
+            body: Column(
+              children: [
+                Expanded(
+                  child: IndexedStack(index: currentIndex, children: pages),
                 ),
-                BottomNavigationBarItem(
-                    icon: const Icon(Icons.calendar_month_outlined),
-                    label: settings.t('Bookings')),
-                BottomNavigationBarItem(
-                    icon: const Icon(Icons.person),
-                    label: settings.t('Profile')),
+                if (currentIndex == 0) const AdMobBannerSlot(),
               ],
-            );
-          },
-        ),
+            ),
+            bottomNavigationBar: BottomNavigationBar(
+              currentIndex: currentIndex,
+              onTap: selectDestination,
+              type: BottomNavigationBarType.fixed,
+              items: navigationItems,
+            ),
+          );
+        },
       ),
     );
   }
