@@ -159156,8 +159156,8 @@ H(a){var s=this,r=null,q=t.p,p=A.b([A.cP(s.c,A.y(a).ax.b,r,48),B.ah,A.d(s.d,r,r,
 if(o.length!==0)B.i.N(p,A.b([B.aH,A.hk(B.tF,o,8,8)],q))
 return A.cC(new A.ac(B.Da,A.aV(p,B.J,B.C,B.H,0,B.O),r),r,r,r)}}
 A.alw.prototype={
-ev(a,b){var s=this,r=null,q=b.aJ($.aA(),t.n),p=s.e===B.bc,o=p?3:2,n=A.bXd(s.r),m=A.es(o*(1+n)*11.289456,s.f,2),l=n>0?" "+q.j("including tax")+" "+B.o.aG(n*100,1)+"%":"",k=p?q.j("artisan"):q.j("user")
-return A.cC(new A.ac(B.Da,A.aV(A.b([A.cP(B.wt,A.y(a).ax.b,r,48),B.ah,A.d(q.j("Verification fee"),r,r,r,r,A.y(a).ok.r,B.b9,r,r),B.Y,A.d(q.j("Before uploading documents, please note that verification costs "+m+l+" for this "+k+" account. After upload you will continue to Paystack, and Support will review your documents only after payment succeeds."),r,r,r,r,r,B.b9,r,r),B.aH,A.f0(B.apg,A.d(q.j("Continue"),r,r,r,r,r,r,r,r),s.w,r)],t.p),B.J,B.C,B.H,0,B.O),r),r,r,r)}}
+ev(a,b){var s=this,r=null,q=b.aJ($.aA(),t.n),p=A.bXd(s.r),o=A.es(9*(1+p)*11.289456,s.f,2),n=p>0?" "+q.j("including tax")+" "+B.o.aG(p*100,1)+"%":"",m=s.e===B.bc?q.j("artisan"):q.j("user")
+return A.cC(new A.ac(B.Da,A.aV(A.b([A.cP(B.wt,A.y(a).ax.b,r,48),B.ah,A.d(q.j("Verification fee"),r,r,r,r,A.y(a).ok.r,B.b9,r,r),B.Y,A.d(q.j("Before uploading documents, please note that verification costs "+o+n+" for this "+m+" account. After upload you will continue to Paystack, and Support will review your documents only after payment succeeds."),r,r,r,r,r,B.b9,r,r),B.aH,A.f0(B.apg,A.d(q.j("Continue"),r,r,r,r,r,r,r,r),s.w,r)],t.p),B.J,B.C,B.H,0,B.O),r),r,r,r)}}
 A.aly.prototype={
 ev(a,b){var s,r=this,q=null,p=b.aJ($.aA(),t.n),o=A.y(a),n=A.di(8),m=r.e
 m=A.d(r.w?m+" *":m,q,q,q,q,q,q,q,q)
@@ -172593,8 +172593,8 @@ o=m.b
 if(o<200||o>=300||!J.f(k.h(0,"ok"),!0)){o=k.h(0,"error")
 throw A.h(A.a3(J.L(o==null?"Could not verify payment.":o)))}case 1:return A.k(q,r)}})
 return A.l($async$LZ,r)},
-arI(a,b,c,d){var s=d==="artisan"?3:2,r=c==="yearly",q=r?s*12:s,p=A.bXd(a),o=r?"year":"month",n=p>0?" incl. "+B.o.aG(p*100,1)+"% tax":""
-return A.es(q*(1+p)*11.289456,b,2)+" / "+o+n}}
+arI(a,b,c,d){var s=c==="yearly",r=s?108:9,q=A.bXd(a),p=s?"year":"month",o=q>0?" incl. "+B.o.aG(q*100,1)+"% tax":""
+return A.es(r*(1+q)*11.289456,b,2)+" / "+p+o}}
 A.ag_.prototype={}
 A.aT2.prototype={
 fq(){var s=0,r=A.m(t.H),q,p=2,o=[],n=this,m,l,k,j
