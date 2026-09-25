@@ -46,8 +46,8 @@ const String kAdMobBannerAdUnitId = String.fromEnvironment(
   'ADMOB_BANNER_AD_UNIT_ID',
   defaultValue: 'ca-app-pub-3851492633678585/7100000049',
 );
-const double kVerificationCustomerMonthlyUsd = 2;
-const double kVerificationArtisanMonthlyUsd = 3;
+const double kVerificationCustomerMonthlyUsd = 9;
+const double kVerificationArtisanMonthlyUsd = 9;
 const double kUsdToGhsEstimate = 11.289456;
 
 // OAuth 2.1 / OIDC endpoints – derived from kSupabaseUrl.

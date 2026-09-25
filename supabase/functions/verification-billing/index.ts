@@ -30,9 +30,12 @@ const validChannels = new Set([
 ]);
 const supportedPaystackCurrencies = new Set(['GHS', 'NGN', 'USD', 'ZAR', 'KES']);
 
-const baseAmountUsdFor = (role: string, interval: string) => {
-  const monthly = role === 'artisan' ? 3 : 2;
-  return interval === 'yearly' ? monthly * 12 : monthly;
+const VERIFICATION_MONTHLY_USD = 9;
+
+const baseAmountUsdFor = (_role: string, interval: string) => {
+  return interval === 'yearly'
+    ? VERIFICATION_MONTHLY_USD * 12
+    : VERIFICATION_MONTHLY_USD;
 };
 
 const taxRateForCountry = (country: string) => {
@@ -129,6 +132,11 @@ const paystackSignature = async (secret: string, body: string) => {
   );
 };
 
+// Distinguishes a real, actionable response from Paystack (safe to show a
+// user or admin verbatim — e.g. "No active channel to process transaction")
+// from internal errors (DB/config issues) that should stay generic.
+class PaystackApiError extends Error {}
+
 const verifyReferenceWithPaystack = async (
   secret: string,
   reference: string,
@@ -139,7 +147,9 @@ const verifyReferenceWithPaystack = async (
   );
   const payload = await response.json();
   if (!response.ok || payload?.status !== true) {
-    throw new Error(payload?.message || 'Paystack verification failed.');
+    throw new PaystackApiError(
+      payload?.message || 'Paystack verification failed.',
+    );
   }
   return payload.data;
 };
@@ -181,7 +191,7 @@ const chargeAuthorization = async ({
   );
   const payload = await response.json();
   if (!response.ok || payload?.status !== true) {
-    throw new Error(
+    throw new PaystackApiError(
       payload?.message || 'Paystack authorization charge failed.',
     );
   }
@@ -529,6 +539,86 @@ const renewDueSubscriptions = async ({
   return { renewed, failed };
 };
 
+// Failsafe for network/payment disruptions: a client that never returns from
+// Paystack (closed tab, dropped connection, crashed app) leaves its
+// subscription stuck at 'pending_payment' forever unless something else
+// checks back in. The webhook above covers most cases, but webhook delivery
+// itself can fail too, so this reconciles anything still pending after a
+// grace period directly against Paystack's own record of the transaction.
+const reconcilePendingPayments = async ({
+  adminClient,
+  paystackSecret,
+  limit,
+}: {
+  adminClient: ReturnType<typeof createClient>;
+  paystackSecret: string;
+  limit: number;
+}) => {
+  const staleBefore = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { data: rows, error } = await adminClient
+    .from('verification_subscriptions')
+    .select('*')
+    .eq('status', 'pending_payment')
+    .not('paystack_reference', 'is', null)
+    .lte('updated_at', staleBefore)
+    .limit(limit);
+  if (error) throw new Error(error.message);
+
+  const activated: string[] = [];
+  const abandoned: string[] = [];
+  const stillPending: string[] = [];
+  for (const subscription of rows ?? []) {
+    const subscriptionId = clean(subscription.id);
+    const reference = clean(subscription.paystack_reference);
+    try {
+      const paymentData = await verifyReferenceWithPaystack(
+        paystackSecret,
+        reference,
+      );
+      const status = clean(paymentData?.status);
+      if (status === 'success') {
+        await activateSubscription({ adminClient, subscription, paymentData });
+        activated.push(subscriptionId);
+        continue;
+      }
+      if (status === 'abandoned' || status === 'failed') {
+        const now = new Date().toISOString();
+        await adminClient
+          .from('verification_payments')
+          .upsert(
+            {
+              subscription_id: subscriptionId,
+              user_id: clean(subscription.user_id),
+              role: clean(subscription.role),
+              plan_interval: clean(subscription.plan_interval),
+              status: 'failed',
+              amount_usd: Number(subscription.amount_usd),
+              charge_currency: clean(subscription.charge_currency),
+              charge_amount: Number(subscription.charge_amount),
+              paystack_reference: reference,
+              gateway_response: clean(paymentData?.gateway_response) || status,
+              raw_payload: paymentData,
+            },
+            { onConflict: 'paystack_reference' },
+          );
+        await adminClient
+          .from('verification_subscriptions')
+          .update({ status: 'payment_failed', updated_at: now })
+          .eq('id', subscriptionId);
+        abandoned.push(subscriptionId);
+        continue;
+      }
+      // Still genuinely pending on Paystack's side (e.g. bank transfer
+      // awaiting confirmation) — leave it for the next reconciliation pass.
+      stillPending.push(subscriptionId);
+    } catch (error) {
+      stillPending.push(subscriptionId);
+      console.error('reconcilePendingPayments failed for', subscriptionId, error);
+    }
+  }
+  return { activated, abandoned, stillPending };
+};
+
 const backfillVerifiedSubscriptions = async (
   adminClient: ReturnType<typeof createClient>,
 ) => {
@@ -626,7 +716,11 @@ Deno.serve(async (req) => {
     const body = rawBody ? JSON.parse(rawBody) : {};
     const action = clean(body.action || 'initialize');
 
-    if (['renewDue', 'syncExpirations', 'backfillVerified'].includes(action)) {
+    if (
+      ['renewDue', 'syncExpirations', 'backfillVerified', 'reconcilePending'].includes(
+        action,
+      )
+    ) {
       await assertAdmin({ req, supabaseUrl, anonKey });
       if (action === 'syncExpirations') {
         await syncExpired(adminClient);
@@ -634,6 +728,14 @@ Deno.serve(async (req) => {
       }
       if (action === 'backfillVerified') {
         const result = await backfillVerifiedSubscriptions(adminClient);
+        return json(200, { ok: true, ...result });
+      }
+      if (action === 'reconcilePending') {
+        const result = await reconcilePendingPayments({
+          adminClient,
+          paystackSecret,
+          limit: Math.min(Math.max(Number(body.limit || 25), 1), 100),
+        });
         return json(200, { ok: true, ...result });
       }
       const result = await renewDueSubscriptions({
@@ -781,7 +883,7 @@ Deno.serve(async (req) => {
     );
     const initPayload = await initResponse.json();
     if (!initResponse.ok || initPayload?.status !== true) {
-      throw new Error(
+      throw new PaystackApiError(
         initPayload?.message || 'Could not initialize Paystack transaction.',
       );
     }
@@ -837,7 +939,7 @@ Deno.serve(async (req) => {
     return json(500, {
       ok: false,
       error:
-        error instanceof Error && error.message.includes('Paystack')
+        error instanceof PaystackApiError
           ? error.message
           : 'Verification billing failed. Please try again or contact support.',
     });
