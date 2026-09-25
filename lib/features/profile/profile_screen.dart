@@ -441,9 +441,22 @@ Future<void> _showVerificationBillingSheet(
                     ),
                   ],
                   const SizedBox(height: 12),
+                  Text(
+                    settings.t('Recommended · pay by card'),
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                  ),
+                  Text(
+                    settings.t(
+                      'Card payments save automatically for renewal, so your badge never lapses.',
+                    ),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 4),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.calendar_month_outlined),
+                    leading: const Icon(Icons.credit_card_outlined),
                     title: Text(settings.t('Monthly')),
                     subtitle: Text(paymentService.verificationPriceLabel(
                       role: role,
@@ -452,11 +465,13 @@ Future<void> _showVerificationBillingSheet(
                       country: user.country,
                     )),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: busy ? null : () => startPayment('monthly'),
+                    onTap: busy
+                        ? null
+                        : () => startPayment('monthly', channel: 'card'),
                   ),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.event_available_outlined),
+                    leading: const Icon(Icons.credit_card_outlined),
                     title: Text(settings.t('Yearly')),
                     subtitle: Text(paymentService.verificationPriceLabel(
                       role: role,
@@ -465,19 +480,14 @@ Future<void> _showVerificationBillingSheet(
                       country: user.country,
                     )),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: busy ? null : () => startPayment('yearly'),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.credit_card_outlined),
-                    title: Text(settings.t('Save or change card')),
-                    subtitle: Text(settings.t(
-                      'Paystack saves reusable cards for automatic renewal.',
-                    )),
                     onTap: busy
                         ? null
-                        : () => startPayment(interval, channel: 'card'),
+                        : () => startPayment('yearly', channel: 'card'),
+                  ),
+                  const Divider(),
+                  Text(
+                    settings.t('Other payment methods'),
+                    style: Theme.of(context).textTheme.labelLarge,
                   ),
                   ListTile(
                     contentPadding: EdgeInsets.zero,

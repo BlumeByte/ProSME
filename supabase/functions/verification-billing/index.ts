@@ -69,8 +69,46 @@ const periodEnd = (interval: string) => {
   return next.toISOString();
 };
 
-const chargeAmount = (amountUsd: number, currency: string) => {
+// Live exchange rates are fetched fresh (with a short in-memory cache so a
+// burst of payments doesn't hammer the rate API) before every charge, so
+// conversions track the real market rate instead of a number that goes
+// stale over time. USD_TO_*_RATE env vars, then the hardcoded numbers
+// below, are only used if the live fetch fails or is still cold.
+let cachedLiveRates: { rates: Record<string, number>; fetchedAt: number } | null =
+  null;
+const LIVE_RATE_CACHE_MS = 60 * 60 * 1000; // 1 hour
+
+const liveRatesFromUsd = async (): Promise<Record<string, number> | null> => {
+  if (
+    cachedLiveRates &&
+    Date.now() - cachedLiveRates.fetchedAt < LIVE_RATE_CACHE_MS
+  ) {
+    return cachedLiveRates.rates;
+  }
+  try {
+    const response = await fetch('https://open.er-api.com/v6/latest/USD', {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return cachedLiveRates?.rates ?? null;
+    const payload = await response.json();
+    if (payload?.result !== 'success' || !payload?.rates) {
+      return cachedLiveRates?.rates ?? null;
+    }
+    cachedLiveRates = { rates: payload.rates, fetchedAt: Date.now() };
+    return cachedLiveRates.rates;
+  } catch (error) {
+    console.error('Live exchange rate fetch failed, using fallback', error);
+    return cachedLiveRates?.rates ?? null;
+  }
+};
+
+const chargeAmount = async (amountUsd: number, currency: string) => {
   if (currency === 'USD') return Math.round(amountUsd * 100);
+  const liveRates = await liveRatesFromUsd();
+  const liveRate = liveRates?.[currency];
+  if (typeof liveRate === 'number' && liveRate > 0) {
+    return Math.round(amountUsd * liveRate * 100);
+  }
   const usdToGhs = Number(Deno.env.get('USD_TO_GHS_RATE') || '11.289456');
   if (currency === 'GHS') return Math.round(amountUsd * usdToGhs * 100);
   const fallbackRates: Record<string, number> = {
@@ -307,6 +345,7 @@ const activateSubscription = async ({
       last_payment_at: clean(paymentData.paid_at) || now,
       last_renewal_attempt_at: null,
       last_renewal_error: null,
+      expiry_reminder_sent_at: null,
       updated_at: now,
       ...authorizationPatch,
     })
@@ -430,7 +469,7 @@ const renewDueSubscriptions = async ({
       interval,
       countryForCurrency(currency),
     );
-    const amount = chargeAmount(amountUsd, currency);
+    const amount = await chargeAmount(amountUsd, currency);
     const reference = `prosme_renew_${clean(subscription.user_id).replaceAll('-', '').slice(0, 12)}_${Date.now()}`;
     const email = clean(subscription.paystack_email);
     const authorizationCode = clean(subscription.paystack_authorization_code);
@@ -619,6 +658,65 @@ const reconcilePendingPayments = async ({
   return { activated, abandoned, stillPending };
 };
 
+// Warns members before their badge lapses: auto-renew subscribers get a
+// heads-up that their saved card will be charged soon, everyone else gets a
+// nudge to renew manually. expiry_reminder_sent_at guards against sending
+// the same reminder twice for one expiry cycle.
+const sendExpiryReminders = async (
+  adminClient: ReturnType<typeof createClient>,
+) => {
+  const now = new Date();
+  const windowEnd = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+  const { data: rows, error } = await adminClient
+    .from('verification_subscriptions')
+    .select('*')
+    .eq('status', 'active')
+    .lte('current_period_end', windowEnd.toISOString())
+    .gte('current_period_end', now.toISOString())
+    .is('expiry_reminder_sent_at', null);
+  if (error) throw new Error(error.message);
+
+  const reminded: string[] = [];
+  for (const subscription of rows ?? []) {
+    const subscriptionId = clean(subscription.id);
+    const userId = clean(subscription.user_id);
+    const daysLeft = Math.max(
+      1,
+      Math.ceil(
+        (new Date(clean(subscription.current_period_end)).getTime() -
+          now.getTime()) /
+          (24 * 60 * 60 * 1000),
+      ),
+    );
+    const dayWord = daysLeft === 1 ? 'day' : 'days';
+    const autoRenew = subscription.auto_renew === true;
+    const message = autoRenew
+      ? `Your ProSME verification renews automatically in ${daysLeft} ${dayWord} using your saved card. No action needed.`
+      : `Your ProSME verification expires in ${daysLeft} ${dayWord}. Renew now to keep your verified badge active.`;
+
+    await adminClient.from('admin_notifications').insert({
+      type: 'verification_expiring',
+      title: 'Verification expiring soon',
+      body: message,
+      related_user_id: userId,
+      related_table: 'verification_subscriptions',
+      related_id: subscriptionId,
+    });
+    await adminClient.from('email_outbox').insert({
+      to_email: null,
+      subject: 'Your ProSME verification is expiring soon',
+      body: message,
+      related_user_id: userId,
+    });
+    await adminClient
+      .from('verification_subscriptions')
+      .update({ expiry_reminder_sent_at: now.toISOString() })
+      .eq('id', subscriptionId);
+    reminded.push(subscriptionId);
+  }
+  return { reminded };
+};
+
 const backfillVerifiedSubscriptions = async (
   adminClient: ReturnType<typeof createClient>,
 ) => {
@@ -717,9 +815,13 @@ Deno.serve(async (req) => {
     const action = clean(body.action || 'initialize');
 
     if (
-      ['renewDue', 'syncExpirations', 'backfillVerified', 'reconcilePending'].includes(
-        action,
-      )
+      [
+        'renewDue',
+        'syncExpirations',
+        'backfillVerified',
+        'reconcilePending',
+        'sendExpiryReminders',
+      ].includes(action)
     ) {
       await assertAdmin({ req, supabaseUrl, anonKey });
       if (action === 'syncExpirations') {
@@ -728,6 +830,10 @@ Deno.serve(async (req) => {
       }
       if (action === 'backfillVerified') {
         const result = await backfillVerifiedSubscriptions(adminClient);
+        return json(200, { ok: true, ...result });
+      }
+      if (action === 'sendExpiryReminders') {
+        const result = await sendExpiryReminders(adminClient);
         return json(200, { ok: true, ...result });
       }
       if (action === 'reconcilePending') {
@@ -847,7 +953,7 @@ Deno.serve(async (req) => {
       clean(profile.country || body.displayCountry),
     );
     const chargeCurrency = chargeCurrencyFor(profile);
-    const amount = chargeAmount(amountUsd, chargeCurrency);
+    const amount = await chargeAmount(amountUsd, chargeCurrency);
     const reference = `prosme_ver_${user.id.replaceAll('-', '').slice(0, 12)}_${Date.now()}`;
     const callbackUrl = clean(
       body.callbackUrl || Deno.env.get('PAYSTACK_CALLBACK_URL'),

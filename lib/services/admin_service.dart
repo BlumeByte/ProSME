@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../models/artisan_profile.dart';
 import '../models/discount_offer.dart';
+import 'payment_service.dart' show verificationTaxRateForCountry;
 
 class PlatformAccount {
   const PlatformAccount({
@@ -539,19 +540,25 @@ class AdminService {
 
     final profile = await client
         .from('profiles')
-        .select('role')
+        .select('role, country')
         .eq('id', userId)
         .maybeSingle();
     final role = (profile?['role'] ?? UserRole.customer.name).toString() ==
             UserRole.artisan.name
         ? UserRole.artisan.name
         : UserRole.customer.name;
+    final country = (profile?['country'] ?? '').toString();
+    final monthlyUsd = role == UserRole.artisan.name
+        ? kVerificationArtisanMonthlyUsd
+        : kVerificationCustomerMonthlyUsd;
+    final amountUsd =
+        monthlyUsd * (1 + verificationTaxRateForCountry(country));
     await client.from('verification_subscriptions').upsert({
       'user_id': userId,
       'role': role,
       'plan_interval': 'monthly',
       'status': 'payment_required',
-      'amount_usd': role == UserRole.artisan.name ? 5 : 2,
+      'amount_usd': amountUsd,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }, onConflict: 'user_id');
 
@@ -567,9 +574,9 @@ class AdminService {
       await client.from('email_outbox').insert({
         'to_email': null,
         'subject': 'Pay for your ProSME verification',
-        'body': role == UserRole.artisan.name
-            ? 'Your documents were uploaded. Pay the \$3 artisan verification fee so Support can review them.'
-            : 'Your documents were uploaded. Pay the \$2 account verification fee so Support can review them.',
+        'body': 'Your documents were uploaded. Pay the '
+            '\$${amountUsd.toStringAsFixed(2)} verification fee so Support '
+            'can review them.',
         'related_user_id': userId,
       });
     } catch (_) {

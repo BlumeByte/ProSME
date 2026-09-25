@@ -285,6 +285,7 @@ class _ArtisanVerificationScreenState
     try {
       await ref.read(paymentServiceProvider).startVerificationCheckout(
             interval: 'monthly',
+            channel: 'card',
             currencyCode: settings.currencyCode,
             country: user.country,
           );
@@ -425,11 +426,14 @@ class _ArtisanVerificationScreenState
               _StatusPanel(
                 icon: Icons.payments_outlined,
                 title: settings.t('Payment required'),
-                message: settings.t(
-                  user?.role == UserRole.artisan
-                      ? 'Your documents are uploaded. Pay the \$3 artisan verification fee so Support can review them.'
-                      : 'Your documents are uploaded. Pay the \$2 account verification fee so Support can review them.',
-                ),
+                message:
+                    '${settings.t('Your documents are uploaded. Pay the verification fee so Support can review them.')} '
+                    '${ref.read(paymentServiceProvider).verificationPriceLabel(
+                          role: user?.role.name ?? UserRole.customer.name,
+                          interval: 'monthly',
+                          currencyCode: settings.currencyCode,
+                          country: user?.country ?? '',
+                        )}',
                 actions: [
                   FilledButton.icon(
                     onPressed: _isPaying ? null : _startPayment,
