@@ -83,52 +83,68 @@ class ListingManageScreen extends ConsumerWidget {
                 ),
               )
             else
-              ...listings.map(
-                (listing) => Card(
-                  child: ListTile(
-                    leading: listing.images.isEmpty
-                        ? const CircleAvatar(child: Icon(Icons.storefront))
-                        : ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              listing.images.first,
-                              width: 56,
-                              height: 56,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const CircleAvatar(
-                                child: Icon(Icons.storefront),
-                              ),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final cardWidth = constraints.maxWidth < 420
+                      ? constraints.maxWidth
+                      : 420.0;
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: listings.map((listing) {
+                      return SizedBox(
+                        width: cardWidth,
+                        child: Card(
+                          child: ListTile(
+                            leading: listing.images.isEmpty
+                                ? const CircleAvatar(
+                                    child: Icon(Icons.storefront))
+                                : ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      listing.images.first,
+                                      width: 56,
+                                      height: 56,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                          const CircleAvatar(
+                                        child: Icon(Icons.storefront),
+                                      ),
+                                    ),
+                                  ),
+                            title: Text(listing.title),
+                            subtitle: Text(
+                              '${listing.category} - ${listing.location}\n${formatMoney(listing.priceMin, currencyCode)} - ${formatMoney(listing.priceMax, currencyCode)}',
+                            ),
+                            isThreeLine: true,
+                            trailing: PopupMenuButton<String>(
+                              onSelected: (action) async {
+                                if (action == 'edit') {
+                                  await _openListingSheet(context, ref,
+                                      existing: listing);
+                                  return;
+                                }
+                                if (action == 'delete') {
+                                  await _deleteListing(context, ref, listing);
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text(settings.t('Edit')),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text(settings.t('Delete')),
+                                ),
+                              ],
                             ),
                           ),
-                    title: Text(listing.title),
-                    subtitle: Text(
-                      '${listing.category} - ${listing.location}\n${formatMoney(listing.priceMin, currencyCode)} - ${formatMoney(listing.priceMax, currencyCode)}',
-                    ),
-                    isThreeLine: true,
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (action) async {
-                        if (action == 'edit') {
-                          await _openListingSheet(context, ref,
-                              existing: listing);
-                          return;
-                        }
-                        if (action == 'delete') {
-                          await _deleteListing(context, ref, listing);
-                        }
-                      },
-                      itemBuilder: (context) => [
-                        PopupMenuItem(
-                          value: 'edit',
-                          child: Text(settings.t('Edit')),
                         ),
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: Text(settings.t('Delete')),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                      );
+                    }).toList(growable: false),
+                  );
+                },
               ),
           ],
         );

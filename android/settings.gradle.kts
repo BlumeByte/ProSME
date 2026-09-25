@@ -21,6 +21,10 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "8.11.1" apply false
     id("org.jetbrains.kotlin.android") version "2.2.20" apply false
+    // Only actually applied in app/build.gradle.kts once google-services.json
+    // exists (added by `flutterfire configure` or manually from the Firebase
+    // console) — see lib/firebase_options.dart for the push notification setup.
+    id("com.google.gms.google-services") version "4.4.2" apply false
 }
 
 include(":app")

@@ -8,10 +8,17 @@ import '../../core/utils/currency.dart';
 import '../../models/wallet_transaction.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
+import '../../services/admin_export_service.dart';
 import '../../services/admin_service.dart';
 import '../../services/service_providers.dart';
 import '../../services/wallet_service.dart';
 import '../jobs/jobs_repository.dart';
+
+const _kReportsTab = 1;
+const _kAccountsTab = 2;
+const _kWalletTab = 3;
+const _kTenantsTab = 4;
+const _kModulesTab = 5;
 
 class AdminPlatformDashboardScreen extends ConsumerStatefulWidget {
   const AdminPlatformDashboardScreen({super.key});
@@ -28,13 +35,14 @@ class _AdminPlatformDashboardScreenState
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(appSettingsControllerProvider);
+    void goToTab(int index) => setState(() => _selectedIndex = index);
     final sections = [
-      const _AdminOverview(),
+      _AdminOverview(onNavigateToTab: goToTab),
       const _ReportsPanel(),
       const _AccountsPanel(),
       const _AdminWalletPanel(),
       const _TenantsPanel(),
-      const _ModulesPanel(),
+      _ModulesPanel(onNavigateToTab: goToTab),
     ];
     final destinations = [
       NavigationDestination(
@@ -132,7 +140,9 @@ class _AdminPlatformDashboardScreenState
 }
 
 class _AdminOverview extends ConsumerWidget {
-  const _AdminOverview();
+  const _AdminOverview({required this.onNavigateToTab});
+
+  final ValueChanged<int> onNavigateToTab;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -172,28 +182,64 @@ class _AdminOverview extends ConsumerWidget {
               runSpacing: 10,
               children: [
                 _MetricCard(
-                    label: settings.t('Accounts'), value: counts.accounts),
+                  label: settings.t('Accounts'),
+                  value: counts.accounts,
+                  onTap: () => onNavigateToTab(_kAccountsTab),
+                ),
                 _MetricCard(
-                    label: settings.t('Tenants'), value: counts.tenants),
+                  label: settings.t('Tenants'),
+                  value: counts.tenants,
+                  onTap: () => onNavigateToTab(_kTenantsTab),
+                ),
                 _MetricCard(
-                    label: settings.t('Listings'), value: counts.listings),
-                _MetricCard(label: settings.t('Jobs'), value: counts.jobs),
+                  label: settings.t('Listings'),
+                  value: counts.listings,
+                  onTap: () => onNavigateToTab(_kModulesTab),
+                ),
                 _MetricCard(
-                    label: settings.t('Direct jobs'), value: counts.directJobs),
-                _MetricCard(label: settings.t('Bids'), value: counts.bids),
+                  label: settings.t('Jobs'),
+                  value: counts.jobs,
+                  onTap: () => onNavigateToTab(_kModulesTab),
+                ),
                 _MetricCard(
-                    label: settings.t('Countered bids'),
-                    value: counts.counteredBids),
-                _MetricCard(label: settings.t('Chats'), value: counts.threads),
+                  label: settings.t('Direct jobs'),
+                  value: counts.directJobs,
+                  onTap: () => onNavigateToTab(_kModulesTab),
+                ),
                 _MetricCard(
-                    label: settings.t('Messages'), value: counts.messages),
+                  label: settings.t('Bids'),
+                  value: counts.bids,
+                  onTap: () => onNavigateToTab(_kModulesTab),
+                ),
                 _MetricCard(
-                    label: settings.t('Reports'), value: counts.reports),
+                  label: settings.t('Countered bids'),
+                  value: counts.counteredBids,
+                  onTap: () => onNavigateToTab(_kModulesTab),
+                ),
                 _MetricCard(
-                    label: settings.t('Alerts'), value: counts.notifications),
+                  label: settings.t('Chats'),
+                  value: counts.threads,
+                  onTap: () => onNavigateToTab(_kModulesTab),
+                ),
+                _MetricCard(
+                  label: settings.t('Messages'),
+                  value: counts.messages,
+                  onTap: () => onNavigateToTab(_kModulesTab),
+                ),
+                _MetricCard(
+                  label: settings.t('Reports'),
+                  value: counts.reports,
+                  onTap: () => onNavigateToTab(_kReportsTab),
+                ),
+                _MetricCard(
+                  label: settings.t('Alerts'),
+                  value: counts.notifications,
+                  onTap: () => onNavigateToTab(_kModulesTab),
+                ),
                 _MetricCard(
                   label: settings.t('Wallet transactions'),
                   value: counts.walletTransactions,
+                  onTap: () => onNavigateToTab(_kWalletTab),
                 ),
               ],
             ),
@@ -852,14 +898,40 @@ class _ReportsPanel extends ConsumerWidget {
           return const Center(child: CircularProgressIndicator());
         }
         final reports = snapshot.data!;
-        if (reports.isEmpty) {
-          return Center(child: Text(settings.t('No reports yet.')));
-        }
-        return ListView.separated(
+        return ListView(
           padding: const EdgeInsets.all(16),
-          itemCount: reports.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (context, index) => _ReportTile(report: reports[index]),
+          children: [
+            _ExportBar(
+              label: settings.t('Reports'),
+              count: reports.length,
+              onPrintPdf: reports.isEmpty
+                  ? null
+                  : () async {
+                      final bytes = await const AdminExportService().reportsPdfBytes(reports);
+                      await const AdminExportService().printPdf(bytes);
+                    },
+              onSharePdf: reports.isEmpty
+                  ? null
+                  : () async {
+                      final bytes = await const AdminExportService().reportsPdfBytes(reports);
+                      await const AdminExportService().sharePdf(bytes, 'prosme-reports.pdf');
+                    },
+              onExportCsv: reports.isEmpty
+                  ? null
+                  : () async {
+                      final bytes = const AdminExportService().reportsCsvBytes(reports);
+                      await const AdminExportService().shareCsv(bytes, 'prosme-reports.csv');
+                    },
+            ),
+            const SizedBox(height: 12),
+            if (reports.isEmpty)
+              Center(child: Text(settings.t('No reports yet.')))
+            else
+              ...reports.map((report) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _ReportTile(report: report),
+                  )),
+          ],
         );
       },
     );
@@ -977,19 +1049,258 @@ class _AccountsPanel extends ConsumerWidget {
           return const Center(child: CircularProgressIndicator());
         }
         final accounts = snapshot.data!;
-        if (accounts.isEmpty) {
-          return Center(child: Text(settings.t('No accounts found.')));
-        }
-        return ListView.separated(
+        return ListView(
           padding: const EdgeInsets.all(16),
-          itemCount: accounts.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (context, index) {
-            return _AccountTile(account: accounts[index]);
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _showCreateAccountSheet(context, ref, settings),
+                    icon: const Icon(Icons.person_add_alt_outlined),
+                    label: Text(settings.t('Create staff account')),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _ExportBar(
+              label: settings.t('Accounts'),
+              count: accounts.length,
+              onPrintPdf: accounts.isEmpty
+                  ? null
+                  : () async {
+                      final bytes = await const AdminExportService().accountsPdfBytes(accounts);
+                      await const AdminExportService().printPdf(bytes);
+                    },
+              onSharePdf: accounts.isEmpty
+                  ? null
+                  : () async {
+                      final bytes = await const AdminExportService().accountsPdfBytes(accounts);
+                      await const AdminExportService().sharePdf(bytes, 'prosme-accounts.pdf');
+                    },
+              onExportCsv: accounts.isEmpty
+                  ? null
+                  : () async {
+                      final bytes = const AdminExportService().accountsCsvBytes(accounts);
+                      await const AdminExportService().shareCsv(bytes, 'prosme-accounts.csv');
+                    },
+            ),
+            const SizedBox(height: 12),
+            if (accounts.isEmpty)
+              Center(child: Text(settings.t('No accounts found.')))
+            else
+              ...accounts.map((account) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _AccountTile(account: account),
+                  )),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showCreateAccountSheet(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    final formKey = GlobalKey<FormState>();
+    final emailController = TextEditingController();
+    final fullNameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final countryController = TextEditingController(text: 'Ghana');
+    final dateController = TextEditingController();
+    var role = UserRole.admin;
+    var gender = 'prefer_not_to_say';
+    DateTime? dateOfBirth;
+    var saving = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            Future<void> pickDate() async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: DateTime(1995),
+                firstDate: DateTime(1900),
+                lastDate: DateTime.now(),
+              );
+              if (picked == null) return;
+              setSheetState(() {
+                dateOfBirth = picked;
+                dateController.text =
+                    '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+              });
+            }
+
+            Future<void> submit() async {
+              if (formKey.currentState?.validate() != true) return;
+              if (dateOfBirth == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(settings.t('Date of birth is required.'))),
+                );
+                return;
+              }
+              setSheetState(() => saving = true);
+              try {
+                final result = await ref.read(adminServiceProvider).createAccount(
+                      email: emailController.text.trim(),
+                      fullName: fullNameController.text.trim(),
+                      role: role,
+                      dateOfBirth: dateOfBirth!,
+                      gender: gender,
+                      phone: phoneController.text.trim(),
+                      country: countryController.text.trim(),
+                    );
+                if (!context.mounted) return;
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      result.passwordResetSent
+                          ? settings.t('Account created. A password-setup email was sent.')
+                          : '${settings.t('Account created. Temporary password')}: ${result.temporaryPassword}',
+                    ),
+                    duration: const Duration(seconds: 8),
+                  ),
+                );
+              } catch (error) {
+                setSheetState(() => saving = false);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(error.toString())),
+                );
+              }
+            }
+
+            final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 16),
+              child: Form(
+                key: formKey,
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    Text(
+                      settings.t('Create staff account'),
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      settings.t(
+                        'For support staff or a new admin. They receive an email to set their own password.',
+                      ),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    _AdminTextField(
+                      controller: emailController,
+                      label: settings.t('Email'),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                        final email = (value ?? '').trim();
+                        if (email.isEmpty || !email.contains('@')) {
+                          return settings.t('Enter a valid email');
+                        }
+                        return null;
+                      },
+                    ),
+                    _AdminTextField(
+                      controller: fullNameController,
+                      label: settings.t('Full name'),
+                      validator: (value) => (value ?? '').trim().isEmpty
+                          ? settings.t('Full name is required')
+                          : null,
+                    ),
+                    _AdminTextField(
+                      controller: phoneController,
+                      label: settings.t('Phone'),
+                      keyboardType: TextInputType.phone,
+                    ),
+                    _AdminTextField(
+                      controller: countryController,
+                      label: settings.t('Country'),
+                    ),
+                    DropdownButtonFormField<UserRole>(
+                      initialValue: role,
+                      decoration: InputDecoration(labelText: settings.t('Role')),
+                      items: UserRole.values
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item,
+                              child: Text(settings.t(item.name)),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (value) => setSheetState(() {
+                        if (value != null) role = value;
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: gender,
+                      decoration: InputDecoration(labelText: settings.t('Gender')),
+                      items: const [
+                        'prefer_not_to_say',
+                        'female',
+                        'male',
+                        'non_binary',
+                      ]
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item,
+                              child: Text(settings.t(item)),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (value) => setSheetState(() {
+                        if (value != null) gender = value;
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: dateController,
+                      readOnly: true,
+                      decoration: InputDecoration(
+                        labelText: settings.t('Date of birth'),
+                        suffixIcon: IconButton(
+                          tooltip: settings.t('Pick date'),
+                          onPressed: pickDate,
+                          icon: const Icon(Icons.calendar_month_outlined),
+                        ),
+                      ),
+                      onTap: pickDate,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: saving ? null : submit,
+                      icon: saving
+                          ? const SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.person_add_alt_outlined),
+                      label: Text(settings.t('Create account')),
+                    ),
+                  ],
+                ),
+              ),
+            );
           },
         );
       },
     );
+
+    emailController.dispose();
+    fullNameController.dispose();
+    phoneController.dispose();
+    countryController.dispose();
+    dateController.dispose();
   }
 }
 
@@ -1711,7 +2022,9 @@ class _TenantsPanel extends ConsumerWidget {
 }
 
 class _ModulesPanel extends ConsumerWidget {
-  const _ModulesPanel();
+  const _ModulesPanel({required this.onNavigateToTab});
+
+  final ValueChanged<int> onNavigateToTab;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1729,26 +2042,29 @@ class _ModulesPanel extends ConsumerWidget {
         }
         final counts = snapshot.data!;
         final modules = [
-          ('Profiles', counts.accounts, 'Account and role records'),
-          ('Listings', counts.listings, 'Artisan service listings'),
+          ('Profiles', counts.accounts, 'Account and role records', _kAccountsTab),
+          ('Listings', counts.listings, 'Artisan service listings', _kModulesTab),
           (
             'Jobs',
             counts.jobs,
-            '${counts.publicJobs} public, ${counts.directJobs} direct requests'
+            '${counts.publicJobs} public, ${counts.directJobs} direct requests',
+            _kModulesTab,
           ),
           (
             'Bids',
             counts.bids,
-            '${counts.pendingBids} pending, ${counts.counteredBids} countered, ${counts.acceptedBids} accepted'
+            '${counts.pendingBids} pending, ${counts.counteredBids} countered, ${counts.acceptedBids} accepted',
+            _kModulesTab,
           ),
-          ('Threads', counts.threads, 'Chat rooms'),
-          ('Messages', counts.messages, 'Chat messages and offers'),
-          ('Reports', counts.reports, 'Chat, support, and safety reports'),
-          ('Notifications', counts.notifications, 'Support tasks'),
+          ('Threads', counts.threads, 'Chat rooms', _kModulesTab),
+          ('Messages', counts.messages, 'Chat messages and offers', _kModulesTab),
+          ('Reports', counts.reports, 'Chat, support, and safety reports', _kReportsTab),
+          ('Notifications', counts.notifications, 'Support tasks', _kModulesTab),
           (
             'Wallet transactions',
             counts.walletTransactions,
-            'Accepted and completed bid money flow'
+            'Accepted and completed bid money flow',
+            _kWalletTab,
           ),
         ];
         return ListView.separated(
@@ -1757,12 +2073,17 @@ class _ModulesPanel extends ConsumerWidget {
           separatorBuilder: (_, __) => const SizedBox(height: 8),
           itemBuilder: (context, index) {
             final module = modules[index];
+            final isSelfReferential = module.$4 == _kModulesTab;
             return Card(
-              child: ListTile(
-                leading: const Icon(Icons.extension_outlined),
-                title: Text(settings.t(module.$1)),
-                subtitle: Text(settings.t(module.$3)),
-                trailing: Text(module.$2.toString()),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: isSelfReferential ? null : () => onNavigateToTab(module.$4),
+                child: ListTile(
+                  leading: const Icon(Icons.extension_outlined),
+                  title: Text(settings.t(module.$1)),
+                  subtitle: Text(settings.t(module.$3)),
+                  trailing: Text(module.$2.toString()),
+                ),
               ),
             );
           },
@@ -1773,29 +2094,118 @@ class _ModulesPanel extends ConsumerWidget {
 }
 
 class _MetricCard extends StatelessWidget {
-  const _MetricCard({required this.label, required this.value});
+  const _MetricCard({required this.label, required this.value, this.onTap});
 
   final String label;
   final int value;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 140,
       child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(value.toString(),
-                  style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 4),
-              Text(label),
-            ],
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value.toString(),
+                    style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 4),
+                Text(label),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ExportBar extends ConsumerWidget {
+  const _ExportBar({
+    required this.label,
+    required this.count,
+    required this.onPrintPdf,
+    required this.onSharePdf,
+    required this.onExportCsv,
+  });
+
+  final String label;
+  final int count;
+  final Future<void> Function()? onPrintPdf;
+  final Future<void> Function()? onSharePdf;
+  final Future<void> Function()? onExportCsv;
+
+  Future<void> _run(BuildContext context, Future<void> Function()? action) async {
+    if (action == null) return;
+    try {
+      await action();
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export failed: $error')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            '$label · $count',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ),
+        PopupMenuButton<String>(
+          enabled: onPrintPdf != null || onSharePdf != null || onExportCsv != null,
+          tooltip: settings.t('Export'),
+          icon: const Icon(Icons.ios_share),
+          onSelected: (value) {
+            switch (value) {
+              case 'print':
+                _run(context, onPrintPdf);
+              case 'share':
+                _run(context, onSharePdf);
+              case 'csv':
+                _run(context, onExportCsv);
+            }
+          },
+          itemBuilder: (_) => [
+            PopupMenuItem(
+              value: 'print',
+              enabled: onPrintPdf != null,
+              child: ListTile(
+                leading: const Icon(Icons.print_outlined),
+                title: Text(settings.t('Print / Save as PDF')),
+              ),
+            ),
+            PopupMenuItem(
+              value: 'share',
+              enabled: onSharePdf != null,
+              child: ListTile(
+                leading: const Icon(Icons.picture_as_pdf_outlined),
+                title: Text(settings.t('Share PDF')),
+              ),
+            ),
+            PopupMenuItem(
+              value: 'csv',
+              enabled: onExportCsv != null,
+              child: ListTile(
+                leading: const Icon(Icons.table_chart_outlined),
+                title: Text(settings.t('Export as Excel/CSV')),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

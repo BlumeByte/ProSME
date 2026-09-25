@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show TextInput;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -152,6 +153,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
     if (message.contains('smtp') || message.contains('email service')) {
       return 'Account email service is not available right now. Please contact Support.';
+    }
+    if (message.contains('microsoft sign-in')) {
+      return 'Microsoft sign-in is not configured yet. Check Microsoft sign-in and redirect settings.';
     }
     if (message.contains('google sign-in') ||
         message.contains('unsupported provider') ||
@@ -382,6 +386,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     setState(() => _isLoading = true);
     try {
       final user = await action();
+      // Web: release the browser's autofill session now that the credentials
+      // were accepted, so a stale session doesn't linger into the next
+      // screen and interfere with editing if the user signs out and back in.
+      TextInput.finishAutofillContext();
       if (mounted) {
         if (forceRoleSelection) {
           context.go(RouteNames.role);
@@ -421,6 +429,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   @override
   void dispose() {
+    // Release the browser's autofill session if the user navigates away
+    // without submitting, so it doesn't linger and interfere with a later
+    // visit to this screen.
+    TextInput.finishAutofillContext(shouldSave: false);
     _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -711,6 +723,18 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       ? null
                       : () => _signIn(
                             authService.signInWithGoogle,
+                            forceRoleSelection: true,
+                          ),
+                ),
+                const SizedBox(height: 12),
+                PrimaryButton(
+                  label: settings.t('Microsoft Sign in'),
+                  icon: Icons.window,
+                  isLoading: _isLoading,
+                  onPressed: _isLoading
+                      ? null
+                      : () => _signIn(
+                            authService.signInWithMicrosoft,
                             forceRoleSelection: true,
                           ),
                 ),

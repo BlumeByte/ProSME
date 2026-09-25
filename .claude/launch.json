@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "admin_web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "admin_web"],
+      "port": 5173,
+      "autoPort": true
+    },
+    {
+      "name": "flutter_web",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": ["run", "-d", "web-server", "--web-port=5008", "--web-hostname=127.0.0.1"],
+      "port": 5008
+    }
+  ]
+}

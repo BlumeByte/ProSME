@@ -74,6 +74,12 @@ flutter {
     source = "../.."
 }
 
+// Applied only once google-services.json is present, so builds keep working
+// before Firebase is connected (see lib/firebase_options.dart).
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")

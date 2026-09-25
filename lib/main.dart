@@ -14,6 +14,7 @@ import 'services/chat_sync_service.dart';
 import 'services/db_service.dart';
 import 'services/mobile_ads_initializer.dart';
 import 'services/notification_service.dart';
+import 'services/push_token_service.dart';
 import 'services/service_providers.dart';
 import 'services/theme_mode_controller.dart';
 
@@ -43,6 +44,7 @@ Future<void> main() async {
   // Non-critical startup work must never delay the first usable frame.
   unawaited(initializeMobileAds());
   unawaited(NotificationService().initialize());
+  unawaited(PushTokenService().initialize());
   unawaited(AnalyticsService.trackAppOpen());
   if (shouldUseSupabase()) {
     unawaited(

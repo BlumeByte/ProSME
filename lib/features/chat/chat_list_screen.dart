@@ -105,7 +105,10 @@ class ChatListScreen extends ConsumerWidget {
             ),
           );
         }
-        return ListView.separated(
+        // A message list reads like a narrow inbox, not a grid — cap and
+        // center it on a wide window instead of stretching rows edge to edge.
+        final isWide = MediaQuery.sizeOf(context).width >= 700;
+        final list = ListView.separated(
           padding: const EdgeInsets.all(16),
           itemCount: threads.length,
           separatorBuilder: (_, __) => const Divider(),
@@ -184,6 +187,13 @@ class ChatListScreen extends ConsumerWidget {
               ),
             );
           },
+        );
+        if (!isWide) return list;
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: list,
+          ),
         );
       },
     );

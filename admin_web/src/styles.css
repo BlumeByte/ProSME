@@ -394,6 +394,18 @@ select {
   font-size: clamp(2.45rem, 5vw, 4.7rem);
 }
 
+.hero-app-note {
+  margin-top: 14px;
+  font-size: 0.88rem;
+  color: var(--site-muted);
+}
+
+.hero-app-note a {
+  color: var(--accent);
+  font-weight: 800;
+  text-decoration: underline;
+}
+
 .hero-copy p,
 .page-hero p,
 .auth-layout p,
@@ -946,6 +958,7 @@ select {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
   min-height: 100vh;
+  background: var(--page-bg);
 }
 
 .sidebar {
@@ -955,21 +968,26 @@ select {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  background: var(--primary);
+  background: linear-gradient(185deg, var(--primary) 0%, #0a2e1d 100%);
   color: #e5e7eb;
   padding: 22px;
+  box-shadow: 2px 0 24px rgba(7, 35, 22, 0.18);
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .brand img {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 10px;
+  background: #fff;
+  padding: 4px;
 }
 
 .brand strong,
@@ -978,39 +996,71 @@ select {
   display: block;
 }
 
+.brand strong {
+  color: #ffffff;
+  font-size: 1.02rem;
+}
+
 .brand span,
 .account span {
-  font-size: 0.82rem;
-  color: #94a3b8;
-}
-
-nav {
-  display: grid;
-  gap: 8px;
-}
-
-.nav-item {
-  width: 100%;
-  text-align: left;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: transparent;
-  color: #cbd5e1;
-  font-weight: 800;
-}
-
-.nav-item.active,
-.nav-item:hover {
-  background: #1e293b;
-  border-color: #334155;
-  color: #ffffff;
+  font-size: 0.78rem;
+  color: #9db3a4;
 }
 
 .account {
   margin-top: auto;
   display: grid;
   gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+nav {
+  display: grid;
+  gap: 4px;
+}
+
+.nav-item {
+  position: relative;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 10px 12px 10px 20px;
+  background: transparent;
+  color: #b8c9bd;
+  font-weight: 700;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-item::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+  transform: translateY(-50%);
+}
+
+.nav-item.active,
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.nav-item.active {
+  background: var(--accent);
+  color: #06251d;
+  font-weight: 800;
+}
+
+.nav-item.active::before {
+  opacity: 1;
 }
 
 .main {
@@ -1024,6 +1074,8 @@ nav {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 22px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
 }
 
 .mobile-account {
@@ -1031,15 +1083,19 @@ nav {
 }
 
 .topbar p {
-  color: var(--muted);
+  color: var(--accent);
   font-weight: 800;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   margin: 0 0 4px;
 }
 
 .topbar h1 {
   margin: 0;
-  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-size: clamp(1.6rem, 3.4vw, 2.2rem);
   letter-spacing: 0;
+  color: var(--heading);
 }
 
 .stat-grid {
@@ -1053,24 +1109,59 @@ nav {
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   box-shadow: 0 10px 35px var(--shadow);
 }
 
 .stat-card {
-  padding: 18px;
+  position: relative;
+  padding: 18px 18px 18px 22px;
   display: grid;
   gap: 6px;
+  overflow: hidden;
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.stat-card span,
+.stat-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: var(--accent);
+}
+
+.stat-card:nth-of-type(3n + 2)::before {
+  background: #2563eb;
+}
+
+.stat-card:nth-of-type(3n)::before {
+  background: #c2410c;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 40px var(--shadow);
+}
+
+.stat-card span {
+  color: var(--muted-strong);
+  font-weight: 700;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .stat-card small {
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .stat-card strong {
   font-size: 2.1rem;
+  color: var(--heading);
+  letter-spacing: -0.02em;
 }
 
 .grid {
@@ -1083,8 +1174,9 @@ nav {
 }
 
 .panel {
-  padding: 18px;
+  padding: 20px;
   margin-bottom: 18px;
+  border-radius: 12px;
 }
 
 .panel.narrow {
@@ -1097,16 +1189,20 @@ nav {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
 }
 
 .panel h2 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--heading);
 }
 
 .list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .list-row {
@@ -1114,9 +1210,16 @@ nav {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 12px;
-  border: 1px solid var(--border);
+  padding: 12px 14px;
+  border: 1px solid transparent;
   border-radius: 8px;
+  background: var(--surface-soft);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.list-row:hover {
+  background: var(--surface-muted);
+  border-color: var(--border);
 }
 
 .detail-row {
@@ -1252,13 +1355,22 @@ td {
 
 th {
   color: var(--muted-strong);
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   text-transform: uppercase;
-  letter-spacing: 0;
+  letter-spacing: 0.04em;
+  background: var(--surface-soft);
 }
 
 td {
   color: var(--text);
+}
+
+tbody tr {
+  transition: background 0.12s ease;
+}
+
+tbody tr:hover {
+  background: var(--surface-soft);
 }
 
 .money-positive {
@@ -1313,14 +1425,25 @@ td {
 .badge {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   width: fit-content;
   border-radius: 999px;
   background: var(--surface-muted);
   color: var(--muted-strong);
-  padding: 4px 9px;
+  padding: 4px 10px 4px 8px;
   font-size: 0.78rem;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.85;
+  flex: none;
 }
 
 .badge-blue {

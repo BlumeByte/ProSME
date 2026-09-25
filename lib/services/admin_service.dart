@@ -166,6 +166,20 @@ class PlatformReport {
   final DateTime createdAt;
 }
 
+class AdminCreatedAccount {
+  const AdminCreatedAccount({
+    required this.userId,
+    required this.temporaryPassword,
+    required this.passwordResetSent,
+    required this.warning,
+  });
+
+  final String userId;
+  final String temporaryPassword;
+  final bool passwordResetSent;
+  final String warning;
+}
+
 class AdminService {
   const AdminService([this._supabase]);
 
@@ -345,6 +359,56 @@ class AdminService {
     final client = _supabase;
     if (client == null) return;
     await client.from('profiles').update({'role': role.name}).eq('id', userId);
+  }
+
+  /// Creates a brand-new account (customer, artisan, or admin/support staff)
+  /// via the admin-dashboard edge function's `createUser` action — the only
+  /// path that can set role=admin, since it runs with the service role.
+  /// The new user gets a password-reset email so they can set their own
+  /// password; the temporary password is also returned in case email is down.
+  Future<AdminCreatedAccount> createAccount({
+    required String email,
+    required String fullName,
+    required UserRole role,
+    required DateTime dateOfBirth,
+    String gender = 'prefer_not_to_say',
+    String phone = '',
+    String country = '',
+    String redirectTo = '',
+  }) async {
+    final client = _supabase;
+    if (client == null) {
+      throw StateError('Supabase is not configured.');
+    }
+    final response = await client.functions.invoke(
+      'admin-dashboard',
+      body: {
+        'action': 'createUser',
+        'email': email,
+        'full_name': fullName,
+        'role': role.name,
+        'gender': gender,
+        'date_of_birth':
+            '${dateOfBirth.year.toString().padLeft(4, '0')}-${dateOfBirth.month.toString().padLeft(2, '0')}-${dateOfBirth.day.toString().padLeft(2, '0')}',
+        'phone': phone,
+        'country': country,
+        if (redirectTo.isNotEmpty) 'redirectTo': redirectTo,
+      },
+    );
+    final data = response.data is Map
+        ? Map<String, dynamic>.from(response.data as Map)
+        : <String, dynamic>{};
+    if (response.status < 200 || response.status >= 300 || data['ok'] != true) {
+      throw StateError(
+        (data['error'] ?? 'Could not create the account.').toString(),
+      );
+    }
+    return AdminCreatedAccount(
+      userId: (data['userId'] ?? '').toString(),
+      temporaryPassword: (data['temporaryPassword'] ?? '').toString(),
+      passwordResetSent: data['passwordResetSent'] == true,
+      warning: (data['warning'] ?? '').toString(),
+    );
   }
 
   Future<void> updateAccountProfile({

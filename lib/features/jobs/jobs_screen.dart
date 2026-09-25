@@ -318,13 +318,11 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
           }
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(jobsStreamProvider),
-            child: ListView.separated(
+            child: ListView(
               padding: const EdgeInsets.all(16),
-              itemCount: visibleJobs.length + (isArtisan ? 1 : 0),
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                if (isArtisan && index == 0) {
-                  return _ArtisanJobFilters(
+              children: [
+                if (isArtisan) ...[
+                  _ArtisanJobFilters(
                     searchController: _searchController,
                     query: _query,
                     category: _category,
@@ -346,67 +344,89 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                     onSortChanged: () =>
                         setState(() => _newestFirst = !_newestFirst),
                     settings: settings,
-                  );
-                }
-                final job = visibleJobs[index - (isArtisan ? 1 : 0)];
-                final hasBid = bidJobIds.contains(job.id);
-                final shownAmount = job.acceptedAmount ?? job.budget;
-                final amountLabel = job.acceptedAmount == null
-                    ? settings.t('Budget')
-                    : settings.t('Accepted amount');
-                final isDirect = job.requestType == 'direct';
-                final canTrack = job.workStatus != 'open' &&
-                    (job.createdBy == user.id ||
-                        acceptedJobIds.contains(job.id));
-                final card = Card(
-                  child: ListTile(
-                    title: Text(job.title),
-                    subtitle: Text(
-                      '${job.location} - $amountLabel: ${formatMoney(shownAmount, currencyCode)}\n${settings.t(_jobStatusText(job.workStatus))} - ${_formatDateTime(job.createdAt)}',
-                    ),
-                    isThreeLine: true,
-                    trailing: FilledButton(
-                      onPressed: () =>
-                          context.push('${RouteNames.jobDetail}/${job.id}'),
-                      child: Text(
-                        canTrack
-                            ? settings.t('Track')
-                            : isArtisan
-                                ? settings.t(isDirect
-                                    ? 'Respond'
-                                    : hasBid
-                                        ? 'Edit bid'
-                                        : 'Bid')
-                                : job.createdBy == user.id
-                                    ? settings.t('View bids')
-                                    : settings.t('View'),
-                      ),
-                    ),
-                    onTap: () =>
-                        context.push('${RouteNames.jobDetail}/${job.id}'),
-                    onLongPress: () => _confirmDeleteOrHideJob(job),
                   ),
-                );
-                if (!isArtisan && job.createdBy != user.id) return card;
-                return Dismissible(
-                  key: ValueKey('job_${job.id}'),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 20),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).appColors.error,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.delete, color: Colors.white),
-                  ),
-                  confirmDismiss: (_) async {
-                    await _confirmDeleteOrHideJob(job);
-                    return false;
+                  const SizedBox(height: 8),
+                ],
+                // On a wide (web/desktop) window these would otherwise be one
+                // giant full-width card per job — wrap into a proper grid.
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final cardWidth = constraints.maxWidth < 420
+                        ? constraints.maxWidth
+                        : 420.0;
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: visibleJobs.map((job) {
+                        final hasBid = bidJobIds.contains(job.id);
+                        final shownAmount = job.acceptedAmount ?? job.budget;
+                        final amountLabel = job.acceptedAmount == null
+                            ? settings.t('Budget')
+                            : settings.t('Accepted amount');
+                        final isDirect = job.requestType == 'direct';
+                        final canTrack = job.workStatus != 'open' &&
+                            (job.createdBy == user.id ||
+                                acceptedJobIds.contains(job.id));
+                        final card = Card(
+                          child: ListTile(
+                            title: Text(job.title),
+                            subtitle: Text(
+                              '${job.location} - $amountLabel: ${formatMoney(shownAmount, currencyCode)}\n${settings.t(_jobStatusText(job.workStatus))} - ${_formatDateTime(job.createdAt)}',
+                            ),
+                            isThreeLine: true,
+                            trailing: FilledButton(
+                              onPressed: () => context
+                                  .push('${RouteNames.jobDetail}/${job.id}'),
+                              child: Text(
+                                canTrack
+                                    ? settings.t('Track')
+                                    : isArtisan
+                                        ? settings.t(isDirect
+                                            ? 'Respond'
+                                            : hasBid
+                                                ? 'Edit bid'
+                                                : 'Bid')
+                                        : job.createdBy == user.id
+                                            ? settings.t('View bids')
+                                            : settings.t('View'),
+                              ),
+                            ),
+                            onTap: () => context
+                                .push('${RouteNames.jobDetail}/${job.id}'),
+                            onLongPress: () => _confirmDeleteOrHideJob(job),
+                          ),
+                        );
+                        final canDismiss =
+                            isArtisan || job.createdBy == user.id;
+                        final item = !canDismiss
+                            ? card
+                            : Dismissible(
+                                key: ValueKey('job_${job.id}'),
+                                direction: DismissDirection.endToStart,
+                                background: Container(
+                                  alignment: Alignment.centerRight,
+                                  padding:
+                                      const EdgeInsets.only(right: 20),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        Theme.of(context).appColors.error,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.delete,
+                                      color: Colors.white),
+                                ),
+                                confirmDismiss: (_) async {
+                                  await _confirmDeleteOrHideJob(job);
+                                  return false;
+                                },
+                                child: card,
+                              );
+                        return SizedBox(width: cardWidth, child: item);
+                      }).toList(growable: false),
+                    );
                   },
-                  child: card,
-                );
-              },
+                ),
+              ],
             ),
           );
         },

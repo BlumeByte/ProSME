@@ -2831,6 +2831,10 @@ function renderHome() {
           <button class="ghost" data-link="/login">Log in</button>
           <a class="ghost button-link" href="https://blumebyte.com/contact/">Contact Blumebyte</a>
         </div>
+        <p class="hero-app-note">
+          <a href="https://play.google.com/store/apps/details?id=com.blumebyte.prosme" target="_blank" rel="noopener noreferrer">Get the ProSME app on Google Play</a>
+          — on a laptop or another device? Create an account right here on the website instead.
+        </p>
       </div>
       <div class="product-panel" aria-label="ProSME service snapshot">
         <div class="product-top">

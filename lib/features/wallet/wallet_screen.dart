@@ -96,7 +96,14 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     }
 
     final isPlatformRole = user.role == UserRole.admin;
-    final total = _items.fold<double>(0, (sum, item) => sum + item.amount);
+    final completedItems =
+        _items.where((item) => item.workStatus == 'completed');
+    final pendingItems =
+        _items.where((item) => item.workStatus != 'completed');
+    final completedTotal =
+        completedItems.fold<double>(0, (sum, item) => sum + item.amount);
+    final pendingTotal =
+        pendingItems.fold<double>(0, (sum, item) => sum + item.amount);
     final currencyCode = settings.currencyCode;
     final reportOwner = user.fullName.trim().isNotEmpty
         ? user.fullName.trim()
@@ -168,18 +175,30 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                   _WalletSummary(
                     title: settings.t(
                       isPlatformRole
-                          ? 'Platform accepted work'
+                          ? 'Total wallet amount'
                           : user.role == UserRole.artisan
-                              ? 'Accepted earnings'
-                              : 'Agreed spending',
+                              ? 'Money received'
+                              : 'Money spent',
                     ),
                     subtitle: settings.t(
                       isPlatformRole
-                          ? 'Money flow across customers and artisans.'
-                          : 'Money flow from accepted work.',
+                          ? 'Paid out once a job is marked complete.'
+                          : user.role == UserRole.artisan
+                              ? 'Credited to your wallet once a customer confirms the job is complete.'
+                              : 'Charged once you confirm a job is complete.',
                     ),
-                    amount: formatMoney(total, currencyCode),
-                    count: _items.length,
+                    amount: formatMoney(completedTotal, currencyCode),
+                    count: completedItems.length,
+                    countLabel: settings.t('completed jobs'),
+                  ),
+                  const SizedBox(height: 8),
+                  _WalletSummary(
+                    title: settings.t('Pending (not yet completed)'),
+                    subtitle: settings.t(
+                      'Agreed on an accepted bid, but the job hasn\'t been marked complete yet.',
+                    ),
+                    amount: formatMoney(pendingTotal, currencyCode),
+                    count: pendingItems.length,
                     countLabel: settings.t('accepted jobs'),
                   ),
                   const SizedBox(height: 12),

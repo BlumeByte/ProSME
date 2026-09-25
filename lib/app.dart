@@ -7,6 +7,7 @@ import 'config/theme.dart';
 import 'app/router.dart';
 import 'services/app_settings_controller.dart';
 import 'services/notification_service.dart';
+import 'services/push_token_service.dart';
 import 'services/service_providers.dart';
 import 'services/theme_mode_controller.dart';
 
@@ -19,7 +20,10 @@ class ProSMEApp extends ConsumerWidget {
     final themeMode = ref.watch(themeModeControllerProvider);
     ref.listen(authStateProvider, (_, next) {
       final user = next.valueOrNull;
-      if (user == null) return;
+      if (user == null) {
+        unawaited(PushTokenService().unregister());
+        return;
+      }
       unawaited(
         ref
             .read(appSettingsControllerProvider.notifier)
@@ -32,6 +36,7 @@ class ProSMEApp extends ConsumerWidget {
               blockedPhoneNotificationTypes: user.blockedPhoneNotificationTypes,
             ),
       );
+      unawaited(PushTokenService().registerForUser(user.id));
     });
     ref.watch(foregroundNotificationListenerProvider);
     return MaterialApp.router(

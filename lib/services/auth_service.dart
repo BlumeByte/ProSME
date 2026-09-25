@@ -61,6 +61,7 @@ abstract class AuthService {
   Future<void> requestSignupEmailOtp(String email);
   Future<AppUser> verifySignupEmailOtp(String email, String code);
   Future<AppUser> signInWithGoogle();
+  Future<AppUser> signInWithMicrosoft();
   Future<void> requestPasswordReset(String email);
   Future<void> requestEmailOtp();
   Future<void> verifyEmailOtp(String code);
@@ -198,6 +199,26 @@ class MockAuthService implements AuthService {
       role: UserRole.customer,
       name: 'Google User',
       fullName: 'Google User',
+      phone: '',
+      email: email,
+      photoUrl: '',
+      verificationStatus: VerificationStatus.pending,
+      createdAt: DateTime.now(),
+    );
+    _accountsByEmail[email] = _currentUser!;
+    _controller.add(_currentUser);
+    return _currentUser!;
+  }
+
+  @override
+  Future<AppUser> signInWithMicrosoft() async {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final email = 'microsoft_user_$now@example.com';
+    _currentUser = AppUser(
+      id: 'mock_microsoft_$now',
+      role: UserRole.customer,
+      name: 'Microsoft User',
+      fullName: 'Microsoft User',
       phone: '',
       email: email,
       photoUrl: '',
@@ -865,6 +886,20 @@ class SupabaseAuthService implements AuthService {
     if (!launched) {
       throw StateError(
         'Google sign-in could not open. Confirm Google sign-in and redirect settings are configured.',
+      );
+    }
+    return _waitForActiveUser();
+  }
+
+  @override
+  Future<AppUser> signInWithMicrosoft() async {
+    final launched = await _supabase.auth.signInWithOAuth(
+      OAuthProvider.azure,
+      redirectTo: kIsWeb ? null : kMicrosoftOAuthRedirectUrl,
+    );
+    if (!launched) {
+      throw StateError(
+        'Microsoft sign-in could not open. Confirm Microsoft sign-in and redirect settings are configured.',
       );
     }
     return _waitForActiveUser();

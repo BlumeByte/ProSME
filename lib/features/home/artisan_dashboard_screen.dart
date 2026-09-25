@@ -50,9 +50,14 @@ class _ArtisanDashboardScreenState
     final status = user?.verificationStatus ?? VerificationStatus.pending;
     final isVerified = status == VerificationStatus.verified;
     final colors = Theme.of(context).appColors;
+    // On a wide (web/desktop) window these Rows would otherwise stretch to
+    // fill the full ~1480px content column and look like a phone UI blown
+    // up — cap the profile/summary block so it reads like a dashboard panel
+    // instead of an oversized mobile card.
+    final isWide = MediaQuery.sizeOf(context).width >= 700;
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    final header = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           settings.t('Artisan'),
@@ -142,6 +147,20 @@ class _ArtisanDashboardScreenState
             ),
           ],
         ),
+      ],
+    );
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        isWide
+            ? Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 900),
+                  child: header,
+                ),
+              )
+            : header,
         const SizedBox(height: 20),
         Row(
           children: [
@@ -194,6 +213,49 @@ class _ArtisanDashboardScreenState
               );
             }
             final preview = openRequests.take(3).toList(growable: false);
+            final jobCards = <Widget>[
+              ...directRequests.take(3).map(
+                    (job) => Card(
+                      child: ListTile(
+                        title: Text(job.title),
+                        subtitle: Text(
+                          '${job.location} - ${settings.t('Offer')}: ${formatMoney(job.budget, currencyCode)}',
+                        ),
+                        trailing: FilledButton(
+                          onPressed: () => context
+                              .push('${RouteNames.jobDetail}/${job.id}'),
+                          child: Text(settings.t('Respond')),
+                        ),
+                        onTap: () => context
+                            .push('${RouteNames.jobDetail}/${job.id}'),
+                      ),
+                    ),
+                  ),
+              ...preview.map(
+                (job) {
+                  final hasBid = bidJobIds.contains(job.id);
+                  final shownAmount = job.acceptedAmount ?? job.budget;
+                  final amountLabel = job.acceptedAmount == null
+                      ? settings.t('Budget')
+                      : settings.t('Accepted amount');
+                  return Card(
+                    child: ListTile(
+                      title: Text(job.title),
+                      subtitle: Text(
+                        '${job.location} - $amountLabel: ${formatMoney(shownAmount, currencyCode)}',
+                      ),
+                      trailing: FilledButton(
+                        onPressed: () =>
+                            context.push('${RouteNames.jobDetail}/${job.id}'),
+                        child: Text(settings.t(hasBid ? 'Edit bid' : 'Bid')),
+                      ),
+                      onTap: () =>
+                          context.push('${RouteNames.jobDetail}/${job.id}'),
+                    ),
+                  );
+                },
+              ),
+            ];
             return Column(
               children: [
                 if (directRequests.isNotEmpty) ...[
@@ -210,46 +272,19 @@ class _ArtisanDashboardScreenState
                       onTap: widget.onOpenJobs,
                     ),
                   ),
-                  ...directRequests.take(3).map(
-                        (job) => Card(
-                          child: ListTile(
-                            title: Text(job.title),
-                            subtitle: Text(
-                              '${job.location} - ${settings.t('Offer')}: ${formatMoney(job.budget, currencyCode)}',
-                            ),
-                            trailing: FilledButton(
-                              onPressed: () => context
-                                  .push('${RouteNames.jobDetail}/${job.id}'),
-                              child: Text(settings.t('Respond')),
-                            ),
-                            onTap: () => context
-                                .push('${RouteNames.jobDetail}/${job.id}'),
-                          ),
-                        ),
-                      ),
                   const SizedBox(height: 8),
                 ],
-                ...preview.map(
-                  (job) {
-                    final hasBid = bidJobIds.contains(job.id);
-                    final shownAmount = job.acceptedAmount ?? job.budget;
-                    final amountLabel = job.acceptedAmount == null
-                        ? settings.t('Budget')
-                        : settings.t('Accepted amount');
-                    return Card(
-                      child: ListTile(
-                        title: Text(job.title),
-                        subtitle: Text(
-                          '${job.location} - $amountLabel: ${formatMoney(shownAmount, currencyCode)}',
-                        ),
-                        trailing: FilledButton(
-                          onPressed: () =>
-                              context.push('${RouteNames.jobDetail}/${job.id}'),
-                          child: Text(settings.t(hasBid ? 'Edit bid' : 'Bid')),
-                        ),
-                        onTap: () =>
-                            context.push('${RouteNames.jobDetail}/${job.id}'),
-                      ),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final cardWidth = constraints.maxWidth < 420
+                        ? constraints.maxWidth
+                        : 420.0;
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: jobCards
+                          .map((card) => SizedBox(width: cardWidth, child: card))
+                          .toList(growable: false),
                     );
                   },
                 ),

@@ -578,18 +578,34 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                 if (featured.isEmpty)
                   Text(settings.t('No professionals found.'))
                 else
-                  ...featured.map((pro) => _ProfessionalCard(
-                        pro: pro,
-                        currencyCode: currencyCode,
-                        settings: settings,
-                        onOpenProfile: () {
-                          widget.onLeaveHomeContent?.call();
-                          context.push(
-                            '${RouteNames.artisanProfile}/${pro.artisanId}',
-                          );
-                        },
-                        onBook: () => _bookProfessional(pro),
-                      )),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final cardWidth = constraints.maxWidth < 360
+                          ? constraints.maxWidth
+                          : 360.0;
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: featured
+                            .map((pro) => SizedBox(
+                                  width: cardWidth,
+                                  child: _ProfessionalCard(
+                                    pro: pro,
+                                    currencyCode: currencyCode,
+                                    settings: settings,
+                                    onOpenProfile: () {
+                                      widget.onLeaveHomeContent?.call();
+                                      context.push(
+                                        '${RouteNames.artisanProfile}/${pro.artisanId}',
+                                      );
+                                    },
+                                    onBook: () => _bookProfessional(pro),
+                                  ),
+                                ))
+                            .toList(growable: false),
+                      );
+                    },
+                  ),
               ],
             ),
           );
@@ -651,8 +667,14 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: categoryCards.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  // 3 across fits a phone; a wide/web window gets more
+                  // columns instead of the same 3 tiles stretched huge.
+                  crossAxisCount:
+                      (MediaQuery.sizeOf(context).width / 170).floor().clamp(
+                            3,
+                            8,
+                          ),
                   mainAxisSpacing: 10,
                   crossAxisSpacing: 10,
                   childAspectRatio: 0.9,
@@ -744,30 +766,45 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             if (listings.isEmpty)
               Text(settings.t('No artisan updates yet.'))
             else
-              ..._sortedArtisanUpdates(
-                listings,
-                _ArtisanUpdateSort.newest,
-              ).take(3).map(
-                    (listing) => Card(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      child: ListTile(
-                        leading: const Icon(Icons.campaign_outlined),
-                        title: Text(listing.title),
-                        subtitle: Text(
-                          '${normalizeServiceCategory(listing.category)} - ${listing.location}',
-                        ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: user == null
-                            ? () => context.go(RouteNames.auth)
-                            : () {
-                                widget.onLeaveHomeContent?.call();
-                                context.push(
-                                  '${RouteNames.listingDetail}/${listing.id}',
-                                );
-                              },
-                      ),
-                    ),
-                  ),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final cardWidth = constraints.maxWidth < 420
+                      ? constraints.maxWidth
+                      : 420.0;
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: _sortedArtisanUpdates(
+                      listings,
+                      _ArtisanUpdateSort.newest,
+                    ).take(3).map(
+                      (listing) {
+                        return SizedBox(
+                          width: cardWidth,
+                          child: Card(
+                            child: ListTile(
+                              leading: const Icon(Icons.campaign_outlined),
+                              title: Text(listing.title),
+                              subtitle: Text(
+                                '${normalizeServiceCategory(listing.category)} - ${listing.location}',
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: user == null
+                                  ? () => context.go(RouteNames.auth)
+                                  : () {
+                                      widget.onLeaveHomeContent?.call();
+                                      context.push(
+                                        '${RouteNames.listingDetail}/${listing.id}',
+                                      );
+                                    },
+                            ),
+                          ),
+                        );
+                      },
+                    ).toList(growable: false),
+                  );
+                },
+              ),
             const SizedBox(height: 20),
             Row(
               children: [
@@ -799,20 +836,37 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             if (featured.isEmpty)
               Text(settings.t('No professionals found for this search.'))
             else
-              ...featured.take(5).map(
-                    (pro) => _ProfessionalCard(
-                      pro: pro,
-                      currencyCode: currencyCode,
-                      settings: settings,
-                      onOpenProfile: () {
-                        widget.onLeaveHomeContent?.call();
-                        context.push(
-                          '${RouteNames.artisanProfile}/${pro.artisanId}',
-                        );
-                      },
-                      onBook: () => _bookProfessional(pro),
-                    ),
-                  ),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final cardWidth = constraints.maxWidth < 360
+                      ? constraints.maxWidth
+                      : 360.0;
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: featured
+                        .take(5)
+                        .map(
+                          (pro) => SizedBox(
+                            width: cardWidth,
+                            child: _ProfessionalCard(
+                              pro: pro,
+                              currencyCode: currencyCode,
+                              settings: settings,
+                              onOpenProfile: () {
+                                widget.onLeaveHomeContent?.call();
+                                context.push(
+                                  '${RouteNames.artisanProfile}/${pro.artisanId}',
+                                );
+                              },
+                              onBook: () => _bookProfessional(pro),
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                  );
+                },
+              ),
             const SizedBox(height: 20),
           ],
         );
@@ -1020,7 +1074,11 @@ class _SearchControls extends StatelessWidget {
     final regions = selectedCountry?.regions ?? const <RegionOption>[];
     final cities = selectedRegion?.cities ?? const <CityOption>[];
     final towns = selectedCity?.towns ?? const <String>[];
-    return Column(
+    // On a wide (web/desktop) window these fields would otherwise stretch
+    // full-width and look like a phone UI blown up — cap and center the
+    // search card instead, like a real search bar rather than a mobile form.
+    final isWide = MediaQuery.sizeOf(context).width >= 700;
+    final column = Column(
       children: [
         TextField(
           controller: serviceController,
@@ -1164,6 +1222,13 @@ class _SearchControls extends StatelessWidget {
           ),
         ),
       ],
+    );
+    if (!isWide) return column;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: column,
+      ),
     );
   }
 }
@@ -1409,29 +1474,39 @@ class _OpenJobsPreview extends ConsumerWidget {
         if (filtered.isEmpty) {
           return Text(settings.t('No service requests posted yet.'));
         }
-        return Column(
-          children: filtered.take(8).map((job) {
-            final shownAmount = job.acceptedAmount ?? job.budget;
-            final amountLabel = job.acceptedAmount == null
-                ? settings.t('Budget')
-                : settings.t('Accepted amount');
-            return Card(
-              margin: const EdgeInsets.only(bottom: 10),
-              child: ListTile(
-                title: Text(job.title),
-                subtitle: Text(
-                  '${job.location} - $amountLabel: ${formatMoney(shownAmount, currencyCode)}',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: userId == null
-                    ? () => context.go(RouteNames.auth)
-                    : () {
-                        onLeaveHomeContent?.call();
-                        context.push('${RouteNames.jobDetail}/${job.id}');
-                      },
-              ),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final cardWidth =
+                constraints.maxWidth < 420 ? constraints.maxWidth : 420.0;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: filtered.take(8).map((job) {
+                final shownAmount = job.acceptedAmount ?? job.budget;
+                final amountLabel = job.acceptedAmount == null
+                    ? settings.t('Budget')
+                    : settings.t('Accepted amount');
+                return SizedBox(
+                  width: cardWidth,
+                  child: Card(
+                    child: ListTile(
+                      title: Text(job.title),
+                      subtitle: Text(
+                        '${job.location} - $amountLabel: ${formatMoney(shownAmount, currencyCode)}',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: userId == null
+                          ? () => context.go(RouteNames.auth)
+                          : () {
+                              onLeaveHomeContent?.call();
+                              context.push('${RouteNames.jobDetail}/${job.id}');
+                            },
+                    ),
+                  ),
+                );
+              }).toList(growable: false),
             );
-          }).toList(growable: false),
+          },
         );
       },
     );

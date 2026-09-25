@@ -162,6 +162,48 @@ const sendSignupEmail = async ({
   }
 };
 
+const queueWelcomeEmail = async ({
+  adminClient,
+  userId,
+  email,
+  fullName,
+  role,
+}: {
+  adminClient: ReturnType<typeof createClient>;
+  userId: string;
+  email: string;
+  fullName: string;
+  role: string;
+}) => {
+  const steps =
+    role === "artisan"
+      ? [
+          "1. Add your service categories and location on your Profile so customers can find you.",
+          "2. Upload your ID for verification — verified artisans get more bookings.",
+          "3. Browse open job requests near you and place bids.",
+          "4. Once a customer accepts your bid, chat and track the job right in the app.",
+          "5. Get paid to your wallet the moment a job is marked complete.",
+        ]
+      : [
+          "1. Post a job or browse verified artisans by category.",
+          "2. Compare bids and chat with artisans before you hire.",
+          "3. Track job progress and message the artisan from one screen.",
+          "4. Confirm when the work is complete to release payment and leave a rating.",
+          "5. Need help? The Support tab has answers and a way to reach us.",
+        ];
+  const body =
+    `Welcome to ProSME, ${fullName || "there"}!\n\n` +
+    `Here's how to get started:\n${steps.join("\n")}\n\n` +
+    `Turn on notifications in Settings so you never miss a bid, message, or job update.`;
+
+  await adminClient.from("email_outbox").insert({
+    to_email: email,
+    subject: "Welcome to ProSME — quick start guide",
+    body,
+    related_user_id: userId,
+  });
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -305,6 +347,7 @@ Deno.serve(async (req) => {
     }
 
     await sendSignupEmail({ to: email, fullName, actionLink, emailOtp });
+    await queueWelcomeEmail({ adminClient, userId: user.id, email, fullName, role });
 
     let smsWarning = "";
     if (phone) smsWarning = await sendPhoneVerification(phone);
