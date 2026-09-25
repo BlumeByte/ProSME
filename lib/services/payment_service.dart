@@ -133,18 +133,23 @@ class PaymentService {
     final amountUsd = baseUsd * (1 + taxRate);
     final amountGhs = amountUsd * kUsdToGhsEstimate;
     final period = interval == 'yearly' ? 'year' : 'month';
-    final taxLabel =
-        taxRate > 0 ? ' incl. ${(taxRate * 100).toStringAsFixed(1)}% tax' : '';
+    final taxLabel = taxRate > 0 ? ' + external charges' : '';
     return '${formatMoney(amountGhs, currencyCode)} / $period$taxLabel';
   }
 }
 
+/// Standard national VAT/GST rate applied to digital services for each
+/// supported country, used as a reasonable default for the "external
+/// charges" added on top of the base price. This is the headline statutory
+/// rate, not a full compliance engine — local levies some countries stack
+/// on top of VAT (e.g. Ghana's NHIL/GETFund on standard domestic supplies)
+/// are not modeled here.
 double verificationTaxRateForCountry(String country) {
   final normalized = country.trim().toLowerCase();
   switch (normalized) {
     case 'ghana':
     case 'gh':
-      return 0.20;
+      return 0.15;
     case 'kenya':
     case 'ke':
       return 0.16;

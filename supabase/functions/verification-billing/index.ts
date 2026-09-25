@@ -44,7 +44,7 @@ const taxRateForCountry = (country: string) => {
     Number(Deno.env.get(`VERIFICATION_TAX_RATE_${normalized.toUpperCase()}`)) ||
     Number(Deno.env.get('VERIFICATION_TAX_RATE') || '0');
   if (override > 0) return override;
-  if (['ghana', 'gh'].includes(normalized)) return 0.2;
+  if (['ghana', 'gh'].includes(normalized)) return 0.15;
   if (['kenya', 'ke'].includes(normalized)) return 0.16;
   if (['nigeria', 'ng'].includes(normalized)) return 0.075;
   if (['south africa', 'za'].includes(normalized)) return 0.15;

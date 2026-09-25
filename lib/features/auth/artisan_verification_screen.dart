@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as img;
 
 import '../../config/constants.dart';
-import '../../core/utils/currency.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
@@ -626,17 +625,12 @@ class _FeeNotice extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(appSettingsControllerProvider);
-    final monthlyUsd = role == UserRole.artisan
-        ? kVerificationArtisanMonthlyUsd
-        : kVerificationCustomerMonthlyUsd;
-    final taxRate = verificationTaxRateForCountry(country);
-    final amountLabel = formatMoney(
-      monthlyUsd * (1 + taxRate) * kUsdToGhsEstimate,
-      currencyCode,
+    final amountLabel = const PaymentService(null).verificationPriceLabel(
+      role: role.name,
+      interval: 'monthly',
+      currencyCode: currencyCode,
+      country: country,
     );
-    final taxLabel = taxRate > 0
-        ? ' ${settings.t('including tax')} ${(taxRate * 100).toStringAsFixed(1)}%'
-        : '';
     final roleLabel =
         role == UserRole.artisan ? settings.t('artisan') : settings.t('user');
     return Card(
@@ -658,7 +652,7 @@ class _FeeNotice extends ConsumerWidget {
             const SizedBox(height: 8),
             Text(
               settings.t(
-                'Before uploading documents, please note that verification costs $amountLabel$taxLabel for this $roleLabel account. After upload you will continue to Paystack, and Support will review your documents only after payment succeeds.',
+                'Before uploading documents, please note that verification costs $amountLabel for this $roleLabel account. After upload you will continue to Paystack, and Support will review your documents only after payment succeeds.',
               ),
               textAlign: TextAlign.center,
             ),
