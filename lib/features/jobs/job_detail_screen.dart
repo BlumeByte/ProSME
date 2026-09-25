@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -284,12 +285,16 @@ class _JobSummary extends StatelessWidget {
               const SizedBox(height: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  job.images.first,
+                child: CachedNetworkImage(
+                  imageUrl: job.images.first,
                   height: 180,
                   width: double.infinity,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  placeholder: (_, __) => const SizedBox(
+                    height: 180,
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (_, __, ___) => const SizedBox.shrink(),
                 ),
               ),
             ],
@@ -1741,7 +1746,7 @@ class _BidTile extends ConsumerWidget {
                   radius: 22,
                   foregroundImage:
                       (bid.artisanAvatarUrl?.trim().isNotEmpty ?? false)
-                          ? NetworkImage(bid.artisanAvatarUrl!)
+                          ? CachedNetworkImageProvider(bid.artisanAvatarUrl!)
                           : null,
                   onForegroundImageError:
                       (bid.artisanAvatarUrl?.trim().isNotEmpty ?? false)

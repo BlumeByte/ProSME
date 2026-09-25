@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -979,12 +980,12 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                                 ? const Icon(Icons.campaign_outlined)
                                 : ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
-                                    child: Image.network(
-                                      listing.images.first,
+                                    child: CachedNetworkImage(
+                                      imageUrl: listing.images.first,
                                       width: 52,
                                       height: 52,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => const Icon(
+                                      errorWidget: (_, __, ___) => const Icon(
                                         Icons.campaign_outlined,
                                       ),
                                     ),
@@ -1549,7 +1550,7 @@ class _ProfessionalCard extends StatelessWidget {
                   CircleAvatar(
                     radius: 24,
                     foregroundImage: (pro.avatarUrl?.isNotEmpty ?? false)
-                        ? NetworkImage(pro.avatarUrl!)
+                        ? CachedNetworkImageProvider(pro.avatarUrl!)
                         : null,
                     onForegroundImageError: (pro.avatarUrl?.isNotEmpty ?? false)
                         ? (_, __) {}

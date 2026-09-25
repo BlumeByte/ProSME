@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -589,7 +590,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               CircleAvatar(
                 radius: 40,
                 foregroundImage:
-                    avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                    avatarUrl.isNotEmpty
+                        ? CachedNetworkImageProvider(avatarUrl)
+                        : null,
                 onForegroundImageError:
                     avatarUrl.isNotEmpty ? (_, __) {} : null,
                 child: const Icon(Icons.person, size: 40),

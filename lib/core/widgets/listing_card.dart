@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../../config/app_colors.dart';
 import '../utils/currency.dart';
@@ -41,12 +42,12 @@ class ListingCard extends StatelessWidget {
                         color: colors.textMuted,
                       ),
                     )
-                  : Image.network(
-                      imageUrl,
+                  : CachedNetworkImage(
+                      imageUrl: imageUrl,
                       width: 96,
                       height: 96,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                      errorWidget: (_, __, ___) => Container(
                         width: 96,
                         height: 96,
                         color: colors.surfaceAlt,

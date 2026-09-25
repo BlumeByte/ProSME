@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -97,7 +98,8 @@ class ListingDetailScreen extends ConsumerWidget {
                         foregroundImage:
                             listingData.artisanPhotoUrl?.trim().isNotEmpty ==
                                     true
-                                ? NetworkImage(listingData.artisanPhotoUrl!)
+                                ? CachedNetworkImageProvider(
+                                    listingData.artisanPhotoUrl!)
                                 : null,
                         onForegroundImageError:
                             listingData.artisanPhotoUrl?.trim().isNotEmpty ==
@@ -430,11 +432,11 @@ class _ListingImageCarouselState extends State<_ListingImageCarousel> {
             onPageChanged: (index) => setState(() => _index = index),
             itemBuilder: (context, index) => ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child: Image.network(
-                widget.images[index],
+              child: CachedNetworkImage(
+                imageUrl: widget.images[index],
                 fit: BoxFit.cover,
                 width: double.infinity,
-                errorBuilder: (_, __, ___) => Container(
+                errorWidget: (_, __, ___) => Container(
                   color: colors.surfaceAlt,
                   alignment: Alignment.center,
                   child: Icon(

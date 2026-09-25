@@ -330,6 +330,110 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
+  /// Two-factor gate: the caller has already validated the password (or
+  /// completed an OAuth sign-in) and holds a live Supabase session at this
+  /// point, so a code sent/verified here reuses the same authenticated
+  /// account-verification edge function as the profile's "verify email"
+  /// action. Returns false (and the caller signs the session back out) if
+  /// the user cancels or never enters a correct code.
+  Future<bool> _showTwoFactorDialog(AuthService authService) async {
+    final settings = ref.read(appSettingsControllerProvider);
+    try {
+      await authService.requestEmailOtp();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${settings.t('Could not send code')}: $error'),
+          ),
+        );
+      }
+      return false;
+    }
+    if (!mounted) return false;
+
+    final codeController = TextEditingController();
+    var busy = false;
+    String? errorText;
+    final verified = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(settings.t('Two-factor verification')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                settings.t(
+                  'Enter the 6-digit code we emailed you to finish signing in.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: codeController,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: settings.t('6-digit code'),
+                  errorText: errorText,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed:
+                  busy ? null : () => Navigator.of(context).pop(false),
+              child: Text(settings.t('Cancel')),
+            ),
+            TextButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      setDialogState(() {
+                        busy = true;
+                        errorText = null;
+                      });
+                      try {
+                        await authService.requestEmailOtp();
+                      } catch (_) {
+                      } finally {
+                        setDialogState(() => busy = false);
+                      }
+                    },
+              child: Text(settings.t(busy ? 'Sending...' : 'Resend code')),
+            ),
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      final code = codeController.text.trim();
+                      setDialogState(() {
+                        busy = true;
+                        errorText = null;
+                      });
+                      try {
+                        await authService.verifyEmailOtp(code);
+                        if (context.mounted) Navigator.of(context).pop(true);
+                      } catch (error) {
+                        setDialogState(() {
+                          busy = false;
+                          errorText = settings.t('Invalid or expired code.');
+                        });
+                      }
+                    },
+              child: Text(settings.t('Verify')),
+            ),
+          ],
+        ),
+      ),
+    );
+    codeController.dispose();
+    return verified ?? false;
+  }
+
   String? _validateEmailPassword() {
     if (_email.isEmpty || _password.isEmpty) {
       return 'Please enter email and password.';
@@ -390,6 +494,13 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       // were accepted, so a stale session doesn't linger into the next
       // screen and interfere with editing if the user signs out and back in.
       TextInput.finishAutofillContext();
+      if (user.twoFactorEnabled && authService != null) {
+        final verified = await _showTwoFactorDialog(authService);
+        if (!verified) {
+          await authService.signOut();
+          return;
+        }
+      }
       if (mounted) {
         if (forceRoleSelection) {
           context.go(RouteNames.role);
@@ -710,6 +821,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                         }
                         _signIn(
                           () => authService.signInWithEmail(_email, _password),
+                          authService: authService,
                         );
                       },
               ),
@@ -724,6 +836,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       : () => _signIn(
                             authService.signInWithGoogle,
                             forceRoleSelection: true,
+                            authService: authService,
                           ),
                 ),
                 const SizedBox(height: 12),
@@ -736,6 +849,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       : () => _signIn(
                             authService.signInWithMicrosoft,
                             forceRoleSelection: true,
+                            authService: authService,
                           ),
                 ),
               ],

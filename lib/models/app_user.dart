@@ -24,6 +24,7 @@ class AppUser {
     this.appLanguage = 'English',
     this.currencyCode = 'GHS',
     this.verificationStatus = VerificationStatus.pending,
+    this.twoFactorEnabled = false,
     required this.createdAt,
   });
 
@@ -49,6 +50,7 @@ class AppUser {
   final String appLanguage;
   final String currencyCode;
   final VerificationStatus verificationStatus;
+  final bool twoFactorEnabled;
   final DateTime createdAt;
 
   AppUser copyWith({
@@ -73,6 +75,7 @@ class AppUser {
     String? appLanguage,
     String? currencyCode,
     VerificationStatus? verificationStatus,
+    bool? twoFactorEnabled,
   }) {
     return AppUser(
       id: id,
@@ -99,6 +102,7 @@ class AppUser {
       appLanguage: appLanguage ?? this.appLanguage,
       currencyCode: currencyCode ?? this.currencyCode,
       verificationStatus: verificationStatus ?? this.verificationStatus,
+      twoFactorEnabled: twoFactorEnabled ?? this.twoFactorEnabled,
       createdAt: createdAt,
     );
   }
@@ -139,6 +143,7 @@ class AppUser {
         (status) => status.name == json['verificationStatus'],
         orElse: () => VerificationStatus.pending,
       ),
+      twoFactorEnabled: (json['twoFactorEnabled'] as bool?) ?? false,
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
   }
@@ -169,6 +174,7 @@ class AppUser {
       'appLanguage': appLanguage,
       'currencyCode': currencyCode,
       'verificationStatus': verificationStatus.name,
+      'twoFactorEnabled': twoFactorEnabled,
       'createdAt': createdAt.toIso8601String(),
     };
   }

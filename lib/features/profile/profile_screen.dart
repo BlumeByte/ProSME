@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'dart:convert';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -647,75 +648,112 @@ Future<void> _showSecuritySheet(
 ) async {
   final settings =
       ProviderScope.containerOf(context).read(appSettingsControllerProvider);
+  var twoFactorEnabled = user.twoFactorEnabled;
+  var twoFactorBusy = false;
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
-    builder: (context) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    settings.t('Security'),
-                    style: Theme.of(context).textTheme.titleLarge,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setSheetState) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      settings.t('Security'),
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                   ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              ListTile(
+                leading: const Icon(Icons.password_outlined),
+                title: Text(settings.t('Change password')),
+                subtitle: Text(settings.t('Updates your password directly.')),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showChangePasswordDialog(context, authService);
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  user.emailVerified
+                      ? Icons.mark_email_read_outlined
+                      : Icons.mark_email_unread_outlined,
                 ),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close),
+                title: Text(settings.t('Email verification')),
+                subtitle: Text(
+                  user.emailVerified
+                      ? settings.t('Your email is verified.')
+                      : '${settings.t('Send a 6-digit code to')} ${user.email}.',
                 ),
-              ],
-            ),
-            ListTile(
-              leading: const Icon(Icons.password_outlined),
-              title: Text(settings.t('Change password')),
-              subtitle: Text(settings.t('Updates your password directly.')),
-              onTap: () {
-                Navigator.of(context).pop();
-                _showChangePasswordDialog(context, authService);
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                user.emailVerified
-                    ? Icons.mark_email_read_outlined
-                    : Icons.mark_email_unread_outlined,
+                trailing:
+                    user.emailVerified ? Text(settings.t('Verified')) : null,
+                onTap: user.emailVerified
+                    ? null
+                    : () {
+                        Navigator.of(context).pop();
+                        _showVerificationCodeDialog(
+                          context,
+                          title: 'Verify email',
+                          requestCode: authService.requestEmailOtp,
+                          verifyCode: authService.verifyEmailOtp,
+                        );
+                      },
               ),
-              title: Text(settings.t('Email verification')),
-              subtitle: Text(
-                user.emailVerified
-                    ? settings.t('Your email is verified.')
-                    : '${settings.t('Send a 6-digit code to')} ${user.email}.',
+              SwitchListTile(
+                secondary: const Icon(Icons.shield_outlined),
+                title: Text(settings.t('Two-factor authentication')),
+                subtitle: Text(
+                  user.emailVerified
+                      ? settings.t(
+                          'Require a code emailed to you every time you sign in.',
+                        )
+                      : settings.t('Verify your email above to turn this on.'),
+                ),
+                value: twoFactorEnabled,
+                onChanged: (!user.emailVerified || twoFactorBusy)
+                    ? null
+                    : (value) async {
+                        setSheetState(() => twoFactorBusy = true);
+                        try {
+                          await authService.setTwoFactorEnabled(value);
+                          setSheetState(() => twoFactorEnabled = value);
+                        } catch (error) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '${settings.t('Could not update two-factor authentication')}: $error',
+                                ),
+                              ),
+                            );
+                          }
+                        } finally {
+                          setSheetState(() => twoFactorBusy = false);
+                        }
+                      },
               ),
-              trailing:
-                  user.emailVerified ? Text(settings.t('Verified')) : null,
-              onTap: user.emailVerified
-                  ? null
-                  : () {
-                      Navigator.of(context).pop();
-                      _showVerificationCodeDialog(
-                        context,
-                        title: 'Verify email',
-                        requestCode: authService.requestEmailOtp,
-                        verifyCode: authService.verifyEmailOtp,
-                      );
-                    },
-            ),
-            ListTile(
-              leading: const Icon(Icons.phone_android_outlined),
-              title: Text(settings.t('Phone number')),
-              subtitle: Text(
-                user.phone.isEmpty
-                    ? settings.t('Add a phone number in account settings.')
-                    : user.phone,
+              ListTile(
+                leading: const Icon(Icons.phone_android_outlined),
+                title: Text(settings.t('Phone number')),
+                subtitle: Text(
+                  user.phone.isEmpty
+                      ? settings.t('Add a phone number in account settings.')
+                      : user.phone,
+                ),
+                onTap: null,
               ),
-              onTap: null,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     ),
@@ -1956,7 +1994,7 @@ class _ProfilePhotoHeader extends ConsumerWidget {
       if (commaIndex == -1) return null;
       return MemoryImage(base64Decode(value.substring(commaIndex + 1)));
     }
-    return NetworkImage(value);
+    return CachedNetworkImageProvider(value);
   }
 }
 

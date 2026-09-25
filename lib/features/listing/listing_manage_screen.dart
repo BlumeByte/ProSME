@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as image_lib;
@@ -101,12 +102,12 @@ class ListingManageScreen extends ConsumerWidget {
                                     child: Icon(Icons.storefront))
                                 : ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
-                                    child: Image.network(
-                                      listing.images.first,
+                                    child: CachedNetworkImage(
+                                      imageUrl: listing.images.first,
                                       width: 56,
                                       height: 56,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
+                                      errorWidget: (_, __, ___) =>
                                           const CircleAvatar(
                                         child: Icon(Icons.storefront),
                                       ),
@@ -335,8 +336,8 @@ Future<void> _openListingSheet(
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                existingImages[index],
+                              child: CachedNetworkImage(
+                                imageUrl: existingImages[index],
                                 width: 120,
                                 height: 68,
                                 fit: BoxFit.cover,

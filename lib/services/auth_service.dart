@@ -84,6 +84,7 @@ abstract class AuthService {
   Future<void> updateAvailability({required bool isBusy});
   Future<void> updateEmail(String email);
   Future<void> deleteAccount({String? reason});
+  Future<void> setTwoFactorEnabled(bool enabled);
 }
 
 class PendingEmailVerificationException implements Exception {
@@ -321,6 +322,17 @@ class MockAuthService implements AuthService {
       throw StateError('Full name cannot be empty.');
     }
     _currentUser = user.copyWith(fullName: normalized);
+    _accountsByEmail[user.email.toLowerCase()] = _currentUser!;
+    _controller.add(_currentUser);
+  }
+
+  @override
+  Future<void> setTwoFactorEnabled(bool enabled) async {
+    final user = _currentUser;
+    if (user == null) {
+      throw StateError('No signed-in user.');
+    }
+    _currentUser = user.copyWith(twoFactorEnabled: enabled);
     _accountsByEmail[user.email.toLowerCase()] = _currentUser!;
     _controller.add(_currentUser);
   }
@@ -658,6 +670,9 @@ class SupabaseAuthService implements AuthService {
                 .toString(),
         orElse: () => VerificationStatus.pending,
       ),
+      twoFactorEnabled:
+          source['two_factor_enabled'] == true ||
+              source['twoFactorEnabled'] == true,
       createdAt: DateTime.tryParse(
             (source['created_at'] ?? user.createdAt).toString(),
           ) ??
@@ -1078,6 +1093,20 @@ class SupabaseAuthService implements AuthService {
     if (_resolvedCurrentUser != null) {
       _resolvedCurrentUser =
           _resolvedCurrentUser!.copyWith(fullName: normalized);
+      _emitProfileUpdate();
+    }
+  }
+
+  @override
+  Future<void> setTwoFactorEnabled(bool enabled) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      throw StateError('No signed-in user.');
+    }
+    await _updateProfile(user.id, {'two_factor_enabled': enabled});
+    if (_resolvedCurrentUser != null) {
+      _resolvedCurrentUser =
+          _resolvedCurrentUser!.copyWith(twoFactorEnabled: enabled);
       _emitProfileUpdate();
     }
   }
