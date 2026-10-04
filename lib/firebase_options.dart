@@ -1,18 +1,12 @@
-// Placeholder Firebase configuration.
+// Firebase configuration for the `prosme-app` Firebase project, generated
+// from android/app/google-services.json (Android only — no web/iOS Firebase
+// app has been created yet).
 //
-// Push notifications stay silently disabled until this file is replaced with
-// real values. To enable them:
-//   1. Create a Firebase project (or reuse an existing one) at
-//      https://console.firebase.google.com
-//   2. Run `flutterfire configure` from the repo root and select that project.
-//      This OVERWRITES this file with your project's real options and adds
-//      android/app/google-services.json + ios/Runner/GoogleService-Info.plist.
-//   3. In Supabase, deploy the `send-push-outbox` edge function and set the
-//      FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY
-//      secrets from a service account key (Firebase console -> Project
-//      settings -> Service accounts -> Generate new private key).
-//
-// See README.md "Push notifications (Firebase)" for the full walkthrough.
+// The corresponding server-side secrets (FIREBASE_PROJECT_ID /
+// FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY) must be set on the
+// `send-push-outbox` Supabase edge function from a service account key
+// (Firebase console -> Project settings -> Service accounts -> Generate new
+// private key) for outgoing pushes to actually send.
 
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
@@ -31,12 +25,18 @@ class DefaultFirebaseOptions {
     }
   }
 
-  /// True once `flutterfire configure` has filled in real values.
+  /// True once real values (not the placeholder) are in place.
   static bool get isConfigured => (currentPlatform?.apiKey ?? '').isNotEmpty;
 
   static const FirebaseOptions? web = null;
 
-  static const FirebaseOptions? android = null;
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyDCV7lS6qEN-CNef2mCcM6itgEa7ReEURY',
+    appId: '1:850287627823:android:d5856cdde71a268cc400da',
+    messagingSenderId: '850287627823',
+    projectId: 'prosme-app',
+    storageBucket: 'prosme-app.firebasestorage.app',
+  );
 
   static const FirebaseOptions? ios = null;
 }

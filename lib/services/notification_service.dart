@@ -25,13 +25,32 @@ class NotificationService {
   Future<void> initialize({bool requestPermission = false}) async {
     if (!_initialized) {
       const androidSettings = AndroidInitializationSettings(
-        '@mipmap/ic_launcher',
+        'ic_stat_notification',
       );
       const settings = InitializationSettings(
         android: androidSettings,
         iOS: DarwinInitializationSettings(),
       );
       await _plugin.initialize(settings);
+      // Android only honours a channel ID once the channel exists. Creating
+      // it here (rather than relying on the lazy creation showSimpleNotification
+      // triggers) means a push arriving via FCM — which references this same
+      // channel ID by name — still lands correctly even if it's the very
+      // first notification this install ever receives.
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(
+            const AndroidNotificationChannel(
+              'prosme_priority_v2',
+              'ProSME Priority Updates',
+              description:
+                  'Important ProSME alerts for bids, hiring, work updates, and account security.',
+              importance: Importance.max,
+              playSound: true,
+              enableVibration: true,
+            ),
+          );
       _initialized = true;
     }
     if (requestPermission) await requestPermissions();

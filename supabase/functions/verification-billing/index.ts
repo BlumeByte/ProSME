@@ -58,9 +58,14 @@ const amountUsdFor = (role: string, interval: string, country = '') => {
   return Number((base * (1 + taxRateForCountry(country))).toFixed(2));
 };
 
-const periodEnd = (interval: string) => {
+// Extends from the existing period end when it's still in the future (an
+// already-verified user paying again early keeps the time they already paid
+// for) and from now otherwise (first payment, or paying after expiry).
+const periodEnd = (interval: string, previousEnd?: string) => {
   const now = new Date();
-  const next = new Date(now);
+  const previous = previousEnd ? new Date(previousEnd) : null;
+  const base = previous && previous.getTime() > now.getTime() ? previous : now;
+  const next = new Date(base);
   if (interval === 'yearly') {
     next.setUTCFullYear(next.getUTCFullYear() + 1);
   } else {
@@ -303,7 +308,10 @@ const activateSubscription = async ({
   }
 
   const now = new Date().toISOString();
-  const end = periodEnd(clean(subscription.plan_interval));
+  const end = periodEnd(
+    clean(subscription.plan_interval),
+    clean(subscription.current_period_end),
+  );
   const subscriptionId = clean(subscription.id);
   const userId = clean(subscription.user_id);
   const authorizationPatch = reusableAuthorizationPatch(paymentData);
@@ -642,7 +650,7 @@ const reconcilePendingPayments = async ({
           );
         await adminClient
           .from('verification_subscriptions')
-          .update({ status: 'payment_failed', updated_at: now })
+          .update({ status: 'expired', updated_at: now })
           .eq('id', subscriptionId);
         abandoned.push(subscriptionId);
         continue;

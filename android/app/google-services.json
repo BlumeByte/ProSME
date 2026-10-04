@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "850287627823",
+    "project_id": "prosme-app",
+    "storage_bucket": "prosme-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:850287627823:android:d5856cdde71a268cc400da",
+        "android_client_info": {
+          "package_name": "com.blumebyte.prosme"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCV7lS6qEN-CNef2mCcM6itgEa7ReEURY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

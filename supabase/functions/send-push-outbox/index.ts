@@ -96,6 +96,14 @@ const getFcmAccessToken = async (clientEmail: string, privateKeyPem: string) => 
 
 type FcmError = Error & { code?: string };
 
+// Must match the Android notification channel the app creates in
+// lib/services/notification_service.dart (NotificationService.showSimpleNotification)
+// so background/terminated pushes land in the same "ProSME Priority Updates"
+// channel as foreground ones, instead of Android's generic default channel.
+const ANDROID_NOTIFICATION_CHANNEL_ID = 'prosme_priority_v2';
+// Small monochrome status-bar icon; see android/app/src/main/res/drawable*/ic_stat_notification.png.
+const ANDROID_NOTIFICATION_ICON = 'ic_stat_notification';
+
 const sendFcm = async ({
   projectId,
   accessToken,
@@ -125,7 +133,13 @@ const sendFcm = async ({
           token: fcmToken,
           notification: { title, body },
           data: stringData,
-          android: { priority: 'high' },
+          android: {
+            priority: 'high',
+            notification: {
+              channel_id: ANDROID_NOTIFICATION_CHANNEL_ID,
+              icon: ANDROID_NOTIFICATION_ICON,
+            },
+          },
           apns: { headers: { 'apns-priority': '10' }, payload: { aps: { sound: 'default' } } },
         },
       }),

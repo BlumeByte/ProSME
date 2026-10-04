@@ -313,6 +313,7 @@ Future<void> _showVerificationBillingSheet(
 ) async {
   final settings = ref.read(appSettingsControllerProvider);
   var busy = false;
+  var changingPlan = subscription?.isActive != true;
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -427,91 +428,149 @@ Future<void> _showVerificationBillingSheet(
                             'Your badge activates after Paystack confirms payment.',
                           ),
                   ),
-                  if (paymentMethod.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      '${settings.t('Saved payment method')}: $paymentMethod',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    Text(
-                      subscription?.autoRenew == true
-                          ? settings.t('Auto-renew on')
-                          : settings.t('Auto-renew off'),
-                      style: Theme.of(context).textTheme.bodySmall,
+                  if (active && !changingPlan) ...[
+                    const SizedBox(height: 12),
+                    Card(
+                      margin: EdgeInsets.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              subscription!.planInterval == 'yearly'
+                                  ? settings.t('Yearly plan')
+                                  : settings.t('Monthly plan'),
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            Text(paymentService.verificationPriceLabel(
+                              role: role,
+                              interval: interval,
+                              currencyCode: settings.currencyCode,
+                              country: user.country,
+                            )),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${settings.t('Next payment')}: ${_dateLabel(subscription.currentPeriodEnd)}',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            if (paymentMethod.isNotEmpty)
+                              Text(
+                                '${settings.t('Saved payment method')}: $paymentMethod',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            Text(
+                              subscription.autoRenew == true
+                                  ? settings.t('Auto-renew on')
+                                  : settings.t('Auto-renew off'),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                onPressed: busy
+                                    ? null
+                                    : () => setSheetState(
+                                        () => changingPlan = true),
+                                icon: const Icon(Icons.swap_horiz),
+                                label: Text(settings
+                                    .t('Change plan or payment method')),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  Text(
-                    settings.t('Recommended · pay by card'),
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                  ),
-                  Text(
-                    settings.t(
-                      'Card payments save automatically for renewal, so your badge never lapses.',
+                  if (changingPlan) ...[
+                    if (paymentMethod.isNotEmpty && !active) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        '${settings.t('Saved payment method')}: $paymentMethod',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      Text(
+                        subscription?.autoRenew == true
+                            ? settings.t('Auto-renew on')
+                            : settings.t('Auto-renew off'),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Text(
+                      settings.t('Recommended · pay by card'),
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                     ),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 4),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.credit_card_outlined),
-                    title: Text(settings.t('Monthly')),
-                    subtitle: Text(paymentService.verificationPriceLabel(
-                      role: role,
-                      interval: 'monthly',
-                      currencyCode: settings.currencyCode,
-                      country: user.country,
-                    )),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: busy
-                        ? null
-                        : () => startPayment('monthly', channel: 'card'),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.credit_card_outlined),
-                    title: Text(settings.t('Yearly')),
-                    subtitle: Text(paymentService.verificationPriceLabel(
-                      role: role,
-                      interval: 'yearly',
-                      currencyCode: settings.currencyCode,
-                      country: user.country,
-                    )),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: busy
-                        ? null
-                        : () => startPayment('yearly', channel: 'card'),
-                  ),
-                  const Divider(),
-                  Text(
-                    settings.t('Other payment methods'),
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.phone_android_outlined),
-                    title: Text(settings.t('Pay with mobile money')),
-                    subtitle: Text(settings.t(
-                      'Mobile money may need manual renewal if Paystack does not return a reusable method.',
-                    )),
-                    onTap: busy
-                        ? null
-                        : () => startPayment(interval, channel: 'mobile_money'),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.account_balance_outlined),
-                    title: Text(settings.t('Pay by bank transfer')),
-                    subtitle: Text(settings.t(
-                      'Bank transfer payments are tracked after Paystack confirms them.',
-                    )),
-                    onTap: busy
-                        ? null
-                        : () =>
-                            startPayment(interval, channel: 'bank_transfer'),
-                  ),
+                    Text(
+                      settings.t(
+                        'Card payments save automatically for renewal, so your badge never lapses.',
+                      ),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 4),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.credit_card_outlined),
+                      title: Text(settings.t('Monthly')),
+                      subtitle: Text(paymentService.verificationPriceLabel(
+                        role: role,
+                        interval: 'monthly',
+                        currencyCode: settings.currencyCode,
+                        country: user.country,
+                      )),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: busy
+                          ? null
+                          : () => startPayment('monthly', channel: 'card'),
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.credit_card_outlined),
+                      title: Text(settings.t('Yearly')),
+                      subtitle: Text(paymentService.verificationPriceLabel(
+                        role: role,
+                        interval: 'yearly',
+                        currencyCode: settings.currencyCode,
+                        country: user.country,
+                      )),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: busy
+                          ? null
+                          : () => startPayment('yearly', channel: 'card'),
+                    ),
+                    const Divider(),
+                    Text(
+                      settings.t('Other payment methods'),
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.phone_android_outlined),
+                      title: Text(settings.t('Pay with mobile money')),
+                      subtitle: Text(settings.t(
+                        'Mobile money may need manual renewal if Paystack does not return a reusable method.',
+                      )),
+                      onTap: busy
+                          ? null
+                          : () =>
+                              startPayment(interval, channel: 'mobile_money'),
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.account_balance_outlined),
+                      title: Text(settings.t('Pay by bank transfer')),
+                      subtitle: Text(settings.t(
+                        'Bank transfer payments are tracked after Paystack confirms them.',
+                      )),
+                      onTap: busy
+                          ? null
+                          : () =>
+                              startPayment(interval, channel: 'bank_transfer'),
+                    ),
+                  ],
                   if (pendingReference.trim().isNotEmpty) ...[
                     const Divider(),
                     ListTile(
