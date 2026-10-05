@@ -23,6 +23,55 @@ const requiredEnv = (key: string) => {
 
 const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
+const clientIp = (req: Request) =>
+  (
+    req.headers.get("cf-connecting-ip") ||
+    req.headers.get("x-forwarded-for") ||
+    "unknown"
+  )
+    .split(",")[0]
+    .trim() || "unknown";
+
+// Fixed-window counter in the database (public.rate_limit_hit). Anonymous
+// callers can otherwise trigger unlimited confirmation e-mails and Twilio
+// SMS (cost abuse / harassment of third parties). Fails open on DB errors so
+// a transient outage does not block legitimate sign-ups.
+const allowRequest = async (
+  adminClient: ReturnType<typeof createClient>,
+  bucket: string,
+  max: number,
+  windowSeconds: number,
+) => {
+  const { data, error } = await adminClient.rpc("rate_limit_hit", {
+    p_bucket: bucket,
+    p_max: max,
+    p_window_seconds: windowSeconds,
+  });
+  if (error) {
+    console.error("rate limit check failed", error.message);
+    return true;
+  }
+  return data === true;
+};
+
+const DEFAULT_REDIRECT = "https://prosme.blumebyte.com/login";
+const allowedRedirects = new Set([
+  DEFAULT_REDIRECT,
+  "https://prosme.blumebyte.com/reset-password",
+  "https://prosme.vercel.app/login",
+  "https://pro-sme.vercel.app/login",
+  "com.blumebyte.prosme://login-callback",
+  "com.prosme.app://login-callback",
+  ...env("SIGNUP_ALLOWED_REDIRECTS")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean),
+]);
+// Only ever link back to our own domains/app scheme (no attacker-chosen
+// redirect targets inside a legitimate-looking confirmation e-mail).
+const safeRedirect = (value: string) =>
+  allowedRedirects.has(value) ? value : DEFAULT_REDIRECT;
+
 const isAdultDate = (value: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [year, month, day] = value.split("-").map(Number);
@@ -228,8 +277,7 @@ Deno.serve(async (req) => {
     const appLanguage = clean(body.app_language) || "English";
     const currencyCode = clean(body.currency_code) || "GHS";
     const phone = phoneForTwilio(clean(body.phone));
-    const redirectTo =
-      clean(body.redirectTo) || "https://prosme.blumebyte.com/login";
+    const redirectTo = safeRedirect(clean(body.redirectTo));
 
     if (!validEmail(email)) {
       return json(200, { ok: false, error: "Enter a valid email address." });
@@ -241,7 +289,35 @@ Deno.serve(async (req) => {
       { auth: { persistSession: false, autoRefreshToken: false } },
     );
 
+    const ip = clientIp(req);
+    if (
+      !(await allowRequest(
+        adminClient,
+        `signup-ip:${ip}`,
+        action === "resend" ? 20 : 10,
+        3600,
+      )) ||
+      !(await allowRequest(adminClient, `signup-email:${email}`, 5, 3600))
+    ) {
+      return json(200, {
+        ok: false,
+        error: "Too many attempts. Please try again later.",
+      });
+    }
+
     if (action === "resend") {
+      // generateLink({ type: "magiclink" }) silently CREATES an auth user for
+      // an unknown e-mail, which would let anyone mint accounts that skip the
+      // age/role checks above. Only act on an account that already signed up
+      // here, and answer identically either way so addresses cannot be probed.
+      const { data: existing } = await adminClient
+        .from("profiles")
+        .select("id")
+        .ilike("email", email.replace(/[\\%_]/g, "\\$&"))
+        .limit(1)
+        .maybeSingle();
+      if (!existing) return json(200, { ok: true, emailSent: true });
+
       const { data, error } = await adminClient.auth.admin.generateLink({
         type: "magiclink",
         email,
@@ -350,7 +426,16 @@ Deno.serve(async (req) => {
     await queueWelcomeEmail({ adminClient, userId: user.id, email, fullName, role });
 
     let smsWarning = "";
-    if (phone) smsWarning = await sendPhoneVerification(phone);
+    if (phone) {
+      // One SMS per number per day from sign-up; also capped per client IP so
+      // a single attacker cannot fan out SMS to many numbers (SMS pumping).
+      const smsAllowed =
+        (await allowRequest(adminClient, `signup-phone:${phone}`, 2, 86400)) &&
+        (await allowRequest(adminClient, `signup-sms-ip:${ip}`, 5, 3600));
+      smsWarning = smsAllowed
+        ? await sendPhoneVerification(phone)
+        : "Too many SMS requests. Try again later from Settings.";
+    }
 
     return json(200, {
       ok: true,
@@ -360,12 +445,10 @@ Deno.serve(async (req) => {
       warning: smsWarning || undefined,
     });
   } catch (error) {
+    console.error("public-signup failed", error);
     return json(200, {
       ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Account could not be created.",
+      error: "Account could not be created. Please try again.",
     });
   }
 });

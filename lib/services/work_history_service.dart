@@ -68,7 +68,7 @@ class WorkHistoryService {
     if (artisanIds.isNotEmpty) {
       final rows = await _client
           .from('profiles')
-          .select('id,username,full_name,email')
+          .select('id,username,full_name')
           .inFilter('id', artisanIds.toList());
       for (final row in rows) {
         final value = Map<String, dynamic>.from(row as Map);
@@ -142,7 +142,5 @@ String _profileName(Map<String, dynamic> row) {
   final fullName = (row['full_name'] ?? '').toString().trim();
   if (fullName.isNotEmpty) return fullName;
   final username = (row['username'] ?? '').toString().trim();
-  if (username.isNotEmpty) return username;
-  final email = (row['email'] ?? '').toString().trim();
-  return email.isEmpty ? 'Artisan' : email;
+  return username.isEmpty ? 'Artisan' : username;
 }

@@ -15,6 +15,36 @@ const json = (status: number, body: Record<string, unknown>) =>
 
 const clean = (value: unknown) => String(value ?? '').trim();
 const lower = (value: unknown) => clean(value).toLowerCase();
+const timingSafeEqual = (a: string, b: string) => {
+  const encoder = new TextEncoder();
+  const x = encoder.encode(a);
+  const y = encoder.encode(b);
+  if (x.length !== y.length) return false;
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+};
+
+// Paystack sends the customer back to this URL after paying. It must never be
+// attacker-chosen (phishing / token leak via redirect), so only our own
+// https origins are honoured; anything else falls back to the configured one.
+const allowedCallbackHosts = new Set([
+  'prosme.blumebyte.com',
+  'prosme.vercel.app',
+  'pro-sme.vercel.app',
+]);
+const safeCallbackUrl = (requested: string) => {
+  const fallback = clean(Deno.env.get('PAYSTACK_CALLBACK_URL'));
+  try {
+    const url = new URL(requested);
+    if (url.protocol === 'https:' && allowedCallbackHosts.has(url.hostname)) {
+      return requested;
+    }
+  } catch (_) {
+    // not a URL: ignore
+  }
+  return fallback;
+};
 const requiredEnv = (key: string) => {
   const value = clean(Deno.env.get(key));
   if (!value) throw new Error(`${key} is not configured`);
@@ -403,7 +433,8 @@ const isDispatchSecret = (req: Request) => {
     clean(Deno.env.get('EMAIL_DISPATCH_SECRET')) ||
     clean(Deno.env.get('BILLING_DISPATCH_SECRET'));
   return Boolean(
-    expected && req.headers.get('x-email-dispatch-secret') === expected,
+    expected &&
+      timingSafeEqual(req.headers.get('x-email-dispatch-secret') || '', expected),
   );
 };
 
@@ -798,7 +829,7 @@ Deno.serve(async (req) => {
     const signature = req.headers.get('x-paystack-signature');
     if (signature) {
       const expected = await paystackSignature(paystackSecret, rawBody);
-      if (expected !== signature)
+      if (!timingSafeEqual(expected, signature))
         return json(401, { ok: false, error: 'Invalid webhook signature.' });
       const event = JSON.parse(rawBody);
       if (event?.event !== 'charge.success')
@@ -963,9 +994,7 @@ Deno.serve(async (req) => {
     const chargeCurrency = chargeCurrencyFor(profile);
     const amount = await chargeAmount(amountUsd, chargeCurrency);
     const reference = `prosme_ver_${user.id.replaceAll('-', '').slice(0, 12)}_${Date.now()}`;
-    const callbackUrl = clean(
-      body.callbackUrl || Deno.env.get('PAYSTACK_CALLBACK_URL'),
-    );
+    const callbackUrl = safeCallbackUrl(clean(body.callbackUrl));
 
     const transactionPayload: Record<string, unknown> = {
       email: clean(profile.email || user.email),

@@ -62,10 +62,9 @@ class SupabaseListingService implements ListingService {
 
   static String _profileDisplayName(dynamic profile) {
     final row = Map<String, dynamic>.from(profile as Map);
-    for (final key in ['full_name', 'username', 'email']) {
+    for (final key in ['full_name', 'username']) {
       final value = (row[key] ?? '').toString().trim();
       if (value.isEmpty) continue;
-      if (key == 'email') return value.split('@').first;
       return value;
     }
     return '';
@@ -92,7 +91,7 @@ class SupabaseListingService implements ListingService {
         final List<dynamic> profiles = await _supabase
             .from('profiles')
             .select(
-                'id,username,full_name,email,avatar_url,verification_status,is_busy')
+                'id,username,full_name,avatar_url,verification_status,is_busy')
             .inFilter('id', artisanIds);
         final List<dynamic> ratings = await _supabase
             .from('job_ratings')

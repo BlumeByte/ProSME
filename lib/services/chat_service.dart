@@ -326,7 +326,7 @@ class SupabaseChatService implements ChatService {
     try {
       final rows = await _supabase
           .from('profiles')
-          .select('id,username,full_name,email,avatar_url')
+          .select('id,username,full_name,avatar_url')
           .inFilter('id', profileIds.toList());
       final profiles = <String, Map<String, dynamic>>{};
       for (final row in rows) {
@@ -339,10 +339,7 @@ class SupabaseChatService implements ChatService {
         final fullName = (profile?['username'] ?? profile?['full_name'] ?? '')
             .toString()
             .trim();
-        if (fullName.isNotEmpty) return fullName;
-        final email = (profile?['email'] ?? '').toString().trim();
-        if (email.isEmpty) return null;
-        return email.split('@').first;
+        return fullName.isEmpty ? null : fullName;
       }
 
       String? photoFor(String id) {

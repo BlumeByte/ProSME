@@ -95,6 +95,23 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    // Per-source cap: the per-address throttle below does not stop one caller
+    // from sending reset e-mails to many different victims. Answer "ok" when
+    // limited so the limit itself cannot be used to probe for accounts.
+    const ip =
+      (req.headers.get('cf-connecting-ip') ||
+        req.headers.get('x-forwarded-for') ||
+        'unknown')
+        .split(',')[0]
+        .trim() || 'unknown';
+    const { data: ipAllowed, error: ipLimitError } = await admin.rpc('rate_limit_hit', {
+      p_bucket: `recovery-ip:${ip}`,
+      p_max: 10,
+      p_window_seconds: 3600,
+    });
+    if (ipLimitError) console.error('rate limit check failed', ipLimitError.message);
+    else if (ipAllowed === false) return json({ ok: true });
+
     const emailHash = await sha256(email);
     await admin
       .from('password_recovery_attempts')

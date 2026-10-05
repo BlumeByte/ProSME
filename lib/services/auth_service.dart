@@ -478,15 +478,13 @@ class SupabaseAuthService implements AuthService {
 
   Future<Map<String, dynamic>?> _fetchProfile(String userId) async {
     try {
-      final response = await _supabase
-          .from('profiles')
-          .select(
-            'id,username,full_name,phone,email,avatar_url,role,verification_status,country,country_code,description,gender,date_of_birth,is_busy,email_verified,phone_verified,email_notifications,phone_notifications,blocked_email_notification_types,blocked_phone_notification_types,app_language,currency_code,username_updated_at,created_at,updated_at',
-          )
-          .eq('id', userId)
-          .maybeSingle();
+      // Contact details (phone, e-mail, date of birth, ...) are not readable
+      // from the profiles table by clients any more; the caller's own full
+      // row comes from this RPC. Only the signed-in user's profile is ever
+      // loaded here.
+      final response = await _supabase.rpc('get_my_profile');
       if (response == null) return null;
-      return Map<String, dynamic>.from(response);
+      return Map<String, dynamic>.from(response as Map);
     } catch (error) {
       if (_isMissingProfilesTable(error)) return null;
       rethrow;
@@ -733,21 +731,35 @@ class SupabaseAuthService implements AuthService {
   @override
   Stream<AppUser?> authStateChanges() async* {
     final controller = StreamController<AppUser?>();
-    Future<void> emitInitial() async {
-      final currentUser = _supabase.auth.currentUser;
-      controller
-          .add(currentUser == null ? null : await _resolveUser(currentUser));
+
+    // A valid session is signed in even if the profile lookup is slow or
+    // fails: report it from the session metadata straight away, then enrich it
+    // with the profile. Waiting on the database here made signed-in users look
+    // signed out whenever the server was slow.
+    void emitSession(User user) {
+      controller.add(_mapUser(user));
+      unawaited(
+        _resolveUser(user).then((resolved) {
+          if (!controller.isClosed) controller.add(resolved);
+        }),
+      );
     }
 
-    unawaited(emitInitial());
-    final authSub = _supabase.auth.onAuthStateChange.listen((authState) async {
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser != null) {
+      emitSession(currentUser);
+    } else {
+      controller.add(null);
+    }
+
+    final authSub = _supabase.auth.onAuthStateChange.listen((authState) {
       final user = authState.session?.user ?? _supabase.auth.currentUser;
       if (user == null) {
         _resolvedCurrentUser = null;
         controller.add(null);
         return;
       }
-      controller.add(await _resolveUser(user));
+      emitSession(user);
     });
     final profileSub = _profileController.stream.listen(controller.add);
     controller.onCancel = () async {

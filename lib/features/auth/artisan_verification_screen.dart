@@ -62,14 +62,9 @@ class _ArtisanVerificationScreenState
       return;
     }
     try {
-      final row = await ref
-          .read(supabaseClientProvider)
-          .from('profiles')
-          .select(
-            'phone,national_id_front_url,national_id_back_url,business_certificate_urls,verification_notes,verification_retry_after',
-          )
-          .eq('id', user.id)
-          .maybeSingle();
+      final raw =
+          await ref.read(supabaseClientProvider).rpc('get_my_profile');
+      final row = raw == null ? null : Map<String, dynamic>.from(raw as Map);
       if (!mounted) return;
       setState(() {
         final phone = (row?['phone'] ?? '').toString();

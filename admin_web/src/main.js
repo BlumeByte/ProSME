@@ -474,13 +474,11 @@ async function loadDashboard() {
   state.error = '';
 
   const userId = state.session.user.id;
-  let { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select(
-      'id,full_name,email,role,verification_status,verification_expires_at,tenant_id,created_at',
-    )
-    .eq('id', userId)
-    .maybeSingle();
+  // Contact details are no longer readable from the profiles table, so the
+  // signed-in user's own full row comes from this RPC.
+  let { data: profile, error: profileError } = await supabase.rpc(
+    'get_my_profile',
+  );
 
   if (profileError) {
     await supabase.auth.signOut({ scope: 'local' });
@@ -542,22 +540,18 @@ async function createProfileForSessionUser() {
     normalize(user.email).split('@')[0] ||
     'ProSME user';
   const email = normalize(user.email);
-  const { data, error } = await supabase
-    .from('profiles')
-    .upsert(
-      {
-        id: user.id,
-        email,
-        full_name: fullName,
-        role,
-        verification_status: 'pending',
-      },
-      { onConflict: 'id' },
-    )
-    .select(
-      'id,full_name,email,role,verification_status,verification_expires_at,tenant_id,created_at',
-    )
-    .single();
+  const { error: upsertError } = await supabase.from('profiles').upsert(
+    {
+      id: user.id,
+      email,
+      full_name: fullName,
+      role,
+      verification_status: 'pending',
+    },
+    { onConflict: 'id' },
+  );
+  if (upsertError) return { profile: null, error: upsertError };
+  const { data, error } = await supabase.rpc('get_my_profile');
   return { profile: data, error };
 }
 
@@ -652,13 +646,9 @@ async function refreshData() {
   ] = await Promise.all([
     safeSelect(
       'profiles',
-      supabase
-        .from('profiles')
-        .select(
-          'id,full_name,email,phone,role,verification_status,verification_expires_at,tenant_id,country,location,categories,description,bio,rating_summary,national_id_front_url,national_id_back_url,business_certificate_urls,verification_notes,verification_submitted_at,verification_reviewed_at,created_at',
-        )
-        .order('created_at', { ascending: false })
-        .limit(500),
+      // Admin-only RPC (checks the caller is an admin); includes contact
+      // details and verification documents, newest first.
+      supabase.rpc('admin_list_profiles').limit(500),
     ),
     safeSelect(
       'listings',
@@ -1949,12 +1939,35 @@ function documentLinks(profile) {
   ].filter(([, url]) => Boolean(url));
 
   if (!links.length) return '<span class="muted">No documents</span>';
+  // The bucket is private: a stored public URL no longer works, so each link
+  // carries the object path and a short-lived signed URL is created on click.
   return links
     .map(
       ([label, url]) =>
-        `<a class="ghost small" href="${esc(url)}" target="_blank" rel="noreferrer">${esc(label)}</a>`,
+        `<button type="button" class="ghost small" data-doc-path="${esc(verificationDocPath(url))}">${esc(label)}</button>`,
     )
     .join('');
+}
+
+// Stored values are full public URLs ("…/object/public/artisan-verification/<uid>/<file>").
+function verificationDocPath(url) {
+  const value = String(url || '');
+  const marker = 'artisan-verification/';
+  const index = value.indexOf(marker);
+  const path = index === -1 ? value : value.slice(index + marker.length);
+  return path.split('?')[0];
+}
+
+async function openVerificationDocument(path) {
+  if (!path) return;
+  const { data, error } = await supabase.storage
+    .from('artisan-verification')
+    .createSignedUrl(path, 120);
+  if (error || !data?.signedUrl) {
+    window.alert(`Could not open the document: ${error?.message || 'unknown error'}`);
+    return;
+  }
+  window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
 }
 
 function renderActivityList(items) {
@@ -3565,6 +3578,12 @@ function bindEvents() {
   document.querySelectorAll('[data-verify]').forEach((button) => {
     button.addEventListener('click', () =>
       setVerification(button.dataset.id, button.dataset.verify),
+    );
+  });
+
+  document.querySelectorAll('[data-doc-path]').forEach((button) => {
+    button.addEventListener('click', () =>
+      openVerificationDocument(button.dataset.docPath),
     );
   });
 

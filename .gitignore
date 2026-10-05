@@ -124,3 +124,10 @@ app.*.symbols
 .flutter
 .flutter_tool_state
 .pub-cache/
+
+# Server credentials that must never be committed
+*service-account*.json
+*firebase-adminsdk*.json
+*serviceAccount*.json
+supabase/.temp/
+supabase/.env*

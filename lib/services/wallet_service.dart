@@ -160,7 +160,7 @@ class WalletService {
     if (profileIds.isNotEmpty) {
       final rows = await _client
           .from('profiles')
-          .select('id,username,full_name,email')
+          .select('id,username,full_name')
           .inFilter('id', profileIds);
       for (final row in rows) {
         final value = Map<String, dynamic>.from(row as Map);
@@ -182,15 +182,11 @@ class WalletService {
         customerName: item.customerName.isNotEmpty
             ? item.customerName
             : _profileName(customer, 'Customer'),
-        customerEmail: item.customerEmail.isNotEmpty
-            ? item.customerEmail
-            : (customer?['email'] ?? '').toString(),
+        customerEmail: item.customerEmail,
         artisanName: item.artisanName.isNotEmpty
             ? item.artisanName
             : _profileName(artisan, 'Artisan'),
-        artisanEmail: item.artisanEmail.isNotEmpty
-            ? item.artisanEmail
-            : (artisan?['email'] ?? '').toString(),
+        artisanEmail: item.artisanEmail,
       );
     }).toList(growable: false);
   }
@@ -200,9 +196,7 @@ String _profileName(Map<String, dynamic>? profile, String fallback) {
   final fullName = (profile?['full_name'] ?? '').toString().trim();
   if (fullName.isNotEmpty) return fullName;
   final username = (profile?['username'] ?? '').toString().trim();
-  if (username.isNotEmpty) return username;
-  final email = (profile?['email'] ?? '').toString().trim();
-  return email.isEmpty ? fallback : email;
+  return username.isEmpty ? fallback : username;
 }
 
 String _shortId(String value) {

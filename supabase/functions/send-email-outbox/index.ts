@@ -78,6 +78,16 @@ const humanizeBody = (body: string) => {
   }
 };
 
+const timingSafeEqual = (a: string, b: string) => {
+  const encoder = new TextEncoder();
+  const x = encoder.encode(a);
+  const y = encoder.encode(b);
+  if (x.length !== y.length) return false;
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+};
+
 const authorize = async (
   req: Request,
   supabaseUrl: string,
@@ -86,7 +96,10 @@ const authorize = async (
   const dispatchSecret = Deno.env.get('EMAIL_DISPATCH_SECRET');
   if (
     dispatchSecret &&
-    req.headers.get('x-email-dispatch-secret') === dispatchSecret
+    timingSafeEqual(
+      req.headers.get('x-email-dispatch-secret') || '',
+      dispatchSecret,
+    )
   ) {
     return { userId: null, canDispatchAll: true };
   }

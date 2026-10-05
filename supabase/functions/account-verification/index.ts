@@ -22,6 +22,45 @@ const requiredEnv = (key: string) => {
   return value;
 };
 
+const timingSafeEqual = (a: string, b: string) => {
+  const encoder = new TextEncoder();
+  const x = encoder.encode(a);
+  const y = encoder.encode(b);
+  if (x.length !== y.length) return false;
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+};
+
+const clientIp = (req: Request) =>
+  (
+    req.headers.get('cf-connecting-ip') ||
+    req.headers.get('x-forwarded-for') ||
+    'unknown'
+  )
+    .split(',')[0]
+    .trim() || 'unknown';
+
+// Fixed-window counter (public.rate_limit_hit). Fails open on a database error
+// so a transient outage does not lock everyone out of verification.
+const allowRequest = async (
+  adminClient: ReturnType<typeof createClient>,
+  bucket: string,
+  max: number,
+  windowSeconds: number,
+) => {
+  const { data, error } = await adminClient.rpc('rate_limit_hit', {
+    p_bucket: bucket,
+    p_max: max,
+    p_window_seconds: windowSeconds,
+  });
+  if (error) {
+    console.error('rate limit check failed', error.message);
+    return true;
+  }
+  return data === true;
+};
+
 const randomCode = () => {
   const bytes = new Uint8Array(4);
   crypto.getRandomValues(bytes);
@@ -163,6 +202,19 @@ Deno.serve(async (req) => {
     if (action === 'requestEmailCode' || action === 'requestPhoneCode') {
       const destination = channel === 'email' ? clean(profile.email || user.email).toLowerCase() : phoneForTwilio(clean(profile.phone || user.phone));
       if (!destination) return json(200, { ok: false, error: channel === 'email' ? 'No email address is saved.' : 'No phone number is saved.' });
+      // The destination is whatever the user typed into their own profile, so
+      // without limits this would send SMS/e-mail to arbitrary third parties
+      // (harassment, SMS pumping). Cap per user, per destination and per IP.
+      const ip = clientIp(req);
+      if (
+        !(await allowRequest(adminClient, `verify-req-user:${user.id}`, 6, 3600)) ||
+        !(await allowRequest(adminClient, `verify-req-dest:${channel}:${destination}`, 3, 3600)) ||
+        !(await allowRequest(adminClient, `verify-req-ip:${ip}`, 20, 3600)) ||
+        (channel === 'phone' &&
+          !(await allowRequest(adminClient, `verify-sms-dest:${destination}`, 5, 86400)))
+      ) {
+        return json(200, { ok: false, error: 'Too many requests. Please try again later.' });
+      }
       if (channel === 'phone') {
         if (!/^\+[1-9]\d{7,14}$/.test(destination)) {
           return json(200, { ok: false, error: 'Enter the phone number with country code, for example +233256122555.' });
@@ -198,6 +250,9 @@ Deno.serve(async (req) => {
     if (action === 'verifyEmailCode' || action === 'verifyPhoneCode') {
       const code = clean(body.code).replace(/\s+/g, '');
       if (!/^\d{6}$/.test(code)) return json(200, { ok: false, error: 'Enter the 6-digit code.' });
+      if (!(await allowRequest(adminClient, `verify-check-user:${user.id}`, 20, 3600))) {
+        return json(200, { ok: false, error: 'Too many attempts. Please try again later.' });
+      }
       if (channel === 'phone') {
         const destination = phoneForTwilio(clean(profile.phone || user.phone));
         if (!/^\+[1-9]\d{7,14}$/.test(destination)) {
@@ -214,29 +269,45 @@ Deno.serve(async (req) => {
       }
 
       const codeHash = await hashCode(user.id, channel, code);
-      const { data: existing, error: findError } = await adminClient
+      // Always load the newest unused code (not "the one matching this guess"):
+      // a wrong guess must count against it, otherwise the 5-attempt cap never
+      // triggers and the 6-digit code can be brute-forced inside its window.
+      const { data: latest, error: findError } = await adminClient
         .from('profile_verification_codes')
-        .select('id,attempt_count,expires_at')
+        .select('id,code_hash,destination,attempt_count,expires_at')
         .eq('user_id', user.id)
         .eq('channel', channel)
-        .eq('code_hash', codeHash)
         .is('consumed_at', null)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
       if (findError) throw new Error(findError.message);
-      if (!existing) return json(200, { ok: false, error: 'Invalid verification code.' });
-      if (new Date(clean(existing.expires_at)).getTime() < Date.now()) {
+      if (!latest) return json(200, { ok: false, error: 'Invalid verification code.' });
+      if (new Date(clean(latest.expires_at)).getTime() < Date.now()) {
         return json(200, { ok: false, error: 'Verification code expired.' });
       }
-      if ((existing.attempt_count ?? 0) >= 5) {
+      const attempts = latest.attempt_count ?? 0;
+      if (attempts >= 5) {
         return json(200, { ok: false, error: 'Too many attempts. Request a new code.' });
+      }
+      // The code proves ownership of the address it was SENT to, which must
+      // still be the address on the profile (it can be edited in between).
+      const currentEmail = clean(profile.email || user.email).toLowerCase();
+      if (
+        !timingSafeEqual(clean(latest.code_hash), codeHash) ||
+        clean(latest.destination).toLowerCase() !== currentEmail
+      ) {
+        await adminClient
+          .from('profile_verification_codes')
+          .update({ attempt_count: attempts + 1 })
+          .eq('id', latest.id);
+        return json(200, { ok: false, error: 'Invalid verification code.' });
       }
 
       await adminClient
         .from('profile_verification_codes')
-        .update({ consumed_at: new Date().toISOString(), attempt_count: (existing.attempt_count ?? 0) + 1 })
-        .eq('id', existing.id);
+        .update({ consumed_at: new Date().toISOString(), attempt_count: attempts + 1 })
+        .eq('id', latest.id);
       const { error: updateError } = await adminClient
         .from('profiles')
         .update(channel === 'email' ? { email_verified: true } : { phone_verified: true })

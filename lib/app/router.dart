@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
+import '../config/supabase_options.dart';
 import '../features/admin/admin_dashboard_screen.dart';
 import '../features/auth/artisan_verification_screen.dart';
 import '../features/auth/auth_screen.dart';
@@ -55,10 +56,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     errorBuilder: (context, state) => RouterErrorScreen(error: state.error),
     redirect: (context, state) {
       final authState = authAsync.valueOrNull;
-      final isLoggedIn = authState != null;
       final fullPath = state.fullPath ?? state.matchedLocation;
       final isOnboarding = fullPath == RouteNames.onboarding;
       final isRecovering = ref.read(passwordRecoveryActiveProvider);
+      final hasStoredSession = shouldUseSupabase() &&
+          supabaseClient.auth.currentSession != null;
+      final isLoggedIn = authState != null ||
+          (authAsync.isLoading && hasStoredSession);
 
       if (isRecovering && fullPath == RouteNames.home) {
         ref.read(passwordRecoveryActiveProvider.notifier).state = false;
@@ -73,9 +77,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return RouteNames.resetPassword;
       }
 
-      // While a persisted session is being restored, avoid redirecting an
-      // existing user to auth/onboarding prematurely.
-      if (authAsync.isLoading) return null;
+      // While a persisted session is restored, keep the screen the user is
+      // on. Signed-out visitors still cannot reach protected screens, and a
+      // returning visitor never sees the welcome screen again.
+      if (authAsync.isLoading && !hasStoredSession) {
+        if (isOnboarding && AppLaunchService.hasSeenWelcome) {
+          return RouteNames.home;
+        }
+        if (_requiresAuth(fullPath)) return RouteNames.auth;
+        return null;
+      }
+      if (authAsync.isLoading && hasStoredSession) {
+        if (isOnboarding) return RouteNames.home;
+        return null;
+      }
 
       if (!isLoggedIn && !AppLaunchService.hasSeenWelcome && !isOnboarding) {
         return RouteNames.onboarding;
@@ -97,9 +112,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return _homeForRole(authState);
       }
 
-      if (isLoggedIn &&
-          authState.role == UserRole.artisan &&
-          fullPath == RouteNames.home) {
+      if (authState?.role == UserRole.artisan && fullPath == RouteNames.home) {
         return RouteNames.artisanHome;
       }
 

@@ -200,9 +200,7 @@ class AdminService {
   Future<List<ArtisanProfile>> fetchVerificationQueue() async {
     if (_supabase == null) return const [];
     try {
-      final rows = await _supabase.from('profiles').select(
-            'id,phone,role,verification_status,national_id_url,national_id_front_url,national_id_back_url,momo_number,location,categories,bio,rating_summary',
-          );
+      final rows = await _supabase.rpc('admin_list_profiles');
       return (rows as List<dynamic>)
           .map((row) => Map<String, dynamic>.from(row as Map))
           .map((row) => ArtisanProfile(
@@ -257,12 +255,7 @@ class AdminService {
 
   Future<List<PlatformAccount>> fetchAccounts() async {
     if (_supabase == null) return const [];
-    final rows = await _supabase
-        .from('profiles')
-        .select(
-          'id,username,full_name,email,phone,avatar_url,country,country_code,description,gender,date_of_birth,is_busy,email_verified,phone_verified,email_notifications,phone_notifications,blocked_email_notification_types,blocked_phone_notification_types,app_language,currency_code,role,verification_status,tenant_id,created_at',
-        )
-        .order('created_at', ascending: false);
+    final rows = await _supabase.rpc('admin_list_profiles');
     return (rows as List<dynamic>)
         .map((row) => _accountFromRow(Map<String, dynamic>.from(row as Map)))
         .toList(growable: false);
