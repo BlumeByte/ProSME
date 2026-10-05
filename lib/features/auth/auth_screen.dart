@@ -825,37 +825,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                         );
                       },
               ),
-              if (!_isCreateAccountMode) ...[
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _SocialSignInIcon(
-                      tooltip: settings.t('Google Sign in'),
-                      onPressed: _isLoading
-                          ? null
-                          : () => _signIn(
-                                authService.signInWithGoogle,
-                                forceRoleSelection: true,
-                                authService: authService,
-                              ),
-                      child: const _GoogleMark(),
-                    ),
-                    const SizedBox(width: 20),
-                    _SocialSignInIcon(
-                      tooltip: settings.t('Microsoft Sign in'),
-                      onPressed: _isLoading
-                          ? null
-                          : () => _signIn(
-                                authService.signInWithMicrosoft,
-                                forceRoleSelection: true,
-                                authService: authService,
-                              ),
-                      child: const _MicrosoftMark(),
-                    ),
-                  ],
-                ),
-              ],
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => context.go(RouteNames.home),
@@ -868,101 +837,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _SocialSignInIcon extends StatelessWidget {
-  const _SocialSignInIcon({
-    required this.tooltip,
-    required this.onPressed,
-    required this.child,
-  });
-
-  final String tooltip;
-  final VoidCallback? onPressed;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Semantics(
-        button: true,
-        label: tooltip,
-        child: Material(
-          color: Colors.white,
-          shape: const CircleBorder(side: BorderSide(color: Color(0xFFDADCE0))),
-          elevation: onPressed == null ? 0 : 1,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onPressed,
-            child: SizedBox(
-              width: 56,
-              height: 56,
-              child: Center(child: child),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GoogleMark extends StatelessWidget {
-  const _GoogleMark();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Text(
-      'G',
-      style: TextStyle(
-        fontSize: 26,
-        fontWeight: FontWeight.w700,
-        color: Color(0xFF4285F4),
-        height: 1,
-      ),
-    );
-  }
-}
-
-class _MicrosoftMark extends StatelessWidget {
-  const _MicrosoftMark();
-
-  @override
-  Widget build(BuildContext context) {
-    const size = 9.0;
-    const gap = 2.0;
-    Widget square(Color color) => Container(
-          width: size,
-          height: size,
-          color: color,
-        );
-    return SizedBox(
-      width: size * 2 + gap,
-      height: size * 2 + gap,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              square(const Color(0xFFF25022)),
-              const SizedBox(width: gap),
-              square(const Color(0xFF7FBA00)),
-            ],
-          ),
-          const SizedBox(height: gap),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              square(const Color(0xFF00A4EF)),
-              const SizedBox(width: gap),
-              square(const Color(0xFFFFB900)),
-            ],
-          ),
-        ],
       ),
     );
   }
