@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.2';
+import { sendMail } from '../_shared/mailer.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -87,30 +88,13 @@ const escapeHtml = (value: string) =>
     .replaceAll("'", '&#39;');
 
 const sendEmail = async (to: string, code: string) => {
-  const apiKey = requiredEnv('RESEND_API_KEY');
-  const from =
-    env('RESEND_FROM_EMAIL') ||
-    env('PROSME_FROM_EMAIL') ||
-    'ProSME <noreply@prosme.blumebyte.com>';
   const body = `Your ProSME verification code is ${code}. It expires in 10 minutes.`;
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to: [to],
-      subject: 'Your ProSME verification code',
-      text: body,
-      html: `<p>${escapeHtml(body)}</p>`,
-    }),
+  await sendMail({
+    to,
+    subject: 'Your ProSME verification code',
+    text: body,
+    html: `<p>${escapeHtml(body)}</p>`,
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(clean(payload?.message) || clean(payload?.error) || 'Email could not be sent.');
-  }
 };
 
 const phoneForTwilio = (phone: string) => {

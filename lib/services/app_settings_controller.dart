@@ -25,6 +25,9 @@ const kNotificationTypeOptions = [
   'payment',
   'verification',
   'account',
+  'new_user',
+  'broadcast',
+  'app_update',
   'support',
   'system',
 ];

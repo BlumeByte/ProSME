@@ -118,6 +118,7 @@ class RealtimeListingService implements ListingService {
     Map<String, String> artisanNames = {};
     Map<String, String> artisanAvatars = {};
     Map<String, bool> artisanBusy = {};
+    Map<String, String> artisanDescriptions = {};
     Map<String, bool> artisanVerified = {};
     Map<String, double> ratingAverages = {};
     Map<String, int> ratingCounts = {};
@@ -128,7 +129,7 @@ class RealtimeListingService implements ListingService {
         _supabase
             .from('profiles')
             .select(
-              'id,username,full_name,avatar_url,verification_status,is_busy',
+              'id,username,full_name,avatar_url,verification_status,is_busy,description',
             )
             .inFilter('id', artisanIds),
         _supabase
@@ -158,6 +159,11 @@ class RealtimeListingService implements ListingService {
       artisanBusy = {
         for (final profile in profiles)
           (profile['id'] ?? '').toString(): profile['is_busy'] == true,
+      };
+      artisanDescriptions = {
+        for (final profile in profiles)
+          (profile['id'] ?? '').toString():
+              (profile['description'] ?? '').toString(),
       };
       artisanVerified = {
         for (final profile in profiles)
@@ -210,6 +216,7 @@ class RealtimeListingService implements ListingService {
             hydrated['artisanName'] = artisanNames[artisanId] ?? '';
             hydrated['artisanPhotoUrl'] = artisanAvatars[artisanId] ?? '';
             hydrated['artisanBusy'] = artisanBusy[artisanId] ?? false;
+            hydrated['artisanDescription'] = artisanDescriptions[artisanId] ?? '';
             hydrated['verified_only'] = artisanVerified[artisanId] ?? false;
             hydrated['ratingAverage'] = ratingAverages[artisanId] ?? 0;
             hydrated['ratingCount'] = ratingCounts[artisanId] ?? 0;

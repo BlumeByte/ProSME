@@ -223,6 +223,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             trailingText: settings.t('Open'),
             onTap: () => context.push(RouteNames.adminImport),
           ),
+          const Divider(),
+          _SettingsTile(
+            icon: Icons.campaign_outlined,
+            title: settings.t('Send announcement'),
+            subtitle: settings.t(
+              'Message everyone or one group, in the app and by email, with an image and links.',
+            ),
+            trailingText: settings.t('Open'),
+            onTap: () => context.push(RouteNames.adminBroadcast),
+          ),
         ],
         const Divider(),
         _SettingsTile(
@@ -1543,7 +1553,13 @@ String _notificationTypeLabel(AppSettings settings, String type) {
     case 'verification':
       return settings.t('Verification');
     case 'account':
-      return settings.t('Account security');
+      return settings.t('Profile and account changes');
+    case 'new_user':
+      return settings.t('New users joining');
+    case 'broadcast':
+      return settings.t('Announcements from ProSME');
+    case 'app_update':
+      return settings.t('App updates');
     case 'support':
       return settings.t('Support');
     default:

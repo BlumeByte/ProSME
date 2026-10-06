@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/app_colors.dart';
+import '../ads/search_ad.dart';
 import '../../core/utils/currency.dart';
 import '../../core/utils/location_data.dart';
 import '../../core/utils/service_categories.dart';
@@ -116,7 +117,22 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     super.dispose();
   }
 
+  /// Search submit: show the full-page search ad first, then apply the search.
   void _applySearch() {
+    final hasQuery = _serviceController.text.trim().isNotEmpty ||
+        _locationController.text.trim().isNotEmpty;
+    if (!hasQuery) {
+      _commitSearch();
+      return;
+    }
+    unawaited(
+      showSearchAd(context).then((_) {
+        if (mounted) _commitSearch();
+      }),
+    );
+  }
+
+  void _commitSearch() {
     final typedLocation = _locationController.text.trim();
     final parts = [
       typedLocation,

@@ -9,6 +9,7 @@ class RouteNames {
   static const artisanHome = '/artisan-home';
   static const adminHome = '/admin';
   static const adminImport = '/admin/import';
+  static const adminBroadcast = '/admin/broadcast';
   static const listingDetail = '/listing';
   static const artisanProfile = '/artisan';
   static const chatThread = '/chat';

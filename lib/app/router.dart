@@ -19,6 +19,7 @@ import '../features/jobs/job_detail_screen.dart';
 import '../features/legal/legal_screen.dart';
 import '../features/listing/listing_detail_screen.dart';
 import '../features/admin/bulk_import/account_import_screen.dart';
+import '../features/admin/broadcast/broadcast_composer_screen.dart';
 import '../features/auth/two_factor_screen.dart';
 import '../features/notifications/notifications_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
@@ -111,6 +112,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (authState?.twoFactorPending == true) {
         return fullPath == RouteNames.twoFactor ? null : RouteNames.twoFactor;
       }
+      // A new Google account must pick customer or artisan once before using the app.
+      if (authState != null &&
+          !authState.roleConfirmed &&
+          fullPath != RouteNames.role) {
+        return RouteNames.role;
+      }
       if (authState == null && fullPath == RouteNames.twoFactor) {
         return RouteNames.auth;
       }
@@ -172,6 +179,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.adminImport,
         builder: (context, state) => const AccountImportScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.adminBroadcast,
+        builder: (context, state) => const BroadcastComposerScreen(),
       ),
       GoRoute(
         path: '${RouteNames.listingDetail}/:id',

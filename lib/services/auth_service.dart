@@ -561,6 +561,11 @@ class SupabaseAuthService implements AuthService {
           metadata['currency_code'] ??
           'GHS',
       'role': role,
+      // A brand-new Google account has not chosen customer or artisan yet, so
+      // the app sends it to the role screen. Email accounts pick their role on
+      // sign-up and are confirmed straight away.
+      'role_confirmed': existingProfile?['role_confirmed'] ??
+          (user.appMetadata['provider'] != 'google'),
       'verification_status': (existingProfile?['verification_status'] ??
               VerificationStatus.pending.name)
           .toString(),
@@ -703,6 +708,7 @@ class SupabaseAuthService implements AuthService {
           source['two_factor_enabled'] == true ||
               source['twoFactorEnabled'] == true,
       twoFactorPending: _isTwoFactorPendingFor(user),
+      roleConfirmed: source['role_confirmed'] != false,
       createdAt: DateTime.tryParse(
             (source['created_at'] ?? user.createdAt).toString(),
           ) ??
@@ -1149,6 +1155,7 @@ class SupabaseAuthService implements AuthService {
           'phone': user.phone ?? '',
           'avatar_url': (user.userMetadata?['avatar_url'] ?? '').toString(),
           'role': role.name,
+          'role_confirmed': true,
           'verification_status': VerificationStatus.pending.name,
         };
         final username = user.userMetadata?['username']?.toString().trim();
@@ -1161,7 +1168,7 @@ class SupabaseAuthService implements AuthService {
       }
       final mapped = _resolvedCurrentUser ?? _mapUser(user);
       if (mapped != null) {
-        _resolvedCurrentUser = mapped.copyWith(role: role);
+        _resolvedCurrentUser = mapped.copyWith(role: role, roleConfirmed: true);
         _emitProfileUpdate();
       }
     }

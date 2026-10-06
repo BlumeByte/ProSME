@@ -15,6 +15,20 @@ import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 import '../jobs/jobs_repository.dart';
 
+/// The artisan's own profile description. Read directly from `profiles`, so it
+/// shows even when the artisan has no listings yet.
+final artisanDescriptionProvider =
+    FutureProvider.autoDispose.family<String, String>((ref, artisanId) async {
+  if (!shouldUseSupabase()) return '';
+  final row = await ref
+      .read(supabaseClientProvider)
+      .from('profiles')
+      .select('description')
+      .eq('id', artisanId)
+      .maybeSingle();
+  return (row?['description'] ?? '').toString().trim();
+});
+
 class ArtisanProfileScreen extends ConsumerWidget {
   const ArtisanProfileScreen({super.key, required this.artisanId});
 
@@ -25,6 +39,8 @@ class ArtisanProfileScreen extends ConsumerWidget {
     final listingsFuture = ref.watch(listingServiceProvider).fetchListings();
     final settings = ref.watch(appSettingsControllerProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
+    final description =
+        ref.watch(artisanDescriptionProvider(artisanId)).valueOrNull ?? '';
     final currencyCode = settings.currencyCode;
     final colors = Theme.of(context).appColors;
     final bids = ref.watch(artisanBidsProvider(artisanId)).valueOrNull ??
@@ -110,6 +126,14 @@ class ArtisanProfileScreen extends ConsumerWidget {
                           ],
                         ],
                       ),
+                      if (description.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          description,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
                       const SizedBox(height: 6),
                       Chip(
                         avatar: Icon(

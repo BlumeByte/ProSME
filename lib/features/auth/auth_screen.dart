@@ -709,6 +709,19 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                         );
                       },
               ),
+              const SizedBox(height: 12),
+              Center(
+                child: _SocialSignInIcon(
+                  tooltip: settings.t('Continue with Google'),
+                  onPressed: _isLoading
+                      ? null
+                      : () => _signIn(
+                            authService.signInWithGoogle,
+                            authService: authService,
+                          ),
+                  child: const _GoogleMark(),
+                ),
+              ),
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => context.go(RouteNames.home),
@@ -721,6 +734,60 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SocialSignInIcon extends StatelessWidget {
+  const _SocialSignInIcon({
+    required this.tooltip,
+    required this.onPressed,
+    required this.child,
+  });
+
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: Material(
+          color: Colors.white,
+          shape: const CircleBorder(side: BorderSide(color: Color(0xFFDADCE0))),
+          elevation: onPressed == null ? 0 : 1,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onPressed,
+            child: SizedBox(
+              width: 56,
+              height: 56,
+              child: Center(child: child),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GoogleMark extends StatelessWidget {
+  const _GoogleMark();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Text(
+      'G',
+      style: TextStyle(
+        fontSize: 26,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFF4285F4),
+        height: 1,
       ),
     );
   }

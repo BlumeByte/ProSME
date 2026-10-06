@@ -26,6 +26,7 @@ class AppUser {
     this.verificationStatus = VerificationStatus.pending,
     this.twoFactorEnabled = false,
     this.twoFactorPending = false,
+    this.roleConfirmed = true,
     required this.createdAt,
   });
 
@@ -55,6 +56,8 @@ class AppUser {
   /// True while the password was accepted but the emailed sign-in code has not
   /// been verified yet. The router keeps such a user on the code screen.
   final bool twoFactorPending;
+  /// False for a new Google account until the user picks customer or artisan.
+  final bool roleConfirmed;
   final DateTime createdAt;
 
   AppUser copyWith({
@@ -81,6 +84,7 @@ class AppUser {
     VerificationStatus? verificationStatus,
     bool? twoFactorEnabled,
     bool? twoFactorPending,
+    bool? roleConfirmed,
   }) {
     return AppUser(
       id: id,
@@ -109,6 +113,7 @@ class AppUser {
       verificationStatus: verificationStatus ?? this.verificationStatus,
       twoFactorEnabled: twoFactorEnabled ?? this.twoFactorEnabled,
       twoFactorPending: twoFactorPending ?? this.twoFactorPending,
+      roleConfirmed: roleConfirmed ?? this.roleConfirmed,
       createdAt: createdAt,
     );
   }

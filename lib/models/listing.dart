@@ -5,6 +5,7 @@ class Listing {
     this.artisanName,
     this.artisanPhotoUrl,
     this.artisanBusy = false,
+    this.artisanDescription = '',
     required this.title,
     required this.description,
     required this.category,
@@ -24,6 +25,8 @@ class Listing {
   final String? artisanName;
   final String? artisanPhotoUrl;
   final bool artisanBusy;
+  /// The artisan's own profile description (shown on their profile page).
+  final String artisanDescription;
   final String title;
   final String description;
   final String category;
@@ -54,6 +57,8 @@ class Listing {
           artisanData?['avatar_url']) as String?,
       artisanBusy:
           (json['artisanBusy'] ?? json['artisan_busy'] ?? false) as bool,
+      artisanDescription:
+          (json['artisanDescription'] ?? json['artisan_description'] ?? '') as String,
       title: (json['title'] ?? '') as String,
       description: (json['description'] ?? '') as String,
       category: (json['category'] ?? '') as String,
@@ -87,6 +92,7 @@ class Listing {
       'artisanName': artisanName,
       'artisanPhotoUrl': artisanPhotoUrl,
       'artisanBusy': artisanBusy,
+      'artisanDescription': artisanDescription,
       'title': title,
       'description': description,
       'category': category,

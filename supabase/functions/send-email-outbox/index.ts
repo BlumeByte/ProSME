@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.2';
+import { sendMail } from '../_shared/mailer.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,6 +13,7 @@ type EmailRow = {
   to_email: string | null;
   subject: string;
   body: string;
+  html: string | null;
   related_user_id: string | null;
   attempt_count: number | null;
 };
@@ -22,16 +24,8 @@ const json = (status: number, body: Record<string, unknown>) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
-const firstEnv = (keys: string[]) => {
-  for (const key of keys) {
-    const value = Deno.env.get(key)?.trim();
-    if (value) return value;
-  }
-  return '';
-};
-
 const requiredEnv = (key: string) => {
-  const value = firstEnv([key]);
+  const value = Deno.env.get(key)?.trim();
   if (!value) throw new Error(`${key} is not configured`);
   return value;
 };
@@ -147,44 +141,6 @@ const resolveRecipient = async (
   return clean(data?.email).toLowerCase();
 };
 
-const sendWithResend = async ({
-  apiKey,
-  from,
-  to,
-  subject,
-  body,
-}: {
-  apiKey: string;
-  from: string;
-  to: string;
-  subject: string;
-  body: string;
-}) => {
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to: [to],
-      subject,
-      text: humanizeBody(body),
-      html: toHtml(humanizeBody(body)),
-    }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const message =
-      clean(payload?.message) ||
-      clean(payload?.error) ||
-      `Resend returned HTTP ${response.status}`;
-    throw new Error(message);
-  }
-  return clean(payload?.id);
-};
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json(405, { ok: false, error: 'Method not allowed' });
@@ -193,10 +149,6 @@ Deno.serve(async (req) => {
     const supabaseUrl = requiredEnv('SUPABASE_URL');
     const anonKey = requiredEnv('SUPABASE_ANON_KEY');
     const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY');
-    const resendApiKey = requiredEnv('RESEND_API_KEY');
-    const from =
-      firstEnv(['RESEND_FROM_EMAIL', 'PROSME_FROM_EMAIL']) ||
-      'ProSME <noreply@prosme.blumebyte.com>';
 
     const auth = await authorize(req, supabaseUrl, anonKey);
 
@@ -211,7 +163,7 @@ Deno.serve(async (req) => {
 
     let query = adminClient
       .from('email_outbox')
-      .select('id,to_email,subject,body,related_user_id,attempt_count')
+      .select('id,to_email,subject,body,html,related_user_id,attempt_count')
       .is('sent_at', null)
       .lt('attempt_count', maxAttempts)
       .order('created_at', { ascending: true });
@@ -231,12 +183,12 @@ Deno.serve(async (req) => {
         const to = await resolveRecipient(adminClient, row);
         if (!to) throw new Error('Missing recipient email.');
 
-        const resendMessageId = await sendWithResend({
-          apiKey: resendApiKey,
-          from,
+        const text = humanizeBody(row.body);
+        const transportId = await sendMail({
           to,
           subject: row.subject,
-          body: row.body,
+          text,
+          html: row.html ?? toHtml(text),
         });
 
         const { error: updateError } = await adminClient
@@ -245,7 +197,7 @@ Deno.serve(async (req) => {
             sent_at: new Date().toISOString(),
             last_attempt_at: new Date().toISOString(),
             last_error: null,
-            resend_message_id: resendMessageId,
+            resend_message_id: transportId,
           })
           .eq('id', row.id);
         if (updateError) throw new Error(updateError.message);
