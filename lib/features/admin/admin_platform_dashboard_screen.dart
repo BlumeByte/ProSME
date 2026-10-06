@@ -178,6 +178,8 @@ class _AdminOverview extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
+            const _ImportedAccountsSummary(),
+            const SizedBox(height: 16),
             Wrap(
               spacing: 10,
               runSpacing: 10,
@@ -1060,6 +1062,14 @@ class _AccountsPanel extends ConsumerWidget {
                     onPressed: () => _showCreateAccountSheet(context, ref, settings),
                     icon: const Icon(Icons.person_add_alt_outlined),
                     label: Text(settings.t('Create staff account')),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => context.push(RouteNames.adminImport),
+                    icon: const Icon(Icons.table_chart_outlined),
+                    label: Text(settings.t('Import from Excel')),
                   ),
                 ),
               ],
@@ -2088,6 +2098,72 @@ class _ModulesPanel extends ConsumerWidget {
               ),
             );
           },
+        );
+      },
+    );
+  }
+}
+
+/// Overview card for accounts created from spreadsheets: how many were
+/// imported, how many people have set their password, and how many are waiting.
+class _ImportedAccountsSummary extends ConsumerWidget {
+  const _ImportedAccountsSummary();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
+    return FutureBuilder<ImportedAccountStats>(
+      future: ref.watch(adminServiceProvider).fetchImportStats(),
+      builder: (context, snapshot) {
+        final stats = snapshot.data ?? const ImportedAccountStats.empty();
+        final loading = !snapshot.hasData && !snapshot.hasError;
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        settings.t('Imported accounts'),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => context.push(RouteNames.adminImport),
+                      icon: const Icon(Icons.upload_file_outlined),
+                      label: Text(settings.t('Import')),
+                    ),
+                  ],
+                ),
+                Text(
+                  settings.t(
+                    'Created from spreadsheets. Pending means the person has not signed in yet, so they still need to use their password email.',
+                  ),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                if (loading)
+                  const LinearProgressIndicator()
+                else if (snapshot.hasError)
+                  Text(settings.t('Could not load import statistics.'))
+                else
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      _MetricCard(label: settings.t('Imported'), value: stats.total),
+                      _MetricCard(label: settings.t('Redeemed'), value: stats.redeemed),
+                      _MetricCard(label: settings.t('Pending'), value: stats.pending),
+                      _MetricCard(label: settings.t('Artisans'), value: stats.artisans),
+                      _MetricCard(label: settings.t('Customers'), value: stats.customers),
+                    ],
+                  ),
+              ],
+            ),
+          ),
         );
       },
     );

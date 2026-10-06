@@ -181,6 +181,44 @@ class AdminCreatedAccount {
   final String warning;
 }
 
+class BulkImportResult {
+  const BulkImportResult({required this.created, required this.failed});
+
+  /// Each entry: `email`, `userId`, `role`, `passwordResetSent`, `warning`.
+  final List<Map<String, dynamic>> created;
+  /// Each entry: `email`, `error`.
+  final List<Map<String, dynamic>> failed;
+
+  int get emailsSent =>
+      created.where((row) => row['passwordResetSent'] == true).length;
+}
+
+class ImportedAccountStats {
+  const ImportedAccountStats({
+    required this.total,
+    required this.redeemed,
+    required this.pending,
+    required this.artisans,
+    required this.customers,
+    required this.lastImportedAt,
+  });
+
+  const ImportedAccountStats.empty()
+      : total = 0,
+        redeemed = 0,
+        pending = 0,
+        artisans = 0,
+        customers = 0,
+        lastImportedAt = null;
+
+  final int total;
+  final int redeemed;
+  final int pending;
+  final int artisans;
+  final int customers;
+  final DateTime? lastImportedAt;
+}
+
 class AdminService {
   const AdminService([this._supabase]);
 
@@ -402,6 +440,85 @@ class AdminService {
       temporaryPassword: (data['temporaryPassword'] ?? '').toString(),
       passwordResetSent: data['passwordResetSent'] == true,
       warning: (data['warning'] ?? '').toString(),
+    );
+  }
+
+  /// Creates accounts from a spreadsheet, [chunkSize] at a time so one request
+  /// never runs long enough to time out. Every account gets a random password
+  /// and a password-reset email to its registered address. No passwords are
+  /// returned or shown to the admin.
+  Future<BulkImportResult> importAccounts(
+    List<Map<String, dynamic>> accounts, {
+    int chunkSize = 25,
+    String redirectTo = '',
+    void Function(int done, int total)? onProgress,
+  }) async {
+    final client = _supabase;
+    if (client == null) {
+      throw StateError('Supabase is not configured.');
+    }
+    final created = <Map<String, dynamic>>[];
+    final failed = <Map<String, dynamic>>[];
+    for (var start = 0; start < accounts.length; start += chunkSize) {
+      final end = (start + chunkSize).clamp(0, accounts.length);
+      final chunk = accounts.sublist(start, end);
+      try {
+        final response = await client.functions.invoke(
+          'admin-dashboard',
+          body: {
+            'action': 'bulkCreateUsers',
+            'accounts': chunk,
+            if (redirectTo.isNotEmpty) 'redirectTo': redirectTo,
+          },
+        );
+        final data = response.data is Map
+            ? Map<String, dynamic>.from(response.data as Map)
+            : <String, dynamic>{};
+        if (response.status < 200 || response.status >= 300 || data['ok'] != true) {
+          throw StateError(
+            (data['error'] ?? 'The import request failed.').toString(),
+          );
+        }
+        created.addAll(_mapList(data['created']));
+        failed.addAll(_mapList(data['failed']));
+      } catch (error) {
+        // Count the whole chunk as failed rather than stopping the import.
+        for (final account in chunk) {
+          failed.add({
+            'email': account['email'] ?? '',
+            'error': error.toString().replaceFirst('Bad state: ', ''),
+          });
+        }
+      }
+      onProgress?.call(end, accounts.length);
+    }
+    return BulkImportResult(created: created, failed: failed);
+  }
+
+  static List<Map<String, dynamic>> _mapList(Object? value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+  }
+
+  /// Counts for the imported-accounts card: total, signed in at least once
+  /// (redeemed), still waiting for their password link (pending), by role.
+  Future<ImportedAccountStats> fetchImportStats() async {
+    final client = _supabase;
+    if (client == null) return const ImportedAccountStats.empty();
+    final raw = await client.rpc('admin_import_stats');
+    if (raw is! Map) return const ImportedAccountStats.empty();
+    final data = Map<String, dynamic>.from(raw);
+    int count(String key) => (data[key] as num?)?.toInt() ?? 0;
+    return ImportedAccountStats(
+      total: count('total'),
+      redeemed: count('redeemed'),
+      pending: count('pending'),
+      artisans: count('artisans'),
+      customers: count('customers'),
+      lastImportedAt: DateTime.tryParse((data['last_imported_at'] ?? '').toString()),
     );
   }
 

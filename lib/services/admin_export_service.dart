@@ -123,7 +123,7 @@ class AdminExportService {
           children: [
             pw.Text(
               'ProSME',
-              style: const pw.TextStyle(
+              style: pw.TextStyle(
                 fontSize: 20,
                 fontWeight: pw.FontWeight.bold,
                 color: PdfColors.green900,
@@ -166,7 +166,7 @@ class AdminExportService {
                     ])
                 .toList(growable: false),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.green900),
-            headerStyle: const pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 9),
+            headerStyle: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 9),
             cellStyle: const pw.TextStyle(fontSize: 9),
             cellHeight: 22,
           ),
@@ -204,7 +204,7 @@ class AdminExportService {
                     ])
                 .toList(growable: false),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.green900),
-            headerStyle: const pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 9),
+            headerStyle: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 9),
             cellStyle: const pw.TextStyle(fontSize: 9),
             cellHeight: 22,
           ),

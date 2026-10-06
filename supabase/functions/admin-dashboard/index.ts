@@ -667,7 +667,16 @@ Deno.serve(async (req) => {
       const accounts = Array.isArray(body.accounts) ? body.accounts : [];
       const created: Array<Record<string, unknown>> = [];
       const failed: Array<Record<string, unknown>> = [];
-      const allowedRoles = new Set(['customer', 'artisan', 'admin']);
+      // Spreadsheet imports cover ordinary users and artisans only. Admin and
+      // support staff are created one at a time with createUser.
+      const allowedRoles = new Set(['customer', 'artisan']);
+      const roleAliases: Record<string, string> = {
+        user: 'customer',
+        users: 'customer',
+        customer: 'customer',
+        artisan: 'artisan',
+        artisans: 'artisan',
+      };
 
       for (const rawAccount of accounts.slice(0, 200)) {
         const account =
@@ -675,7 +684,8 @@ Deno.serve(async (req) => {
             ? (rawAccount as Record<string, unknown>)
             : {};
         const email = clean(account.email).toLowerCase();
-        const role = clean(account.role) || 'customer';
+        const roleInput = clean(account.role).toLowerCase() || 'customer';
+        const role = roleAliases[roleInput] ?? roleInput;
         const fullName =
           clean(account.full_name) ||
           clean(account.name) ||
@@ -685,7 +695,9 @@ Deno.serve(async (req) => {
           clean(account.date_of_birth) ||
           clean(account.dob) ||
           clean(account.birth_date);
-        const password = clean(account.password) || randomPassword();
+        // Every imported account gets a random password nobody knows. The
+        // person sets their own through the emailed link.
+        const password = randomPassword();
 
         if (!validEmail(email)) {
           failed.push({ email, error: 'Valid email is required.' });
@@ -736,9 +748,13 @@ Deno.serve(async (req) => {
             date_of_birth: dateOfBirth,
             role,
             verification_status: 'pending',
+            account_source: 'imported',
+            imported_at: new Date().toISOString(),
           });
 
         if (profileError) {
+          // Remove the auth user so a failed row can be re-imported cleanly.
+          await adminClient.auth.admin.deleteUser(data.user.id);
           failed.push({ email, error: profileError.message });
           continue;
         }
@@ -761,7 +777,7 @@ Deno.serve(async (req) => {
         created.push({
           email,
           userId: data.user.id,
-          temporaryPassword: password,
+          role,
           passwordResetSent: !resetWarning,
           warning: resetWarning || undefined,
           ...resetResult,

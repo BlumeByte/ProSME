@@ -13,6 +13,9 @@ import '../../services/app_settings_controller.dart';
 import '../../services/notification_service.dart';
 import '../../services/service_providers.dart';
 import '../chat/chat_list_screen.dart';
+import '../../config/constants.dart';
+import '../notifications/unread_notifications_provider.dart';
+import 'account_status_card.dart';
 import '../listing/listing_feed_screen.dart';
 import '../jobs/jobs_screen.dart';
 import '../profile/profile_screen.dart';
@@ -67,18 +70,28 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     final user = ref.watch(authStateProvider).valueOrNull;
     final chatService = ref.watch(chatServiceProvider);
     final settings = ref.watch(appSettingsControllerProvider);
+    final unreadNotifications =
+        ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
     final currentIndex = user == null && _currentIndex > 0 ? 0 : _currentIndex;
     final banners = _buildBanners(settings);
     final pages = [
       ListingFeedScreen(
         openingBanner: _shouldShowBanner
-            ? _BannerSlider(
-                controller: _bannerController,
-                banners: banners,
-                currentIndex: _bannerIndex,
-                onPageChanged: (index) => setState(() => _bannerIndex = index),
+            ? Column(
+                children: [
+                  if (user != null && user.role != UserRole.admin)
+                    const AccountStatusCard(),
+                  _BannerSlider(
+                    controller: _bannerController,
+                    banners: banners,
+                    currentIndex: _bannerIndex,
+                    onPageChanged: (index) => setState(() => _bannerIndex = index),
+                  ),
+                ],
               )
-            : null,
+            : (user != null && user.role != UserRole.admin
+                ? const AccountStatusCard()
+                : null),
         onOpenUploadTab: () => _openTab(2),
         onLeaveHomeContent: _hideOpeningBanner,
       ),
@@ -162,6 +175,23 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
                 },
                 icon: const Icon(Icons.person_outline),
                 tooltip: settings.t('Profile'),
+              ),
+              IconButton(
+                onPressed: () {
+                  if (user == null) {
+                    context.go(RouteNames.auth);
+                    return;
+                  }
+                  context.push(RouteNames.notifications);
+                },
+                icon: Badge(
+                  isLabelVisible: unreadNotifications > 0,
+                  label: Text(
+                    unreadNotifications > 99 ? '99+' : '$unreadNotifications',
+                  ),
+                  child: const Icon(Icons.notifications_outlined),
+                ),
+                tooltip: settings.t('Notifications'),
               ),
             ],
             selectedIndex: currentIndex,

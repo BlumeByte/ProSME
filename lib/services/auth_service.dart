@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../models/app_user.dart';
 import '../routes/route_names.dart';
 import 'app_settings_controller.dart';
+
+final RegExp _e164PhonePattern = RegExp(r'^\+[1-9]\d{7,14}$');
 
 final _emailRegex = RegExp(
   r'^(?=.{1,254}$)(?=.{1,64}@)[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
@@ -85,6 +88,10 @@ abstract class AuthService {
   Future<void> updateEmail(String email);
   Future<void> deleteAccount({String? reason});
   Future<void> setTwoFactorEnabled(bool enabled);
+  /// Marks the sign-in's emailed code as verified and releases the session.
+  Future<void> completeTwoFactor();
+  /// Abandons a pending two-factor sign-in and signs the session out.
+  Future<void> cancelTwoFactor();
 }
 
 class PendingEmailVerificationException implements Exception {
@@ -338,6 +345,12 @@ class MockAuthService implements AuthService {
   }
 
   @override
+  Future<void> completeTwoFactor() async {}
+
+  @override
+  Future<void> cancelTwoFactor() => signOut();
+
+  @override
   Future<void> updatePhone(String phone) async {
     final user = _currentUser;
     if (user == null) {
@@ -569,12 +582,17 @@ class SupabaseAuthService implements AuthService {
     Map<String, dynamic> payload,
   ) async {
     try {
-      final updated = await _supabase
-          .from('profiles')
-          .update(payload)
-          .eq('id', userId)
-          .select('id')
-          .maybeSingle();
+      var updated = await _updateProfileRow(userId, payload);
+      if (updated == null) {
+        // Some accounts exist without a profile row (interrupted sign-ups or
+        // accounts created before profiles were written). Create the row from
+        // the signed-in user, then retry the update once.
+        final user = _supabase.auth.currentUser;
+        if (user != null && user.id == userId) {
+          await _upsertProfile(user);
+          updated = await _updateProfileRow(userId, payload);
+        }
+      }
       if (updated == null) {
         throw StateError(
           'Profile update was not saved. Please sign in again and retry.',
@@ -584,6 +602,19 @@ class SupabaseAuthService implements AuthService {
       if (_isMissingProfilesTable(error)) return;
       rethrow;
     }
+  }
+
+  Future<Map<String, dynamic>?> _updateProfileRow(
+    String userId,
+    Map<String, dynamic> payload,
+  ) async {
+    final row = await _supabase
+        .from('profiles')
+        .update(payload)
+        .eq('id', userId)
+        .select('id')
+        .maybeSingle();
+    return row == null ? null : Map<String, dynamic>.from(row);
   }
 
   AppUser? _mapUser(User? user, {Map<String, dynamic>? profile}) {
@@ -671,6 +702,7 @@ class SupabaseAuthService implements AuthService {
       twoFactorEnabled:
           source['two_factor_enabled'] == true ||
               source['twoFactorEnabled'] == true,
+      twoFactorPending: _isTwoFactorPendingFor(user),
       createdAt: DateTime.tryParse(
             (source['created_at'] ?? user.createdAt).toString(),
           ) ??
@@ -678,10 +710,73 @@ class SupabaseAuthService implements AuthService {
     );
   }
 
+  static const _twoFactorEmailKey = 'two_factor_pending_email';
+  String? _twoFactorEmail;
+  bool _twoFactorLoaded = false;
+
+  /// Restores the pending two-factor marker after an app restart, so a user
+  /// who closed the app before entering the code is asked again.
+  Future<void> _loadTwoFactorMarker() async {
+    if (_twoFactorLoaded) return;
+    _twoFactorLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _twoFactorEmail ??= prefs.getString(_twoFactorEmailKey);
+    } catch (_) {
+      // Storage unavailable: the in-memory marker still guards this session.
+    }
+  }
+
+  Future<void> _setTwoFactorMarker(String? email) async {
+    _twoFactorEmail = email;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (email == null) {
+        await prefs.remove(_twoFactorEmailKey);
+      } else {
+        await prefs.setString(_twoFactorEmailKey, email);
+      }
+    } catch (_) {
+      // Keep the in-memory marker even if persisting it failed.
+    }
+  }
+
+  bool _isTwoFactorPendingFor(User user) {
+    final marker = _twoFactorEmail;
+    return marker != null && marker == (user.email ?? '').toLowerCase();
+  }
+
+  Future<void> _markRedeemed(String userId) async {
+    try {
+      await _supabase
+          .from('profiles')
+          .update({'redeemed_at': DateTime.now().toUtc().toIso8601String()})
+          .eq('id', userId)
+          .isFilter('redeemed_at', null);
+    } catch (error) {
+      debugPrint('Could not record account redemption: $error');
+    }
+  }
+
   Future<AppUser> _resolveUser(User user) async {
+    await _loadTwoFactorMarker();
     try {
       await _upsertProfile(user);
       final profile = await _fetchProfile(user.id);
+      // The marker only has meaning while two-factor is on. If the profile
+      // says it is off, the sign-in is complete.
+      if (profile != null &&
+          profile['two_factor_enabled'] != true &&
+          _isTwoFactorPendingFor(user)) {
+        await _setTwoFactorMarker(null);
+      }
+      // First successful sign-in of an admin-imported account: they have
+      // followed the emailed link and chosen their password.
+      if (profile != null &&
+          profile['account_source'] == 'imported' &&
+          profile['redeemed_at'] == null) {
+        unawaited(_markRedeemed(user.id));
+      }
       final mappedUser = _mapUser(user, profile: profile)!;
       _resolvedCurrentUser = mappedUser;
       return mappedUser;
@@ -787,12 +882,24 @@ class SupabaseAuthService implements AuthService {
 
   @override
   Future<AppUser> signInWithEmail(String email, String password) async {
-    final response = await _supabase.auth.signInWithPassword(
-      email: email.trim(),
-      password: password,
-    );
+    final normalizedEmail = email.trim().toLowerCase();
+    // Mark the sign-in as pending BEFORE the session is created, so the router
+    // cannot show the app ahead of the code screen. The marker is cleared when
+    // the password is rejected or the profile shows two-factor is off.
+    await _setTwoFactorMarker(normalizedEmail);
+    final AuthResponse response;
+    try {
+      response = await _supabase.auth.signInWithPassword(
+        email: normalizedEmail,
+        password: password,
+      );
+    } catch (_) {
+      await _setTwoFactorMarker(null);
+      rethrow;
+    }
     final user = response.user ?? _supabase.auth.currentUser;
     if (user == null) {
+      await _setTwoFactorMarker(null);
       throw StateError('Sign-in completed but no active session was returned.');
     }
     return _resolveUser(user);
@@ -1021,6 +1128,7 @@ class SupabaseAuthService implements AuthService {
 
   @override
   Future<void> signOut() async {
+    await _setTwoFactorMarker(null);
     await _supabase.auth.signOut();
     _resolvedCurrentUser = null;
   }
@@ -1124,6 +1232,19 @@ class SupabaseAuthService implements AuthService {
   }
 
   @override
+  Future<void> completeTwoFactor() async {
+    await _setTwoFactorMarker(null);
+    final current = _resolvedCurrentUser ?? _mapUser(_supabase.auth.currentUser);
+    if (current != null) {
+      _resolvedCurrentUser = current.copyWith(twoFactorPending: false);
+      _emitProfileUpdate();
+    }
+  }
+
+  @override
+  Future<void> cancelTwoFactor() => signOut();
+
+  @override
   Future<void> updatePhone(String phone) async {
     final user = _supabase.auth.currentUser;
     if (user == null) {
@@ -1159,6 +1280,12 @@ class SupabaseAuthService implements AuthService {
     final normalized = phone.trim();
     if (normalized.isEmpty) {
       throw StateError('Phone cannot be empty.');
+    }
+
+    if (!_e164PhonePattern.hasMatch(normalized)) {
+      throw StateError(
+        'Enter the phone number with its country code, for example +233256122555.',
+      );
     }
 
     await _updateProfile(user.id, {

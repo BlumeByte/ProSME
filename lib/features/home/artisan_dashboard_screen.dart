@@ -10,6 +10,7 @@ import '../../services/app_settings_controller.dart';
 import '../../services/notification_service.dart';
 import '../../services/service_providers.dart';
 import '../jobs/jobs_repository.dart';
+import 'account_status_card.dart';
 
 class ArtisanDashboardScreen extends ConsumerStatefulWidget {
   const ArtisanDashboardScreen({
@@ -161,6 +162,8 @@ class _ArtisanDashboardScreenState
                 ),
               )
             : header,
+        const SizedBox(height: 20),
+        const AccountStatusCard(),
         const SizedBox(height: 20),
         Row(
           children: [

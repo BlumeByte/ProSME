@@ -36,7 +36,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         .from('admin_notifications')
         .select()
         .or('related_user_id.eq.${user.id},actor_id.eq.${user.id}')
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .limit(200);
     return rows
         .map((row) => _NotificationItem.fromJson(
               Map<String, dynamic>.from(row as Map),

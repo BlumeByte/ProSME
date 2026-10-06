@@ -7,6 +7,7 @@ import '../../core/widgets/safe_back_button.dart';
 import '../../config/constants.dart';
 import '../../core/utils/country_preferences.dart';
 import '../../core/utils/location_data.dart';
+import '../../core/utils/phone_validation.dart';
 import '../../models/app_user.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../routes/route_names.dart';
@@ -42,22 +43,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       _usernameController.text.trim().replaceAll(RegExp(r'\s+'), ' ');
   String get _email => _emailController.text.trim();
   String get _password => _passwordController.text;
+  /// The phone number in E.164 form for the selected country, or '' when none
+  /// was entered or it does not check out (sign-up validation reports why).
   String get _phone {
     final value = _phoneController.text.trim();
     if (value.isEmpty) return '';
-    final compact = value.replaceAll(RegExp(r'[\s()-]'), '');
-    if (compact.startsWith('+')) return compact;
-    final dialDigits = _selectedCountry.dialCode.replaceFirst('+', '');
-    if (compact.startsWith(dialDigits) && compact.length > dialDigits.length) {
-      return '+$compact';
-    }
-    if (compact.startsWith('0') && compact.length > 1) {
-      return '${_selectedCountry.dialCode}${compact.substring(1)}';
-    }
-    if (RegExp(r'^\d{8,14}$').hasMatch(compact)) {
-      return '${_selectedCountry.dialCode}$compact';
-    }
-    return compact;
+    return checkPhoneForCountry(value, _selectedCountry).e164 ?? '';
   }
 
   bool _isAdult(DateTime value) {
@@ -330,110 +321,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
-  /// Two-factor gate: the caller has already validated the password (or
-  /// completed an OAuth sign-in) and holds a live Supabase session at this
-  /// point, so a code sent/verified here reuses the same authenticated
-  /// account-verification edge function as the profile's "verify email"
-  /// action. Returns false (and the caller signs the session back out) if
-  /// the user cancels or never enters a correct code.
-  Future<bool> _showTwoFactorDialog(AuthService authService) async {
-    final settings = ref.read(appSettingsControllerProvider);
-    try {
-      await authService.requestEmailOtp();
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${settings.t('Could not send code')}: $error'),
-          ),
-        );
-      }
-      return false;
-    }
-    if (!mounted) return false;
-
-    final codeController = TextEditingController();
-    var busy = false;
-    String? errorText;
-    final verified = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(settings.t('Two-factor verification')),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                settings.t(
-                  'Enter the 6-digit code we emailed you to finish signing in.',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: codeController,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: settings.t('6-digit code'),
-                  errorText: errorText,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed:
-                  busy ? null : () => Navigator.of(context).pop(false),
-              child: Text(settings.t('Cancel')),
-            ),
-            TextButton(
-              onPressed: busy
-                  ? null
-                  : () async {
-                      setDialogState(() {
-                        busy = true;
-                        errorText = null;
-                      });
-                      try {
-                        await authService.requestEmailOtp();
-                      } catch (_) {
-                      } finally {
-                        setDialogState(() => busy = false);
-                      }
-                    },
-              child: Text(settings.t(busy ? 'Sending...' : 'Resend code')),
-            ),
-            FilledButton(
-              onPressed: busy
-                  ? null
-                  : () async {
-                      final code = codeController.text.trim();
-                      setDialogState(() {
-                        busy = true;
-                        errorText = null;
-                      });
-                      try {
-                        await authService.verifyEmailOtp(code);
-                        if (context.mounted) Navigator.of(context).pop(true);
-                      } catch (error) {
-                        setDialogState(() {
-                          busy = false;
-                          errorText = settings.t('Invalid or expired code.');
-                        });
-                      }
-                    },
-              child: Text(settings.t('Verify')),
-            ),
-          ],
-        ),
-      ),
-    );
-    codeController.dispose();
-    return verified ?? false;
-  }
-
   String? _validateEmailPassword() {
     if (_email.isEmpty || _password.isEmpty) {
       return 'Please enter email and password.';
@@ -465,8 +352,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (!_isAdult(_dateOfBirth!)) {
       return 'You must be at least 18 years old to create an account.';
     }
-    if (_phone.isNotEmpty && !RegExp(r'^\+[1-9]\d{7,14}$').hasMatch(_phone)) {
-      return 'Enter phone with country code, for example +233256122555.';
+    if (_phoneController.text.trim().isNotEmpty) {
+      final check = checkPhoneForCountry(_phoneController.text, _selectedCountry);
+      if (!check.isValid) return check.error;
     }
     return null;
   }
@@ -494,13 +382,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       // were accepted, so a stale session doesn't linger into the next
       // screen and interfere with editing if the user signs out and back in.
       TextInput.finishAutofillContext();
-      if (user.twoFactorEnabled && authService != null) {
-        final verified = await _showTwoFactorDialog(authService);
-        if (!verified) {
-          await authService.signOut();
-          return;
-        }
-      }
+      // A two-factor account is held on the code screen by the router until
+      // the emailed code is verified, so there is nothing left to do here.
+      if (user.twoFactorPending) return;
       if (mounted) {
         if (forceRoleSelection) {
           context.go(RouteNames.role);

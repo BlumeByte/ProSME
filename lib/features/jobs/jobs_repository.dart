@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/realtime/table_change_signal.dart';
 import '../../services/db_service.dart';
 import '../../services/service_providers.dart';
 
@@ -225,6 +226,12 @@ class SupabaseJobsRepository implements JobsRepository {
 
   final SupabaseClient _client;
   final LocalDbService? _localDb;
+  // Watch loops re-read when jobs, bids or ratings change, and otherwise at a
+  // 60 second fallback, instead of re-reading the tables every 8 to 12 seconds.
+  late final TableChangeSignal _changes = TableChangeSignal(
+    _client,
+    const ['jobs', 'job_bids', 'job_ratings'],
+  );
 
   @override
   Stream<List<JobFeedItem>> watchJobs() async* {
@@ -237,7 +244,8 @@ class SupabaseJobsRepository implements JobsRepository {
             .from('jobs')
             .select()
             .neq('status', 'cancelled')
-            .order('created_at', ascending: false);
+            .order('created_at', ascending: false)
+            .limit(200);
         final remoteRows = rows
             .map((row) => Map<String, dynamic>.from(row as Map))
             .toList(growable: false);
@@ -252,7 +260,7 @@ class SupabaseJobsRepository implements JobsRepository {
         lastGood = await _loadCachedJobs();
         yield lastGood;
       }
-      await Future<void>.delayed(const Duration(seconds: 12));
+      await _changes.wait(const Duration(seconds: 60));
     }
   }
 
@@ -275,7 +283,7 @@ class SupabaseJobsRepository implements JobsRepository {
         debugPrintStack(stackTrace: stackTrace);
         yield lastGood;
       }
-      await Future<void>.delayed(const Duration(seconds: 10));
+      await _changes.wait(const Duration(seconds: 60));
     }
   }
 
@@ -298,7 +306,7 @@ class SupabaseJobsRepository implements JobsRepository {
         debugPrintStack(stackTrace: stackTrace);
         yield lastGood;
       }
-      await Future<void>.delayed(const Duration(seconds: 12));
+      await _changes.wait(const Duration(seconds: 60));
     }
   }
 
@@ -321,7 +329,7 @@ class SupabaseJobsRepository implements JobsRepository {
         debugPrintStack(stackTrace: stackTrace);
         yield lastGood;
       }
-      await Future<void>.delayed(const Duration(seconds: 12));
+      await _changes.wait(const Duration(seconds: 60));
     }
   }
 
@@ -344,7 +352,7 @@ class SupabaseJobsRepository implements JobsRepository {
         debugPrintStack(stackTrace: stackTrace);
         yield lastGood;
       }
-      await Future<void>.delayed(const Duration(seconds: 8));
+      await _changes.wait(const Duration(seconds: 60));
     }
   }
 
@@ -367,7 +375,7 @@ class SupabaseJobsRepository implements JobsRepository {
         debugPrintStack(stackTrace: stackTrace);
         yield lastGood;
       }
-      await Future<void>.delayed(const Duration(seconds: 10));
+      await _changes.wait(const Duration(seconds: 60));
     }
   }
 

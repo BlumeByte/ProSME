@@ -11,6 +11,7 @@ import '../../models/chat_models.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
+import 'accepted_contact_card.dart';
 import 'jobs_repository.dart';
 
 class JobDetailScreen extends ConsumerStatefulWidget {
@@ -105,6 +106,10 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
               if (acceptedBid != null &&
                   user != null &&
                   (isOwner || acceptedBid.artisanId == user.id)) ...[
+                if (_canChatForAcceptedWork(job, acceptedBid)) ...[
+                  AcceptedContactCard(jobId: job.id),
+                  const SizedBox(height: 16),
+                ],
                 _JobTrackingPanel(job: job, acceptedBid: acceptedBid),
                 const SizedBox(height: 16),
               ],

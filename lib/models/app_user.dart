@@ -25,6 +25,7 @@ class AppUser {
     this.currencyCode = 'GHS',
     this.verificationStatus = VerificationStatus.pending,
     this.twoFactorEnabled = false,
+    this.twoFactorPending = false,
     required this.createdAt,
   });
 
@@ -51,6 +52,9 @@ class AppUser {
   final String currencyCode;
   final VerificationStatus verificationStatus;
   final bool twoFactorEnabled;
+  /// True while the password was accepted but the emailed sign-in code has not
+  /// been verified yet. The router keeps such a user on the code screen.
+  final bool twoFactorPending;
   final DateTime createdAt;
 
   AppUser copyWith({
@@ -76,6 +80,7 @@ class AppUser {
     String? currencyCode,
     VerificationStatus? verificationStatus,
     bool? twoFactorEnabled,
+    bool? twoFactorPending,
   }) {
     return AppUser(
       id: id,
@@ -103,6 +108,7 @@ class AppUser {
       currencyCode: currencyCode ?? this.currencyCode,
       verificationStatus: verificationStatus ?? this.verificationStatus,
       twoFactorEnabled: twoFactorEnabled ?? this.twoFactorEnabled,
+      twoFactorPending: twoFactorPending ?? this.twoFactorPending,
       createdAt: createdAt,
     );
   }

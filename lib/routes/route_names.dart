@@ -8,6 +8,7 @@ class RouteNames {
   static const home = '/home';
   static const artisanHome = '/artisan-home';
   static const adminHome = '/admin';
+  static const adminImport = '/admin/import';
   static const listingDetail = '/listing';
   static const artisanProfile = '/artisan';
   static const chatThread = '/chat';
@@ -15,6 +16,7 @@ class RouteNames {
   static const jobDetail = '/job';
   static const aiSupport = '/support';
   static const notifications = '/notifications';
+  static const twoFactor = '/two-factor';
   static const saved = '/saved';
   static const wallet = '/wallet';
   static const workHistory = '/work-history';

@@ -11,6 +11,7 @@ import '../../config/app_colors.dart';
 import '../../config/constants.dart';
 import '../../core/utils/currency.dart';
 import '../../core/utils/location_data.dart';
+import '../../core/utils/phone_validation.dart';
 import '../../models/app_user.dart';
 import '../../models/verification_subscription.dart';
 import '../../routes/route_names.dart';
@@ -211,6 +212,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           onTap: () =>
               _showAccountSettingsSheet(context, ref, authService, user),
         ),
+        if (user.role == UserRole.admin) ...[
+          const Divider(),
+          _SettingsTile(
+            icon: Icons.table_chart_outlined,
+            title: settings.t('Import accounts'),
+            subtitle: settings.t(
+              'Create customer and artisan accounts from an Excel sheet.',
+            ),
+            trailingText: settings.t('Open'),
+            onTap: () => context.push(RouteNames.adminImport),
+          ),
+        ],
         const Divider(),
         _SettingsTile(
           icon: Icons.tune_outlined,
@@ -248,14 +261,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           leading: const Icon(Icons.logout),
           title: Text(settings.t('Logout')),
           onTap: () => authService.signOut(),
-        ),
-        ListTile(
-          leading: Icon(Icons.delete_forever, color: colors.error),
-          title: Text(
-            settings.t('Delete account'),
-            style: TextStyle(color: colors.error),
-          ),
-          onTap: () => _confirmDeleteAccount(context, authService),
         ),
       ],
     );
@@ -1056,14 +1061,11 @@ Future<void> _showChangePhoneDialog(
   controller.dispose();
 
   if (nextPhone == null || nextPhone.isEmpty) return;
-  if (!isValidPhoneForCountry(nextPhone, selectedCountry)) {
+  final check = checkPhoneForCountry(nextPhone, selectedCountry);
+  if (!check.isValid) {
     if (context.mounted && messenger != null) {
       messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            '${settings.t('Enter a valid')} ${selectedCountry.name} ${settings.t('phone number.')}',
-          ),
-        ),
+        SnackBar(content: Text(settings.t(check.error!))),
       );
     }
     return;
@@ -1071,7 +1073,7 @@ Future<void> _showChangePhoneDialog(
 
   try {
     await authService.updatePhoneAndCountry(
-      phone: formatPhoneForCountry(nextPhone, selectedCountry),
+      phone: check.e164!,
       country: selectedCountry.name,
       countryCode: selectedCountry.dialCode,
     );
@@ -1865,6 +1867,24 @@ Future<void> _showAccountSettingsSheet(
                           'Pro SME helps customers connect with verified SMEs and artisans.',
                         ),
                       );
+                    },
+                  ),
+                  const Divider(),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      Icons.delete_forever,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    title: Text(
+                      settings.t('Delete account'),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _confirmDeleteAccount(parentContext, authService);
                     },
                   ),
                 ],

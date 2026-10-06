@@ -18,6 +18,8 @@ import '../features/invoice/invoice_screen.dart';
 import '../features/jobs/job_detail_screen.dart';
 import '../features/legal/legal_screen.dart';
 import '../features/listing/listing_detail_screen.dart';
+import '../features/admin/bulk_import/account_import_screen.dart';
+import '../features/auth/two_factor_screen.dart';
 import '../features/notifications/notifications_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/profile/artisan_profile_screen.dart';
@@ -104,6 +106,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return RouteNames.auth;
       }
 
+      // Password accepted but the emailed sign-in code is not verified yet:
+      // the only screen available is the code screen.
+      if (authState?.twoFactorPending == true) {
+        return fullPath == RouteNames.twoFactor ? null : RouteNames.twoFactor;
+      }
+      if (authState == null && fullPath == RouteNames.twoFactor) {
+        return RouteNames.auth;
+      }
+      if (authState != null && fullPath == RouteNames.twoFactor) {
+        return _homeForRole(authState);
+      }
+
       if (isLoggedIn && isOnboarding) {
         return _homeForRole(authState);
       }
@@ -156,6 +170,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const AdminDashboardScreen(),
       ),
       GoRoute(
+        path: RouteNames.adminImport,
+        builder: (context, state) => const AccountImportScreen(),
+      ),
+      GoRoute(
         path: '${RouteNames.listingDetail}/:id',
         builder: (context, state) => ListingDetailScreen(
           listingId: state.pathParameters['id']!,
@@ -194,6 +212,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.notifications,
         builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.twoFactor,
+        builder: (context, state) => const TwoFactorScreen(),
       ),
       GoRoute(
         path: RouteNames.saved,
