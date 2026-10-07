@@ -11,16 +11,10 @@ final accountStatusProvider =
     FutureProvider.autoDispose<Map<String, dynamic>?>((ref) async {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null || !shouldUseSupabase()) return null;
-  final row = await ref
-      .read(supabaseClientProvider)
-      .from('profiles')
-      .select(
-        'account_source,redeemed_at,phone,date_of_birth,country,avatar_url,'
-        'email_verified,phone_verified,verification_status',
-      )
-      .eq('id', user.id)
-      .maybeSingle();
-  return row == null ? null : Map<String, dynamic>.from(row);
+  // The caller's own full row comes from the get_my_profile function; direct
+  // reads cannot include contact columns.
+  final raw = await ref.read(supabaseClientProvider).rpc('get_my_profile');
+  return raw is Map ? Map<String, dynamic>.from(raw) : null;
 });
 
 /// "Your account" summary for customers and artisans: where the account came

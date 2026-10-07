@@ -507,6 +507,10 @@ class SupabaseAuthService implements AuthService {
   Future<void> _upsertProfile(User user) async {
     final metadata = user.userMetadata ?? const <String, dynamic>{};
     final existingProfile = await _fetchProfile(user.id);
+    // An existing profile is never rewritten here. Upserting it asks the
+    // database to read back every column, which the app's role is not allowed
+    // to do, so the request is refused and the profile fails to load.
+    if (existingProfile != null) return;
     final fullName = (existingProfile?['full_name'] ??
             metadata['full_name'] ??
             metadata['name'] ??
@@ -575,7 +579,7 @@ class SupabaseAuthService implements AuthService {
     }
 
     try {
-      await _supabase.from('profiles').upsert(payload, onConflict: 'id');
+      await _supabase.from('profiles').insert(payload);
     } catch (error) {
       if (_isMissingProfilesTable(error)) return;
       rethrow;
@@ -1162,7 +1166,9 @@ class SupabaseAuthService implements AuthService {
         if (username != null && username.isNotEmpty) {
           payload['username'] = username;
         }
-        await _supabase.from('profiles').upsert(payload, onConflict: 'id');
+        // Update the existing row; the id is the match, not a value to change.
+        payload.remove('id');
+        await _supabase.from('profiles').update(payload).eq('id', user.id);
       } catch (error) {
         if (!_isMissingProfilesTable(error)) rethrow;
       }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
 
@@ -36,7 +38,7 @@ class _TwoFactorScreenState extends ConsumerState<TwoFactorScreen> {
   String _friendly(Object error) {
     return error
         .toString()
-        .replaceFirst(RegExp(r'^(StateError|Exception):\s*'), '')
+        .replaceFirst(RegExp(r'^(StateError|Exception|Bad state):\s*'), '')
         .trim();
   }
 
@@ -81,6 +83,8 @@ class _TwoFactorScreenState extends ConsumerState<TwoFactorScreen> {
       await authService.verifyEmailOtp(code);
       // Releases the router gate; the redirect then sends the user home.
       await authService.completeTwoFactor();
+      // Do not wait on the router to notice the change: go straight to the app.
+      if (mounted) context.go(RouteNames.home);
     } catch (error) {
       if (mounted) setState(() => _error = _friendly(error));
     } finally {
