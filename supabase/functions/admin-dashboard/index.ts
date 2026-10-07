@@ -656,7 +656,6 @@ Deno.serve(async (req) => {
       }
       return ok({
         userId: createdUser.id,
-        temporaryPassword: password,
         passwordResetSent: !resetWarning,
         warning: resetWarning || undefined,
         ...resetResult,
