@@ -1175,7 +1175,9 @@ class _AccountsPanel extends ConsumerWidget {
                     content: Text(
                       result.passwordResetSent
                           ? settings.t('Account created. A password-setup email was sent.')
-                          : '${settings.t('Account created. Temporary password')}: ${result.temporaryPassword}',
+                          : settings.t(
+                              'Account created, but the password-setup email could not be sent. Use password reset to retry.',
+                            ),
                     ),
                     duration: const Duration(seconds: 8),
                   ),
