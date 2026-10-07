@@ -6379,6 +6379,12 @@ SOFTWARE.
 --------------------------------------------------------------------------------
 flutter_lints
 go_router
+google_identity_services_web
+google_sign_in
+google_sign_in_android
+google_sign_in_ios
+google_sign_in_platform_interface
+google_sign_in_web
 image_picker_linux
 image_picker_windows
 local_auth
