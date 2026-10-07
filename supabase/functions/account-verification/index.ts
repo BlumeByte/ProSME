@@ -209,14 +209,11 @@ Deno.serve(async (req) => {
 
       const code = randomCode();
       const codeHash = await hashCode(user.id, channel, code);
-      await adminClient
-        .from('profile_verification_codes')
-        .update({ consumed_at: new Date().toISOString() })
-        .eq('user_id', user.id)
-        .eq('channel', channel)
-        .is('consumed_at', null);
 
-      const { error: insertError } = await adminClient
+      // Keep any previous unused code valid until the replacement email is
+      // actually sent. If delivery fails, remove the unsent replacement so
+      // the user is not left with an active code they never received.
+      const { data: inserted, error: insertError } = await adminClient
         .from('profile_verification_codes')
         .insert({
           user_id: user.id,
@@ -224,10 +221,29 @@ Deno.serve(async (req) => {
           destination,
           code_hash: codeHash,
           expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-        });
+        })
+        .select('id')
+        .single();
       if (insertError) throw new Error(insertError.message);
 
-      await sendEmail(destination, code);
+      try {
+        await sendEmail(destination, code);
+      } catch (error) {
+        await adminClient
+          .from('profile_verification_codes')
+          .delete()
+          .eq('id', inserted.id);
+        throw error;
+      }
+
+      await adminClient
+        .from('profile_verification_codes')
+        .update({ consumed_at: new Date().toISOString() })
+        .eq('user_id', user.id)
+        .eq('channel', channel)
+        .neq('id', inserted.id)
+        .is('consumed_at', null);
+
       return json(200, { ok: true });
     }
 
