@@ -723,6 +723,7 @@ class SupabaseAuthService implements AuthService {
   static const _twoFactorEmailKey = 'two_factor_pending_email';
   String? _twoFactorEmail;
   bool _twoFactorLoaded = false;
+  String? _passwordSignInInProgressEmail;
 
   /// Restores the pending two-factor marker after an app restart, so a user
   /// who closed the app before entering the code is asked again.
@@ -768,7 +769,10 @@ class SupabaseAuthService implements AuthService {
     }
   }
 
-  Future<AppUser> _resolveUser(User user) async {
+  Future<AppUser> _resolveUser(
+    User user, {
+    bool failOnProfileError = false,
+  }) async {
     await _loadTwoFactorMarker();
     try {
       await _upsertProfile(user);
@@ -791,6 +795,7 @@ class SupabaseAuthService implements AuthService {
       _resolvedCurrentUser = mappedUser;
       return mappedUser;
     } catch (error, stackTrace) {
+      if (failOnProfileError) rethrow;
       debugPrint('Failed to resolve Supabase profile: $error');
       debugPrintStack(stackTrace: stackTrace);
       final mappedUser = _mapUser(user)!;
@@ -842,6 +847,8 @@ class SupabaseAuthService implements AuthService {
     // with the profile. Waiting on the database here made signed-in users look
     // signed out whenever the server was slow.
     void emitSession(User user) {
+      final email = (user.email ?? '').toLowerCase();
+      if (_passwordSignInInProgressEmail == email) return;
       controller.add(_mapUser(user));
       unawaited(
         _resolveUser(user).then((resolved) {
@@ -893,26 +900,46 @@ class SupabaseAuthService implements AuthService {
   @override
   Future<AppUser> signInWithEmail(String email, String password) async {
     final normalizedEmail = email.trim().toLowerCase();
-    // Mark the sign-in as pending BEFORE the session is created, so the router
-    // cannot show the app ahead of the code screen. The marker is cleared when
-    // the password is rejected or the profile shows two-factor is off.
-    await _setTwoFactorMarker(normalizedEmail);
-    final AuthResponse response;
+
+    // Do not create a two-factor challenge until the signed-in user's profile
+    // explicitly says two-factor is enabled. The in-progress marker prevents
+    // the auth stream from briefly routing every password login to the code
+    // screen before the profile has been checked.
+    _passwordSignInInProgressEmail = normalizedEmail;
+    await _setTwoFactorMarker(null);
+
     try {
-      response = await _supabase.auth.signInWithPassword(
+      final response = await _supabase.auth.signInWithPassword(
         email: normalizedEmail,
         password: password,
       );
+      final user = response.user ?? _supabase.auth.currentUser;
+      if (user == null) {
+        throw StateError('Sign-in completed but no active session was returned.');
+      }
+
+      // Fail closed for the two-factor decision. If the profile cannot be
+      // loaded, do not let a two-factor-enabled account bypass its challenge.
+      final resolved = await _resolveUser(user, failOnProfileError: true);
+      final result = resolved.twoFactorEnabled
+          ? resolved.copyWith(twoFactorPending: true)
+          : resolved.copyWith(twoFactorPending: false);
+
+      if (resolved.twoFactorEnabled) {
+        await _setTwoFactorMarker(normalizedEmail);
+      } else {
+        await _setTwoFactorMarker(null);
+      }
+
+      _resolvedCurrentUser = result;
+      _emitProfileUpdate();
+      return result;
     } catch (_) {
       await _setTwoFactorMarker(null);
       rethrow;
+    } finally {
+      _passwordSignInInProgressEmail = null;
     }
-    final user = response.user ?? _supabase.auth.currentUser;
-    if (user == null) {
-      await _setTwoFactorMarker(null);
-      throw StateError('Sign-in completed but no active session was returned.');
-    }
-    return _resolveUser(user);
   }
 
   @override
