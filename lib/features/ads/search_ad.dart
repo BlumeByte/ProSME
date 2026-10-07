@@ -23,6 +23,10 @@ DateTime? _lastShownAt;
 /// Only called when a search is submitted, and not again within [_cooldown].
 /// Resolves when the ad closes, or immediately if the cooldown is active.
 Future<void> showSearchAd(BuildContext context) async {
+  // Do not interrupt a search with an empty advertisement.
+  if (kSearchAdVideoUrl.trim().isEmpty && kSearchAdImageUrl.trim().isEmpty) {
+    return;
+  }
   final now = DateTime.now();
   if (_lastShownAt != null && now.difference(_lastShownAt!) < _cooldown) {
     return;

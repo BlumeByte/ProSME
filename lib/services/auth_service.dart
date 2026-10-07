@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
@@ -1023,6 +1024,33 @@ class SupabaseAuthService implements AuthService {
 
   @override
   Future<AppUser> signInWithGoogle() async {
+    if (!kIsWeb) {
+      // Android and iOS: Google's own sign-in screen returns an ID token. The
+      // browser flow is blocked by Google in embedded browsers.
+      final googleSignIn = GoogleSignIn(
+        serverClientId: kGoogleWebClientId,
+        scopes: const ['email', 'profile'],
+      );
+      final account = await googleSignIn.signIn();
+      if (account == null) {
+        throw StateError('Google sign-in was cancelled.');
+      }
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
+      if (idToken == null) {
+        throw StateError('Google did not return a sign-in token. Try again.');
+      }
+      await _supabase.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken,
+        accessToken: auth.accessToken,
+      );
+      final signedIn = _supabase.auth.currentUser;
+      if (signedIn == null) {
+        throw StateError('Google sign-in completed but no session was returned.');
+      }
+      return _resolveUser(signedIn);
+    }
     final launched = await _supabase.auth.signInWithOAuth(
       OAuthProvider.google,
       redirectTo: kIsWeb ? null : kGoogleOAuthRedirectUrl,

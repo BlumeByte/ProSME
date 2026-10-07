@@ -170,13 +170,11 @@ class PlatformReport {
 class AdminCreatedAccount {
   const AdminCreatedAccount({
     required this.userId,
-    required this.temporaryPassword,
     required this.passwordResetSent,
     required this.warning,
   });
 
   final String userId;
-  final String temporaryPassword;
   final bool passwordResetSent;
   final String warning;
 }
@@ -437,7 +435,6 @@ class AdminService {
     }
     return AdminCreatedAccount(
       userId: (data['userId'] ?? '').toString(),
-      temporaryPassword: (data['temporaryPassword'] ?? '').toString(),
       passwordResetSent: data['passwordResetSent'] == true,
       warning: (data['warning'] ?? '').toString(),
     );

@@ -24,6 +24,12 @@ const String kGoogleOAuthRedirectUrl = String.fromEnvironment(
   // Override with your Android applicationId, e.g. com.yourcompany.prosme://login-callback
   defaultValue: 'com.blumebyte.prosme://login-callback',
 );
+/// Web application OAuth client ID from Google Cloud. Android uses it as the
+/// server client ID so Google issues an ID token that Supabase accepts.
+const String kGoogleWebClientId = String.fromEnvironment(
+  'GOOGLE_WEB_CLIENT_ID',
+  defaultValue: '800199711809-90b6oajqtk8cq3c7rmbght0m0j7dr521.apps.googleusercontent.com',
+);
 const String kMicrosoftOAuthRedirectUrl = String.fromEnvironment(
   'MICROSOFT_OAUTH_REDIRECT_URL',
   // Same custom scheme as Google; Supabase routes both providers back here.

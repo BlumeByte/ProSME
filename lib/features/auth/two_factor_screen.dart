@@ -68,6 +68,7 @@ class _TwoFactorScreenState extends ConsumerState<TwoFactorScreen> {
   }
 
   Future<void> _verify() async {
+    if (_sending || _verifying) return;
     final settings = ref.read(appSettingsControllerProvider);
     final code = _codeController.text.trim();
     if (!RegExp(r'^\d{6}$').hasMatch(code)) {
@@ -141,7 +142,7 @@ class _TwoFactorScreenState extends ConsumerState<TwoFactorScreen> {
                     errorText: _error,
                     counterText: '',
                   ),
-                  onSubmitted: (_) => _verifying ? null : _verify(),
+                  onSubmitted: (_) => _sending || _verifying ? null : _verify(),
                 ),
                 if (_info != null && _error == null) ...[
                   const SizedBox(height: 8),
@@ -149,7 +150,7 @@ class _TwoFactorScreenState extends ConsumerState<TwoFactorScreen> {
                 ],
                 const SizedBox(height: 16),
                 FilledButton(
-                  onPressed: _verifying ? null : _verify,
+                  onPressed: _sending || _verifying ? null : _verify,
                   child: Text(
                     settings.t(_verifying ? 'Verifying...' : 'Verify'),
                   ),

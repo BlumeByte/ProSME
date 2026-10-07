@@ -109,6 +109,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       return 'Account created. Click the verification link in your email, then sign in.';
     }
     final message = error.toString().toLowerCase();
+    if (message.contains('was cancelled')) {
+      return 'Sign-in was cancelled.';
+    }
     if (message.contains('invalid login credentials') ||
         message.contains('invalid email or password')) {
       return 'Invalid email or password.';

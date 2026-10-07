@@ -52,16 +52,10 @@ final supabaseAuthServiceProvider = Provider<AuthService>((ref) {
 /// Riverpod shares this stream across the router and UI. Returning users get
 /// the restored Supabase session rather than a new in-memory auth state.
 final authStateProvider = StreamProvider((ref) {
-  return ref.watch(authServiceProvider).authStateChanges().distinct(
-        (previous, next) =>
-            previous?.id == next?.id &&
-            previous?.role == next?.role &&
-            previous?.name == next?.name &&
-            previous?.fullName == next?.fullName &&
-            previous?.photoUrl == next?.photoUrl &&
-            previous?.verificationStatus == next?.verificationStatus &&
-            previous?.isBusy == next?.isBusy,
-      );
+  // Every profile update matters to a consumer (including phone, description,
+  // country and the sign-in security gate). A partial-field comparator
+  // silently discarded successful saves and security-state transitions.
+  return ref.watch(authServiceProvider).authStateChanges();
 });
 
 final passwordRecoveryActiveProvider = StateProvider<bool>((ref) => false);
