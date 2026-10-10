@@ -18,6 +18,18 @@ jobs:
       SUPABASE_PROJECT_REF: wbnvifrzckjttyxhmlcf
     steps:
       - uses: actions/checkout@v4
+
+      - name: Apply bulk import schema repair directly
+        shell: bash
+        run: |
+          PGPASSWORD="$SUPABASE_DB_PASSWORD" psql \
+            --host="db.$SUPABASE_PROJECT_REF.supabase.co" \
+            --port=5432 \
+            --username=postgres \
+            --dbname=postgres \
+            --set=ON_ERROR_STOP=1 \
+            --file="supabase/migrations/20261010040000_repair_bulk_account_import_support.sql"
+
       - uses: supabase/setup-cli@v1
         with:
           version: latest
