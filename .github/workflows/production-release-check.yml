@@ -18,6 +18,18 @@ jobs:
       SUPABASE_PROJECT_REF: wbnvifrzckjttyxhmlcf
     steps:
       - uses: actions/checkout@v4
+
+      - name: Apply bulk import schema repair directly
+        shell: bash
+        run: |
+          PGPASSWORD="$SUPABASE_DB_PASSWORD" psql \
+            --host="db.$SUPABASE_PROJECT_REF.supabase.co" \
+            --port=5432 \
+            --username=postgres \
+            --dbname=postgres \
+            --set=ON_ERROR_STOP=1 \
+            --file="supabase/migrations/20261010040000_repair_bulk_account_import_support.sql"
+
       - uses: supabase/setup-cli@v1
         with:
           version: latest
@@ -31,14 +43,38 @@ jobs:
           echo "reason=$reason" >> "$GITHUB_OUTPUT"
           [ "$reason" = "ok" ] || exit 1
       - name: Link ProSME production project
+        id: link
         if: steps.preflight.outcome == 'success'
+        continue-on-error: true
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Build direct database URL fallback
+        id: dburl
+        if: steps.preflight.outcome == 'success' && steps.link.outcome != 'success'
+        shell: bash
+        run: |
+          encoded_password="$(python3 - <<'PY'
+          import os, urllib.parse
+          print(urllib.parse.quote(os.environ['SUPABASE_DB_PASSWORD'], safe=''))
+          PY
+          )"
+          echo "url=postgresql://postgres:${encoded_password}@db.${SUPABASE_PROJECT_REF}.supabase.co:5432/postgres" >> "$GITHUB_OUTPUT"
+
       - name: Preview pending migrations
-        if: steps.preflight.outcome == 'success'
+        if: steps.preflight.outcome == 'success' && steps.link.outcome == 'success'
         run: supabase db push --dry-run
+
+      - name: Preview pending migrations via direct database
+        if: steps.preflight.outcome == 'success' && steps.link.outcome != 'success'
+        run: supabase db push --dry-run --db-url "${{ steps.dburl.outputs.url }}"
+
       - name: Apply pending migrations
-        if: steps.preflight.outcome == 'success'
+        if: steps.preflight.outcome == 'success' && steps.link.outcome == 'success'
         run: supabase db push
+
+      - name: Apply pending migrations via direct database
+        if: steps.preflight.outcome == 'success' && steps.link.outcome != 'success'
+        run: supabase db push --db-url "${{ steps.dburl.outputs.url }}"
       - name: Publish Supabase migration status
         if: always()
         uses: actions/github-script@v7
