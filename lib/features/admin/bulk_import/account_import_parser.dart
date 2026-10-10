@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:archive/archive.dart';
 import 'package:excel/excel.dart';
 
 import '../../../core/utils/location_data.dart';
@@ -77,15 +80,99 @@ const _headerAliases = <String, String>{
 
 const _allowedGenders = {'female', 'male', 'non_binary', 'prefer_not_to_say'};
 
+/// `.xlsx` is a zip archive (starts with `PK`). The most common reason the
+/// `excel` package rejects a file that is genuinely named `.xlsx` is that it
+/// is actually something else underneath — an old binary `.xls`, a CSV, or an
+/// HTML/MHTML table that a spreadsheet tool saved with the wrong extension.
+/// Catching that here gives a precise, actionable message instead of a bare
+/// parser exception.
+void _checkContainerFormat(List<int> bytes) {
+  if (bytes.length < 8) {
+    throw const FormatException('This file is empty or too small to be a workbook.');
+  }
+  final header = bytes.sublist(0, 8);
+  final isZip = header[0] == 0x50 && header[1] == 0x4B; // "PK"
+  if (isZip) return;
+  final isOle2 = header[0] == 0xD0 &&
+      header[1] == 0xCF &&
+      header[2] == 0x11 &&
+      header[3] == 0xE0;
+  if (isOle2) {
+    throw const FormatException(
+      'This is an old .xls workbook, not .xlsx. Open it in Excel or Google '
+      'Sheets, then use File > Save As / Download as Microsoft Excel (.xlsx).',
+    );
+  }
+  final looksLikeText = header.every(
+    (byte) => byte == 0x09 || byte == 0x0A || byte == 0x0D || (byte >= 0x20 && byte < 0x7F),
+  );
+  if (looksLikeText) {
+    throw const FormatException(
+      'This looks like a CSV or text file saved with an .xlsx name. Open it '
+      'in Excel or Google Sheets and save/export it as a real .xlsx workbook.',
+    );
+  }
+  throw const FormatException(
+    'This does not look like an .xlsx workbook. Save it as .xlsx from Excel '
+    'or Google Sheets and try again.',
+  );
+}
+
+/// Some spreadsheet exporters write package-relationship targets as absolute
+/// paths from the package root (`Target="/xl/worksheets/sheet1.xml"`), which
+/// the OOXML spec allows but the `excel` package does not expect: it always
+/// joins a target relative to `xl/`, so an absolute target resolves to a path
+/// that is not in the zip and `Excel.decodeBytes` crashes with a null-check
+/// error instead of a readable one. Rewrite any such targets to the relative
+/// form it expects before handing the bytes over. A no-op, wrapped in its own
+/// try/catch, for every file that does not have this quirk.
+List<int> _normalizeRelationshipTargets(List<int> bytes) {
+  try {
+    final archive = ZipDecoder().decodeBytes(bytes);
+    var changed = false;
+    for (final file in List<ArchiveFile>.from(archive.files)) {
+      if (!file.isFile || !file.name.endsWith('.rels')) continue;
+      final content = utf8.decode(file.content as List<int>);
+      if (!content.contains('Target="/')) continue;
+      final fixed = content.replaceAllMapped(
+        RegExp(r'Target="(/[^"]*)"'),
+        (match) {
+          var target = match.group(1)!;
+          target =
+              target.startsWith('/xl/') ? target.substring(4) : target.substring(1);
+          return 'Target="$target"';
+        },
+      );
+      if (fixed == content) continue;
+      changed = true;
+      final data = utf8.encode(fixed);
+      archive.addFile(ArchiveFile(file.name, data.length, data));
+    }
+    if (!changed) return bytes;
+    return ZipEncoder().encode(archive) ?? bytes;
+  } catch (_) {
+    // Best-effort only: fall through to the original bytes and let
+    // Excel.decodeBytes report its own error.
+    return bytes;
+  }
+}
+
 /// Reads the first sheet of an `.xlsx` file. Throws [FormatException] with a
 /// message the admin can act on when the file is not a usable account list.
 ImportAccountSheet parseAccountSheet(List<int> bytes) {
+  _checkContainerFormat(bytes);
+  final normalized = _normalizeRelationshipTargets(bytes);
   final Excel excel;
   try {
-    excel = Excel.decodeBytes(bytes);
-  } catch (_) {
-    throw const FormatException(
-      'This file could not be read. Save it as an .xlsx workbook and try again.',
+    excel = Excel.decodeBytes(normalized);
+  } catch (error) {
+    // The generic "could not be read" message hid what actually went wrong,
+    // which made this impossible to diagnose without the file in hand. Keep
+    // the underlying exception in the message the admin sees.
+    throw FormatException(
+      'This file could not be read ($error). '
+      'Open it in Excel or Google Sheets, then use File > Save As / Download '
+      'as Microsoft Excel (.xlsx) and try the new copy.',
     );
   }
   if (excel.tables.isEmpty) {

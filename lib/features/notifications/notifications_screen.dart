@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../config/constants.dart';
 import '../../core/widgets/loading_state.dart';
 import '../../core/widgets/safe_back_button.dart';
+import '../../models/app_user.dart';
+import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
+import '../home/account_completion.dart';
+import '../home/account_status_card.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -107,6 +113,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     }
   }
 
+  void _openCompletionItem(AppUser user, AccountCompletionItem item) {
+    // Profile tab index differs per role's home shell (see user_home_screen
+    // / artisan_home_screen); admins never see these items at all.
+    final tabIndex = user.role == UserRole.artisan ? 4 : 3;
+    final home =
+        user.role == UserRole.artisan ? RouteNames.artisanHome : RouteNames.home;
+    ref.read(requestedProfileActionProvider.notifier).state = item.action;
+    ref.read(requestedHomeTabProvider.notifier).state = tabIndex;
+    context.go(home);
+  }
+
   Future<void> _pickDateRange() async {
     final now = DateTime.now();
     final selected = await showDateRangePicker(
@@ -120,9 +137,26 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     }
   }
 
+  String _actionSubtitle(AppSettings settings, AccountCompletionAction action) {
+    switch (action) {
+      case AccountCompletionAction.accountSettings:
+        return settings.t('Tap to add it in Account settings.');
+      case AccountCompletionAction.photo:
+        return settings.t('Tap to add a profile photo.');
+      case AccountCompletionAction.verifyEmail:
+        return settings.t('Tap to send yourself a 6-digit code.');
+      case AccountCompletionAction.verifyPhone:
+        return settings.t('Tap to send yourself an SMS code.');
+      case AccountCompletionAction.artisanVerification:
+        return settings.t('Tap to submit your documents for review.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(appSettingsControllerProvider);
+    final user = ref.watch(authStateProvider).valueOrNull;
+    final completionItems = ref.watch(accountCompletionItemsProvider);
     return Scaffold(
       appBar: AppBar(
         leading: const SafeBackButton(),
@@ -153,6 +187,42 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (user != null && completionItems.isNotEmpty) ...[
+                Text(
+                  settings.t('Finish setting up your account'),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                for (final item in completionItems)
+                  Card(
+                    color: Theme.of(context).colorScheme.tertiaryContainer,
+                    child: ListTile(
+                      leading: Icon(
+                        Icons.priority_high,
+                        color: Theme.of(context).colorScheme.onTertiaryContainer,
+                      ),
+                      title: Text(
+                        '${settings.t('Complete')}: ${settings.t(item.label)}',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onTertiaryContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: Text(
+                        _actionSubtitle(settings, item.action),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onTertiaryContainer,
+                        ),
+                      ),
+                      trailing: Icon(
+                        Icons.chevron_right,
+                        color: Theme.of(context).colorScheme.onTertiaryContainer,
+                      ),
+                      onTap: () => _openCompletionItem(user, item),
+                    ),
+                  ),
+                const SizedBox(height: 16),
+              ],
               Wrap(
                 spacing: 8,
                 runSpacing: 8,

@@ -20,6 +20,7 @@ import '../../services/auth_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/service_providers.dart';
 import '../../services/theme_mode_controller.dart';
+import '../home/account_completion.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -53,6 +54,46 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         ],
       );
+    }
+
+    // A notification tap asked for a specific flow (verify email, add a
+    // photo, ...) once this tab is showing. The Profile tab stays mounted
+    // inside the home shell's IndexedStack even while another tab is active,
+    // so this fires as soon as the request is set, and the home screen's own
+    // tab switch (same frame) brings it into view.
+    final requestedAction = ref.watch(requestedProfileActionProvider);
+    if (requestedAction != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(requestedProfileActionProvider.notifier).state = null;
+        switch (requestedAction) {
+          case AccountCompletionAction.accountSettings:
+            _showAccountSettingsSheet(context, ref, authService, user);
+            break;
+          case AccountCompletionAction.photo:
+            _changeProfilePhoto(authService);
+            break;
+          case AccountCompletionAction.verifyEmail:
+            _showVerificationCodeDialog(
+              context,
+              title: 'Verify email',
+              requestCode: authService.requestEmailOtp,
+              verifyCode: authService.verifyEmailOtp,
+            );
+            break;
+          case AccountCompletionAction.verifyPhone:
+            _showVerificationCodeDialog(
+              context,
+              title: 'Verify phone',
+              requestCode: authService.requestPhoneOtp,
+              verifyCode: authService.verifyPhoneOtp,
+            );
+            break;
+          case AccountCompletionAction.artisanVerification:
+            context.push(RouteNames.artisanVerification);
+            break;
+        }
+      });
     }
 
     final normalizedName = user.name.trim();
@@ -827,14 +868,32 @@ Future<void> _showSecuritySheet(
                       },
               ),
               ListTile(
-                leading: const Icon(Icons.phone_android_outlined),
-                title: Text(settings.t('Phone number')),
+                leading: Icon(
+                  user.phoneVerified
+                      ? Icons.phonelink_lock_outlined
+                      : Icons.phone_android_outlined,
+                ),
+                title: Text(settings.t('Phone verification')),
                 subtitle: Text(
                   user.phone.isEmpty
                       ? settings.t('Add a phone number in account settings.')
-                      : user.phone,
+                      : user.phoneVerified
+                          ? settings.t('Your phone number is verified.')
+                          : '${settings.t('Send a 6-digit code by SMS to')} ${user.phone}.',
                 ),
-                onTap: null,
+                trailing:
+                    user.phoneVerified ? Text(settings.t('Verified')) : null,
+                onTap: (user.phone.isEmpty || user.phoneVerified)
+                    ? null
+                    : () {
+                        Navigator.of(context).pop();
+                        _showVerificationCodeDialog(
+                          context,
+                          title: 'Verify phone',
+                          requestCode: authService.requestPhoneOtp,
+                          verifyCode: authService.verifyPhoneOtp,
+                        );
+                      },
               ),
             ],
           ),

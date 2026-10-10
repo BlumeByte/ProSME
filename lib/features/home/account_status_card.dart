@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/constants.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
+import 'account_completion.dart';
 
 /// Account fields the status card needs. Read from the signed-in user's own
 /// profile row, which the profiles policies already allow.
@@ -15,6 +16,21 @@ final accountStatusProvider =
   // reads cannot include contact columns.
   final raw = await ref.read(supabaseClientProvider).rpc('get_my_profile');
   return raw is Map ? Map<String, dynamic>.from(raw) : null;
+});
+
+/// The still-incomplete items from [accountStatusProvider], for the
+/// notifications panel's priority section. Empty once everything is done, or
+/// for admins (who never see the status card either).
+final accountCompletionItemsProvider =
+    Provider.autoDispose<List<AccountCompletionItem>>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  final row = ref.watch(accountStatusProvider).valueOrNull;
+  if (user == null || row == null || user.role == UserRole.admin) {
+    return const [];
+  }
+  return accountCompletionItems(row, user.role)
+      .where((item) => !item.done)
+      .toList(growable: false);
 });
 
 /// "Your account" summary for customers and artisans: where the account came
@@ -43,9 +59,15 @@ class AccountStatusCard extends ConsumerWidget {
         if (row == null) return const SizedBox.shrink();
         final imported = row['account_source'] == 'imported';
         final redeemed = row['redeemed_at'] != null;
-        final items = _completeness(row, user.role);
-        final done = items.where((item) => item.$2).length;
+        final items = accountCompletionItems(row, user.role);
+        final done = items.where((item) => item.done).length;
         final fraction = items.isEmpty ? 0.0 : done / items.length;
+        // Nothing left to do: stop taking up space on the home screen. The
+        // notifications panel only ever shows the items that are still
+        // missing, so there is nothing to lose by removing this card too.
+        if (items.isNotEmpty && done == items.length) {
+          return const SizedBox.shrink();
+        }
 
         return Card(
           child: Padding(
@@ -95,11 +117,11 @@ class AccountStatusCard extends ConsumerWidget {
                     for (final item in items)
                       Chip(
                         avatar: Icon(
-                          item.$2 ? Icons.check_circle : Icons.radio_button_unchecked,
+                          item.done ? Icons.check_circle : Icons.radio_button_unchecked,
                           size: 18,
-                          color: item.$2 ? Colors.green : null,
+                          color: item.done ? Colors.green : null,
                         ),
-                        label: Text(settings.t(item.$1)),
+                        label: Text(settings.t(item.label)),
                       ),
                   ],
                 ),
@@ -121,21 +143,6 @@ class AccountStatusCard extends ConsumerWidget {
         );
       },
     );
-  }
-
-  /// Label and whether it is done, for each profile field that matters.
-  List<(String, bool)> _completeness(Map<String, dynamic> row, UserRole role) {
-    bool filled(String key) => (row[key] ?? '').toString().trim().isNotEmpty;
-    return [
-      ('Phone number', filled('phone')),
-      ('Date of birth', filled('date_of_birth')),
-      ('Country', filled('country')),
-      ('Profile photo', filled('avatar_url')),
-      ('Email verified', row['email_verified'] == true),
-      ('Phone verified', row['phone_verified'] == true),
-      if (role == UserRole.artisan)
-        ('Verified badge', row['verification_status'] == 'verified'),
-    ];
   }
 
   String _verificationLabel(Object? status) {

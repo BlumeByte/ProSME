@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../config/supabase_options.dart';
+import '../features/home/account_completion.dart';
 import '../models/listing.dart';
 import 'auth_service.dart';
 import 'chat_service.dart';
@@ -59,6 +60,19 @@ final authStateProvider = StreamProvider((ref) {
 });
 
 final passwordRecoveryActiveProvider = StateProvider<bool>((ref) => false);
+
+/// Set by a notification tap (or anything else outside the home shell) to
+/// jump the bottom navigation to a specific tab — e.g. Profile, to finish an
+/// account item. Read-and-cleared by the home screen that owns the tab bar,
+/// since the tab index is otherwise private `State` the rest of the app
+/// cannot reach.
+final requestedHomeTabProvider = StateProvider<int?>((ref) => null);
+
+/// Set alongside [requestedHomeTabProvider] when the Profile tab should also
+/// open a specific flow (verify email, add a photo, ...) once it is showing.
+/// Read-and-cleared by [ProfileScreen].
+final requestedProfileActionProvider =
+    StateProvider<AccountCompletionAction?>((ref) => null);
 
 final listingServiceProvider = Provider<ListingService>((ref) {
   if (!shouldUseSupabase()) {

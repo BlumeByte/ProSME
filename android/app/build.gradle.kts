@@ -64,8 +64,18 @@ android {
                 }
                 signingConfigs.getByName("debug")
             }
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // Play Console flagged the release build for near-zero DEX
+            // shrinking/obfuscation. proguard-rules.pro keeps every plugin
+            // that reaches classes via reflection/JNI (Firebase, Google
+            // Sign-In, Maps, AdMob, local_auth, video_player); test sign-in,
+            // push, maps, ads, biometrics and video thoroughly before
+            // promoting a build past internal testing.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

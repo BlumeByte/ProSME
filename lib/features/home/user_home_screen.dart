@@ -72,6 +72,17 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     final settings = ref.watch(appSettingsControllerProvider);
     final unreadNotifications =
         ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
+    // A notification tap (or anything outside this shell) asked to jump to a
+    // specific tab, e.g. Profile, to finish an account item. `_currentIndex`
+    // is private State the rest of the app has no other way to reach.
+    final requestedTab = ref.watch(requestedHomeTabProvider);
+    if (requestedTab != null && requestedTab != _currentIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _currentIndex = requestedTab);
+        ref.read(requestedHomeTabProvider.notifier).state = null;
+      });
+    }
     final currentIndex = user == null && _currentIndex > 0 ? 0 : _currentIndex;
     final banners = _buildBanners(settings);
     final pages = [

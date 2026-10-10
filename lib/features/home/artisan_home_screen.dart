@@ -46,6 +46,16 @@ class _ArtisanHomeScreenState extends ConsumerState<ArtisanHomeScreen> {
     final user = ref.watch(authStateProvider).valueOrNull;
     final chatService = ref.watch(chatServiceProvider);
     final settings = ref.watch(appSettingsControllerProvider);
+    // A notification tap (or anything outside this shell) asked to jump to a
+    // specific tab, e.g. Profile, to finish an account item.
+    final requestedTab = ref.watch(requestedHomeTabProvider);
+    if (requestedTab != null && requestedTab != _currentIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _currentIndex = requestedTab);
+        ref.read(requestedHomeTabProvider.notifier).state = null;
+      });
+    }
     final currentIndex = user == null && _currentIndex > 0 ? 0 : _currentIndex;
 
     return PopScope(

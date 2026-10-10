@@ -34,13 +34,27 @@ class _AccountImportScreenState extends ConsumerState<AccountImportScreen> {
       _parseError = null;
       _result = null;
     });
+    // Picking with FileType.custom + allowedExtensions relies on the OS
+    // reporting a MIME type for the file. Many Android storage providers
+    // (Downloads, Drive, WhatsApp, etc.) tag .xlsx files as the generic
+    // application/octet-stream, so the system picker's filter hides them
+    // entirely and nothing can be selected. FileType.any avoids that; the
+    // extension is checked here instead, after the pick.
     final picked = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['xlsx'],
+      type: FileType.any,
       withData: true,
     );
     if (picked == null || picked.files.isEmpty) return;
     final file = picked.files.single;
+    final name = file.name.toLowerCase();
+    if (!name.endsWith('.xlsx')) {
+      setState(() {
+        _sheet = null;
+        _fileName = file.name;
+        _parseError = 'Choose a .xlsx file. "${file.name}" is not one.';
+      });
+      return;
+    }
     final bytes = file.bytes;
     if (bytes == null) {
       setState(() => _parseError = 'The file could not be opened. Try again.');
