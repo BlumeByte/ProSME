@@ -575,7 +575,14 @@ Deno.serve(async (req) => {
 
     if (userError || !user) return fail('Invalid admin session.');
 
-    const { data: caller, error: callerError } = await userClient
+    // Authorize with the service-role client after validating the caller's JWT.
+    // The authenticated client may intentionally lack direct SELECT access to
+    // sensitive profile columns (for example email) after the PII lockdown.
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    const { data: caller, error: callerError } = await adminClient
       .from('profiles')
       .select('id,role,email')
       .eq('id', user.id)
@@ -586,9 +593,6 @@ Deno.serve(async (req) => {
       return fail('Only admin accounts can use this action.');
     }
 
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
     const publicClient = createClient(supabaseUrl, anonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
