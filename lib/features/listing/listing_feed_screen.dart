@@ -346,6 +346,19 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   }
 
   Future<void> _bookProfessional(_ProfessionalPreview pro) async {
+    if (pro.listingId.isEmpty) {
+      final settings = ref.read(appSettingsControllerProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            settings.t(
+              'This artisan has not posted an active service listing yet. You can still view their profile.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     if (pro.isBusy) {
       _showUnavailable();
       return;
@@ -404,6 +417,9 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     }
 
     final listingsAsync = ref.watch(listingsStreamProvider);
+    final marketplaceArtisans =
+        ref.watch(marketplaceArtisansProvider).valueOrNull ??
+            const <Map<String, dynamic>>[];
     return listingsAsync.when(
       error: (_, __) {
         return Center(
@@ -497,6 +513,62 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                 ? listing.wonBidCount
                 : existing.wonBidCount,
             isBusy: existing.isBusy || listing.artisanBusy,
+          );
+        }
+
+        // Profiles are also marketplace professionals even before they post
+        // their first listing. This is important for newly imported artisans.
+        for (final profile in marketplaceArtisans) {
+          final artisanId = (profile['id'] ?? '').toString();
+          if (artisanId.isEmpty || professionalsById.containsKey(artisanId)) {
+            continue;
+          }
+          final rawCategories = profile['categories'];
+          final categories = rawCategories is List
+              ? rawCategories
+                  .map((item) => item.toString().trim())
+                  .where((item) => item.isNotEmpty)
+                  .map(normalizeServiceCategory)
+                  .toSet()
+              : <String>{};
+          final name = [
+            (profile['full_name'] ?? '').toString().trim(),
+            (profile['username'] ?? '').toString().trim(),
+          ].firstWhere((value) => value.isNotEmpty, orElse: () => 'Professional');
+          final location = (profile['location'] ?? profile['country'] ?? '')
+              .toString()
+              .trim();
+          final serviceText = [
+            name,
+            (profile['description'] ?? '').toString(),
+            (profile['bio'] ?? '').toString(),
+            ...categories,
+          ].join(' ').toLowerCase();
+          final serviceMatches =
+              _serviceQuery.isEmpty || fuzzyContains(serviceText, _serviceQuery);
+          final categoryMatches = _selectedCategory == null ||
+              categories.contains(_selectedCategory) ||
+              categories.any((item) => fuzzyContains(item, _selectedCategory!));
+          final locationMatches = _locationQuery.isEmpty ||
+              _matchesLocation(location.toLowerCase(), _locationQuery);
+          if (!serviceMatches || !categoryMatches || !locationMatches) continue;
+
+          professionalsById[artisanId] = _ProfessionalPreview(
+            artisanId: artisanId,
+            listingId: '',
+            name: name,
+            avatarUrl: (profile['avatar_url'] ?? '').toString(),
+            location: location,
+            minPrice: 0,
+            categories: categories,
+            isVerified: (profile['verification_status'] ?? '').toString() ==
+                VerificationStatus.verified.name,
+            listingCount: 0,
+            ratingAverage:
+                (profile['rating_summary'] as num?)?.toDouble() ?? 0,
+            ratingCount: 0,
+            wonBidCount: 0,
+            isBusy: profile['is_busy'] == true,
           );
         }
 
@@ -1626,7 +1698,9 @@ class _ProfessionalCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${pro.listingCount} ${settings.t(pro.listingCount == 1 ? 'active service' : 'active services')}',
+                          pro.listingCount == 0
+                              ? settings.t('No active service listing yet')
+                              : '${pro.listingCount} ${settings.t(pro.listingCount == 1 ? 'active service' : 'active services')}',
                           style: TextStyle(color: scheme.onSurfaceVariant),
                         ),
                         const SizedBox(height: 4),
@@ -1660,11 +1734,13 @@ class _ProfessionalCard extends StatelessWidget {
                     .toList(growable: false),
               ),
               const SizedBox(height: 12),
-              Text(
-                '${settings.t('From')} ${formatMoney(pro.minPrice, currencyCode)}',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
+              if (pro.listingCount > 0) ...[
+                Text(
+                  '${settings.t('From')} ${formatMoney(pro.minPrice, currencyCode)}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+              ],
               OutlinedButton.icon(
                 onPressed: onOpenProfile,
                 icon: const Icon(Icons.account_circle_outlined, size: 18),
@@ -1678,7 +1754,7 @@ class _ProfessionalCard extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: pro.isBusy ? null : onBook,
+                  onPressed: pro.isBusy || pro.listingId.isEmpty ? null : onBook,
                   icon: Icon(
                     pro.isBusy ? Icons.block : Icons.request_quote_outlined,
                     size: 18,
@@ -1688,7 +1764,15 @@ class _ProfessionalCard extends StatelessWidget {
                           backgroundColor: unavailableColor,
                         )
                       : null,
-                  label: Text(settings.t(pro.isBusy ? 'Busy' : 'Book Now')),
+                  label: Text(
+                    settings.t(
+                      pro.listingId.isEmpty
+                          ? 'No service listing yet'
+                          : pro.isBusy
+                              ? 'Busy'
+                              : 'Book Now',
+                    ),
+                  ),
                 ),
               ),
             ],
