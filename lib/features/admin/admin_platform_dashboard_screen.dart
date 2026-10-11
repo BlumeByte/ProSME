@@ -247,6 +247,10 @@ class _AdminOverview extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 16),
+            _PlatformActivityGraph(counts: counts),
+            const SizedBox(height: 16),
+            const _RecentActivityPanel(),
+            const SizedBox(height: 16),
             _JobProgressHealth(counts: counts),
             const SizedBox(height: 16),
             const _WalletFlowPreview(),
@@ -255,6 +259,179 @@ class _AdminOverview extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _PlatformActivityGraph extends StatelessWidget {
+  const _PlatformActivityGraph({required this.counts});
+
+  final PlatformModuleCounts counts;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <(String, int, IconData)>[
+      ('Jobs', counts.jobs, Icons.work_outline),
+      ('Bids', counts.bids, Icons.gavel_outlined),
+      ('Chats', counts.threads, Icons.forum_outlined),
+      ('Messages', counts.messages, Icons.message_outlined),
+      ('Reports', counts.reports, Icons.report_outlined),
+    ];
+    final maxValue = rows
+        .map((row) => row.$2)
+        .fold<int>(1, (max, value) => value > max ? value : max);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Platform activity',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Live operational totals for support and marketplace activity.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            ...rows.map(
+              (row) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  children: [
+                    SizedBox(width: 28, child: Icon(row.$3, size: 20)),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 78, child: Text(row.$1)),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: LinearProgressIndicator(
+                          minHeight: 12,
+                          value: row.$2 / maxValue,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      width: 42,
+                      child: Text(
+                        row.$2.toString(),
+                        textAlign: TextAlign.end,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentActivityPanel extends ConsumerWidget {
+  const _RecentActivityPanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return FutureBuilder<List<AdminActivityItem>>(
+      future: ref.watch(adminServiceProvider).fetchRecentActivity(limit: 30),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Card(
+            child: ListTile(
+              leading: const Icon(Icons.warning_amber_outlined),
+              title: const Text('Could not load recent activity'),
+              subtitle: Text(snapshot.error.toString()),
+            ),
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+        final items = snapshot.data!;
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.manage_search_outlined),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Recent user activity',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Messages, chats, bids, jobs and reports across all accounts.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                if (items.isEmpty)
+                  const Text('No activity yet.')
+                else
+                  ...items.take(10).map(
+                        (item) => _ActivityTile(item: item),
+                      ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ActivityTile extends StatelessWidget {
+  const _ActivityTile({required this.item});
+
+  final AdminActivityItem item;
+
+  IconData get _icon => switch (item.kind) {
+        'message' => Icons.message_outlined,
+        'chat' => Icons.forum_outlined,
+        'bid' => Icons.gavel_outlined,
+        'job' => Icons.work_outline,
+        'report' => Icons.report_outlined,
+        _ => Icons.history,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(_icon),
+      title: Text(item.title),
+      subtitle: Text(
+        [
+          if (item.actorLabel.isNotEmpty) item.actorLabel,
+          if (item.detail.isNotEmpty) item.detail,
+          item.createdAt.toLocal().toString(),
+        ].join('\n'),
+        maxLines: 4,
+        overflow: TextOverflow.ellipsis,
+      ),
+      isThreeLine: true,
     );
   }
 }
@@ -1468,6 +1645,12 @@ class _AccountTile extends ConsumerWidget {
                     );
                   }),
                   OutlinedButton.icon(
+                    onPressed: () => _showAccountActivity(context, ref),
+                    icon: const Icon(Icons.timeline_outlined),
+                    label: Text(settings.t('Activity')),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
                     onPressed: account.role == UserRole.admin
                         ? null
                         : () => _confirmResetData(context, ref, settings),
@@ -1503,6 +1686,72 @@ class _AccountTile extends ConsumerWidget {
     return '${value.year.toString().padLeft(4, '0')}-'
         '${value.month.toString().padLeft(2, '0')}-'
         '${value.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _showAccountActivity(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.78,
+        maxChildSize: 0.95,
+        minChildSize: 0.45,
+        builder: (context, scrollController) {
+          return FutureBuilder<List<AdminActivityItem>>(
+            future: ref
+                .read(adminServiceProvider)
+                .fetchRecentActivity(userId: account.id, limit: 100),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    Text(
+                      'Activity · ${account.name}',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    Text('Could not load activity: ${snapshot.error}'),
+                  ],
+                );
+              }
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final items = snapshot.data!;
+              return ListView(
+                controller: scrollController,
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Text(
+                    'Activity · ${account.name}',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    account.email.isEmpty ? account.id : account.email,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 16),
+                  if (items.isEmpty)
+                    const Text('No jobs, bids, chats, messages or reports found.')
+                  else
+                    ...items.map((item) => _ActivityTile(item: item)),
+                ],
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _showEditAccountSheet(
