@@ -217,6 +217,26 @@ class ImportedAccountStats {
   final DateTime? lastImportedAt;
 }
 
+class AdminActivityItem {
+  const AdminActivityItem({
+    required this.kind,
+    required this.title,
+    required this.detail,
+    required this.actorId,
+    required this.actorLabel,
+    required this.relatedId,
+    required this.createdAt,
+  });
+
+  final String kind;
+  final String title;
+  final String detail;
+  final String actorId;
+  final String actorLabel;
+  final String relatedId;
+  final DateTime createdAt;
+}
+
 class AdminService {
   const AdminService([this._supabase]);
 
@@ -377,6 +397,190 @@ class AdminService {
       reports: (reportRows as List<dynamic>).length,
       walletTransactions: (walletRows as List<dynamic>).length,
     );
+  }
+
+  Future<List<AdminActivityItem>> fetchRecentActivity({
+    String? userId,
+    int limit = 80,
+  }) async {
+    final client = _supabase;
+    if (client == null) return const [];
+
+    final accounts = await fetchAccounts();
+    final names = <String, String>{
+      for (final account in accounts)
+        account.id: account.fullName.trim().isNotEmpty
+            ? account.fullName.trim()
+            : account.name.trim().isNotEmpty
+                ? account.name.trim()
+                : account.email.trim().isNotEmpty
+                    ? account.email.trim()
+                    : account.id,
+    };
+    String label(String id) => names[id] ?? id;
+
+    final items = <AdminActivityItem>[];
+
+    final messageRows = userId == null
+        ? await client
+            .from('messages')
+            .select('id,thread_id,sender_id,type,content,created_at')
+            .order('created_at', ascending: false)
+            .limit(limit)
+        : await client
+            .from('messages')
+            .select('id,thread_id,sender_id,type,content,created_at')
+            .eq('sender_id', userId)
+            .order('created_at', ascending: false)
+            .limit(limit);
+    for (final raw in messageRows as List<dynamic>) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final actorId = (row['sender_id'] ?? '').toString();
+      items.add(
+        AdminActivityItem(
+          kind: 'message',
+          title: 'Message sent',
+          detail: (row['content'] ?? '').toString(),
+          actorId: actorId,
+          actorLabel: label(actorId),
+          relatedId: (row['thread_id'] ?? '').toString(),
+          createdAt:
+              DateTime.tryParse((row['created_at'] ?? '').toString()) ??
+                  DateTime.now(),
+        ),
+      );
+    }
+
+    final bidRows = userId == null
+        ? await client
+            .from('job_bids')
+            .select('id,job_id,artisan_id,amount,message,counter_message,status,created_at,updated_at')
+            .order('updated_at', ascending: false)
+            .limit(limit)
+        : await client
+            .from('job_bids')
+            .select('id,job_id,artisan_id,amount,message,counter_message,status,created_at,updated_at')
+            .or('artisan_id.eq.$userId,created_by_user_id.eq.$userId')
+            .order('updated_at', ascending: false)
+            .limit(limit);
+    for (final raw in bidRows as List<dynamic>) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final actorId = (row['artisan_id'] ?? '').toString();
+      final status = (row['status'] ?? 'pending').toString();
+      final amount = (row['amount'] as num?)?.toDouble() ?? 0;
+      final message = (row['counter_message'] ?? '').toString().trim().isNotEmpty
+          ? (row['counter_message'] ?? '').toString()
+          : (row['message'] ?? '').toString();
+      items.add(
+        AdminActivityItem(
+          kind: 'bid',
+          title: 'Bid $status · ${amount.toStringAsFixed(2)}',
+          detail: message,
+          actorId: actorId,
+          actorLabel: label(actorId),
+          relatedId: (row['job_id'] ?? '').toString(),
+          createdAt:
+              DateTime.tryParse((row['updated_at'] ?? row['created_at'] ?? '').toString()) ??
+                  DateTime.now(),
+        ),
+      );
+    }
+
+    final threadRows = userId == null
+        ? await client
+            .from('threads')
+            .select('id,user_id,artisan_id,last_message,updated_at')
+            .order('updated_at', ascending: false)
+            .limit(limit)
+        : await client
+            .from('threads')
+            .select('id,user_id,artisan_id,last_message,updated_at')
+            .or('user_id.eq.$userId,artisan_id.eq.$userId')
+            .order('updated_at', ascending: false)
+            .limit(limit);
+    for (final raw in threadRows as List<dynamic>) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final customerId = (row['user_id'] ?? '').toString();
+      final artisanId = (row['artisan_id'] ?? '').toString();
+      items.add(
+        AdminActivityItem(
+          kind: 'chat',
+          title: 'Chat · ${label(customerId)} ↔ ${label(artisanId)}',
+          detail: (row['last_message'] ?? '').toString(),
+          actorId: customerId,
+          actorLabel: label(customerId),
+          relatedId: (row['id'] ?? '').toString(),
+          createdAt:
+              DateTime.tryParse((row['updated_at'] ?? '').toString()) ??
+                  DateTime.now(),
+        ),
+      );
+    }
+
+    final jobRows = userId == null
+        ? await client
+            .from('jobs')
+            .select('id,title,created_by,work_status,request_type,created_at')
+            .order('created_at', ascending: false)
+            .limit(limit)
+        : await client
+            .from('jobs')
+            .select('id,title,created_by,work_status,request_type,created_at')
+            .eq('created_by', userId)
+            .order('created_at', ascending: false)
+            .limit(limit);
+    for (final raw in jobRows as List<dynamic>) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final actorId = (row['created_by'] ?? '').toString();
+      final status = (row['work_status'] ?? 'open').toString();
+      final requestType = (row['request_type'] ?? 'public').toString();
+      items.add(
+        AdminActivityItem(
+          kind: 'job',
+          title: 'Job · $status · $requestType',
+          detail: (row['title'] ?? '').toString(),
+          actorId: actorId,
+          actorLabel: label(actorId),
+          relatedId: (row['id'] ?? '').toString(),
+          createdAt:
+              DateTime.tryParse((row['created_at'] ?? '').toString()) ??
+                  DateTime.now(),
+        ),
+      );
+    }
+
+    final reportRows = userId == null
+        ? await client
+            .from('reports')
+            .select('id,reporter_id,reported_user_id,title,body,message,status,created_at')
+            .order('created_at', ascending: false)
+            .limit(limit)
+        : await client
+            .from('reports')
+            .select('id,reporter_id,reported_user_id,title,body,message,status,created_at')
+            .or('reporter_id.eq.$userId,reported_user_id.eq.$userId')
+            .order('created_at', ascending: false)
+            .limit(limit);
+    for (final raw in reportRows as List<dynamic>) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final actorId = (row['reporter_id'] ?? '').toString();
+      items.add(
+        AdminActivityItem(
+          kind: 'report',
+          title: 'Report · ${(row['status'] ?? 'open')}',
+          detail: (row['body'] ?? row['message'] ?? row['title'] ?? '').toString(),
+          actorId: actorId,
+          actorLabel: label(actorId),
+          relatedId: (row['id'] ?? '').toString(),
+          createdAt:
+              DateTime.tryParse((row['created_at'] ?? '').toString()) ??
+                  DateTime.now(),
+        ),
+      );
+    }
+
+    items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return items.take(limit).toList(growable: false);
   }
 
   Future<void> updateAccountRole({
