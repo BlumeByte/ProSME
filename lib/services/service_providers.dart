@@ -92,6 +92,31 @@ final listingsStreamProvider = StreamProvider<List<Listing>>((ref) {
   return ref.watch(listingServiceProvider).watchListings();
 });
 
+/// Public marketplace artisan directory. Unlike the listing feed, this also
+/// includes artisans who have an account/profile but have not posted their
+/// first service listing yet (for example newly imported artisans).
+final marketplaceArtisansProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  if (!shouldUseSupabase()) return const <Map<String, dynamic>>[];
+  try {
+    final rows = await ref.watch(supabaseClientProvider)
+        .from('profiles')
+        .select(
+          'id,username,full_name,avatar_url,role,verification_status,is_busy,description,country,categories,location,bio,rating_summary,created_at',
+        )
+        .eq('role', 'artisan')
+        .order('created_at', ascending: false);
+    return (rows as List<dynamic>)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
+  } catch (_) {
+    // Guest/public access can be more restrictive than signed-in marketplace
+    // access. Listings still load normally if artisan-directory access is not
+    // available for the current session.
+    return const <Map<String, dynamic>>[];
+  }
+});
+
 final chatServiceProvider = Provider<ChatService>((ref) {
   if (!shouldUseSupabase()) {
     return MockChatService();
