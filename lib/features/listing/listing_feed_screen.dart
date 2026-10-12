@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -84,6 +85,12 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   final _serviceController = TextEditingController();
   final _locationController = TextEditingController();
   final _locationLookup = LocationLookupService();
+  final PageController _featuredController =
+      PageController(viewportFraction: 0.88);
+  Timer? _featuredTimer;
+  int _featuredPage = 0;
+  int _featuredCount = 0;
+  final int _contentSeed = DateTime.now().microsecondsSinceEpoch;
   String _serviceQuery = '';
   String _locationQuery = '';
   String? _selectedCategory;
@@ -108,10 +115,25 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     super.initState();
     _loadRecentSearches();
     _loadCountries();
+    _featuredTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted ||
+          _featuredCount < 2 ||
+          !_featuredController.hasClients) {
+        return;
+      }
+      _featuredPage = (_featuredPage + 1) % _featuredCount;
+      _featuredController.animateToPage(
+        _featuredPage,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 
   @override
   void dispose() {
+    _featuredTimer?.cancel();
+    _featuredController.dispose();
     _serviceController.dispose();
     _locationController.dispose();
     super.dispose();
@@ -417,6 +439,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     }
 
     final listingsAsync = ref.watch(listingsStreamProvider);
+    final jobsAsync = ref.watch(jobsStreamProvider);
     final marketplaceArtisans =
         ref.watch(marketplaceArtisansProvider).valueOrNull ??
             const <Map<String, dynamic>>[];
@@ -465,7 +488,8 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   categoryCounts[item.name] ?? 0,
                 ))
             .where((item) => item.count > 0)
-            .toList(growable: false);
+            .toList(growable: true)
+          ..sort((a, b) => b.count.compareTo(a.count));
 
         final professionalsById = <String, _ProfessionalPreview>{};
         for (final listing in filtered) {
@@ -572,8 +596,27 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
           );
         }
 
-        final featured = professionalsById.values.toList()
-          ..sort((a, b) => b.listingCount.compareTo(a.listingCount));
+        final allProfessionals = professionalsById.values.toList()
+          ..sort((a, b) {
+            final rating = b.ratingAverage.compareTo(a.ratingAverage);
+            if (rating != 0) return rating;
+            final services = b.listingCount.compareTo(a.listingCount);
+            if (services != 0) return services;
+            return a.name.compareTo(b.name);
+          });
+        final featured = allProfessionals
+            .where((pro) => pro.isVerified)
+            .toList(growable: false);
+        _featuredCount = featured.length;
+        final featuredIds = featured.map((pro) => pro.artisanId).toSet();
+        final professionals = allProfessionals
+            .where((pro) => !featuredIds.contains(pro.artisanId))
+            .toList(growable: false);
+        final recentUpdates = _sortedArtisanUpdates(
+          listings,
+          _ArtisanUpdateSort.newest,
+        ).take(12).toList(growable: true)
+          ..shuffle(math.Random(_contentSeed));
         final showingAllProfessionals = _showSearchResults &&
             _serviceQuery.isEmpty &&
             _locationQuery.isEmpty &&
@@ -664,7 +707,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                         : settings.t('Matching professionals'),
                     style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
-                if (featured.isEmpty)
+                if (allProfessionals.isEmpty)
                   Text(settings.t('No professionals found.'))
                 else
                   LayoutBuilder(
@@ -675,7 +718,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                       return Wrap(
                         spacing: 12,
                         runSpacing: 12,
-                        children: featured
+                        children: allProfessionals
                             .map((pro) => SizedBox(
                                   width: cardWidth,
                                   child: _ProfessionalCard(
@@ -863,10 +906,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   return Wrap(
                     spacing: 12,
                     runSpacing: 12,
-                    children: _sortedArtisanUpdates(
-                      listings,
-                      _ArtisanUpdateSort.newest,
-                    ).take(3).map(
+                    children: recentUpdates.take(3).map(
                       (listing) {
                         return SizedBox(
                           width: cardWidth,
@@ -923,7 +963,64 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             ),
             const SizedBox(height: 8),
             if (featured.isEmpty)
-              Text(settings.t('No professionals found for this search.'))
+              Text(settings.t('No verified professionals available yet.'))
+            else
+              SizedBox(
+                height: 360,
+                child: PageView.builder(
+                  controller: _featuredController,
+                  onPageChanged: (index) => _featuredPage = index,
+                  itemCount: featured.length,
+                  itemBuilder: (context, index) {
+                    final pro = featured[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: _ProfessionalCard(
+                        pro: pro,
+                        currencyCode: currencyCode,
+                        settings: settings,
+                        onOpenProfile: () {
+                          widget.onLeaveHomeContent?.call();
+                          context.push(
+                            '${RouteNames.artisanProfile}/${pro.artisanId}',
+                          );
+                        },
+                        onBook: () => _bookProfessional(pro),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    settings.t('Professionals'),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    _serviceController.clear();
+                    _locationController.clear();
+                    setState(() {
+                      _serviceQuery = '';
+                      _locationQuery = '';
+                      _selectedCategory = null;
+                      _selectedRegion = null;
+                      _selectedCity = null;
+                      _selectedTown = null;
+                      _showSearchResults = true;
+                    });
+                  },
+                  child: Text(settings.t('View All')),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (professionals.isEmpty)
+              Text(settings.t('No other professionals available yet.'))
             else
               LayoutBuilder(
                 builder: (context, constraints) {
@@ -933,8 +1030,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   return Wrap(
                     spacing: 12,
                     runSpacing: 12,
-                    children: featured
-                        .take(5)
+                    children: professionals
                         .map(
                           (pro) => SizedBox(
                             width: cardWidth,
