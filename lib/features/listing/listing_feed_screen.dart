@@ -439,7 +439,6 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     }
 
     final listingsAsync = ref.watch(listingsStreamProvider);
-    final jobsAsync = ref.watch(jobsStreamProvider);
     final marketplaceArtisans =
         ref.watch(marketplaceArtisansProvider).valueOrNull ??
             const <Map<String, dynamic>>[];
@@ -1648,14 +1647,42 @@ class _OpenJobsPreview extends ConsumerWidget {
         ),
       ),
       data: (jobs) {
+        final viewer = ref.watch(authStateProvider).valueOrNull;
         final filtered = jobs.where((job) {
+          // Public discovery only contains genuinely open work. Once a bid is
+          // accepted, work starts, or the request is completed/cancelled, the
+          // item stays in the participants' Bookings/History instead.
+          final isOpen = job.workStatus == 'open' &&
+              job.status != 'completed' &&
+              job.status != 'cancelled' &&
+              job.acceptedAmount == null &&
+              job.deletedByUserAt == null;
+          if (!isOpen) return false;
+
+          if (viewer != null) {
+            if (viewer.role == UserRole.customer &&
+                job.createdBy != viewer.id) {
+              return false;
+            }
+            if (viewer.role == UserRole.artisan) {
+              final directForViewer = job.requestType == 'direct' &&
+                  job.targetArtisanId == viewer.id;
+              if (job.requestType != 'public' && !directForViewer) {
+                return false;
+              }
+            }
+          } else if (job.requestType != 'public') {
+            return false;
+          }
+
           final jobText = '${job.title} ${job.description}'.toLowerCase();
           final locationText = job.location.toLowerCase();
           final queryMatches = query.isEmpty || fuzzyContains(jobText, query);
           final locationMatches = locationQuery.isEmpty ||
               _matchesLocation(locationText, locationQuery);
           return queryMatches && locationMatches;
-        }).toList(growable: false);
+        }).toList(growable: true)
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
         if (filtered.isEmpty) {
           return Text(settings.t('No service requests posted yet.'));
         }
