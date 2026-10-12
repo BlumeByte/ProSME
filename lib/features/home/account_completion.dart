@@ -67,14 +67,6 @@ List<AccountCompletionItem> accountCompletionItems(
       done: row['email_verified'] == true,
       action: AccountCompletionAction.verifyEmail,
     ),
-    AccountCompletionItem(
-      id: 'phone_verified',
-      label: 'Phone number added',
-      // Phone verification is not currently available. Treat an entered phone
-      // number as complete so users are not repeatedly prompted to verify it.
-      done: filled('phone'),
-      action: AccountCompletionAction.accountSettings,
-    ),
     if (role == UserRole.artisan)
       AccountCompletionItem(
         id: 'verification_badge',
