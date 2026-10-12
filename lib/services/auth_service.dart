@@ -1051,36 +1051,27 @@ class SupabaseAuthService implements AuthService {
 
   @override
   Future<AppUser> signInWithGoogle() async {
-    if (!kIsWeb) {
-      // Android and iOS: Google's own sign-in screen returns an ID token. The
-      // browser flow is blocked by Google in embedded browsers.
-      final googleSignIn = GoogleSignIn(
-        serverClientId: kGoogleWebClientId,
-        scopes: const ['email', 'profile'],
-      );
-      final account = await googleSignIn.signIn();
-      if (account == null) {
-        throw StateError('Google sign-in was cancelled.');
-      }
-      final auth = await account.authentication;
-      final idToken = auth.idToken;
-      if (idToken == null) {
-        throw StateError('Google did not return a sign-in token. Try again.');
-      }
-      await _supabase.auth.signInWithIdToken(
-        provider: OAuthProvider.google,
-        idToken: idToken,
-        accessToken: auth.accessToken,
-      );
-      final signedIn = _supabase.auth.currentUser;
-      if (signedIn == null) {
-        throw StateError('Google sign-in completed but no session was returned.');
-      }
-      return _resolveUser(signedIn);
-    }
+    // Use Supabase's OAuth flow on every platform. This keeps Google provider
+    // configuration in one place and avoids native Android failures when the
+    // Firebase config has no Android OAuth client/SHA registration.
+    //
+    // Web must return to the Flutter hash route under /app/. Returning to the
+    // site root can leave GoRouter with an unknown callback location and show
+    // the generic "Something went wrong" page.
+    final redirectTo = kIsWeb
+        ? Uri.base.replace(
+            path: Uri.base.path.endsWith('/')
+                ? Uri.base.path
+                : '${Uri.base.path}/',
+            query: null,
+            fragment: RouteNames.loginCallback,
+          ).toString()
+        : kGoogleOAuthRedirectUrl;
+
     final launched = await _supabase.auth.signInWithOAuth(
       OAuthProvider.google,
-      redirectTo: kIsWeb ? null : kGoogleOAuthRedirectUrl,
+      redirectTo: redirectTo,
+      authScreenLaunchMode: LaunchMode.externalApplication,
     );
     if (!launched) {
       throw StateError(
