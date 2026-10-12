@@ -12,6 +12,34 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // One-time cache reset for the October 2026 web rollout. Older ProSME
+    // Flutter service workers can otherwise continue serving a stale app
+    // bundle after production has already been updated.
+    (async () => {
+      const cacheVersion = '2026-10-12-marketplace-refresh-1';
+      const key = 'prosme_web_cache_version';
+      try {
+        if (localStorage.getItem(key) !== cacheVersion) {
+          if ('serviceWorker' in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map((registration) => registration.unregister()));
+          }
+          if ('caches' in window) {
+            const names = await caches.keys();
+            await Promise.all(names.map((name) => caches.delete(name)));
+          }
+          localStorage.setItem(key, cacheVersion);
+        }
+      } catch (_) {
+        // Cache cleanup is best-effort; never block app startup.
+      }
+
+      const script = document.createElement('script');
+      script.src = 'flutter_bootstrap.js?v=' + cacheVersion;
+      script.async = true;
+      document.body.appendChild(script);
+    })();
+  </script>
 </body>
 </html>
