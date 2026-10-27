@@ -1,4 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.2';
+import { sendMail } from '../_shared/mailer.ts';
+import { wrapEmailHtml } from '../_shared/email_template.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,40 +46,23 @@ const allowedRedirect = (value: string) => {
   return value;
 };
 
-const escapeHtml = (value: string) =>
-  value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-
 const sendEmail = async (email: string, actionLink: string) => {
-  const apiKey = requiredEnv('RESEND_API_KEY');
-  const from = env('RESEND_FROM_EMAIL') ||
-    env('PROSME_FROM_EMAIL') ||
-    'ProSME <noreply@prosme.blumebyte.com>';
-  const safeLink = escapeHtml(actionLink);
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to: [email],
-      subject: 'Reset your ProSME password',
-      text: `Use this secure link to choose a new ProSME password: ${actionLink}`,
-      html: `<p>Use the button below to choose a new ProSME password.</p><p><a href="${safeLink}" style="display:inline-block;padding:12px 18px;background:#0f1b3d;color:#fff;text-decoration:none;border-radius:6px">Reset password</a></p><p>If you did not request this, you can ignore this email.</p>`,
-    }),
+  const html = wrapEmailHtml({
+    preheader: 'Use this link to choose a new ProSME password.',
+    heading: 'Reset your password',
+    bodyHtml: `
+      <p style="margin:0 0 4px">We received a request to reset your ProSME password. Tap the button below to choose a new one.</p>
+      <p style="margin:12px 0 0;color:#6b7280;font-size:13px">If you didn’t request this, you can safely ignore this email — your password will stay the same.</p>
+    `,
+    ctaLabel: 'Choose a new password',
+    ctaUrl: actionLink,
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(
-      clean(payload?.message) || clean(payload?.error) || `Resend returned HTTP ${response.status}`,
-    );
-  }
+  await sendMail({
+    to: email,
+    subject: 'Reset your ProSME password',
+    text: `Use this secure link to choose a new ProSME password: ${actionLink}`,
+    html,
+  });
 };
 
 Deno.serve(async (req) => {

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../config/app_colors.dart';
 import '../../config/constants.dart';
 import '../../core/utils/currency.dart';
+import '../../core/utils/friendly_error.dart';
 import '../../models/wallet_transaction.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
@@ -36,7 +37,36 @@ class _AdminPlatformDashboardScreenState
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(appSettingsControllerProvider);
+    final user = ref.watch(authStateProvider).valueOrNull;
     void goToTab(int index) => setState(() => _selectedIndex = index);
+
+    // Customer-care staff (an admin account with staff_role='support') only
+    // ever need the ticket queue — not wallet resets, tenants, or account
+    // deletion, which stay admin-only.
+    if (user?.isSupportStaff == true) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(settings.t('Customer care')),
+          actions: [
+            IconButton(
+              tooltip: settings.t('Refresh'),
+              onPressed: () => setState(() {}),
+              icon: const Icon(Icons.refresh),
+            ),
+            IconButton(
+              tooltip: settings.t('Logout'),
+              onPressed: () async {
+                await ref.read(authServiceProvider).signOut();
+                if (context.mounted) context.go(RouteNames.auth);
+              },
+              icon: const Icon(Icons.logout),
+            ),
+          ],
+        ),
+        body: const _ReportsPanel(),
+      );
+    }
+
     final sections = [
       _AdminOverview(onNavigateToTab: goToTab),
       const _ReportsPanel(),
@@ -178,6 +208,28 @@ class _AdminOverview extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                FilledButton.icon(
+                  onPressed: () => context.push(RouteNames.adminBroadcast),
+                  icon: const Icon(Icons.campaign_outlined),
+                  label: Text(settings.t('Send newsletter / broadcast')),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => context.push(RouteNames.adminImport),
+                  icon: const Icon(Icons.table_chart_outlined),
+                  label: Text(settings.t('Import accounts')),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _showDirectMessageDialog(context, ref),
+                  icon: const Icon(Icons.outgoing_mail),
+                  label: Text(settings.t('Message a user directly')),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
             const _ImportedAccountsSummary(),
             const SizedBox(height: 16),
             Wrap(
@@ -253,12 +305,111 @@ class _AdminOverview extends ConsumerWidget {
             const SizedBox(height: 16),
             _JobProgressHealth(counts: counts),
             const SizedBox(height: 16),
+            const _RatingsPanel(),
+            const SizedBox(height: 16),
             const _WalletFlowPreview(),
             const SizedBox(height: 16),
             const _RecentReportsPreview(),
           ],
         );
       },
+    );
+  }
+}
+
+Future<void> _showDirectMessageDialog(
+  BuildContext context,
+  WidgetRef ref, {
+  String prefillEmail = '',
+  String prefillUserId = '',
+}) async {
+  final settings = ref.read(appSettingsControllerProvider);
+  final emailController = TextEditingController(text: prefillEmail);
+  final subjectController = TextEditingController();
+  final messageController = TextEditingController();
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(settings.t('Message a user directly')),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              settings.t(
+                'For conflicts, errors, updates, or anything outside an existing report. Sent as a notification and an email.',
+              ),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: emailController,
+              enabled: prefillUserId.isEmpty,
+              decoration: InputDecoration(labelText: settings.t('User email')),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: subjectController,
+              decoration: InputDecoration(labelText: settings.t('Subject')),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: messageController,
+              minLines: 3,
+              maxLines: 6,
+              decoration: InputDecoration(labelText: settings.t('Message')),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(settings.t('Cancel')),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text(settings.t('Send')),
+        ),
+      ],
+    ),
+  );
+  final email = emailController.text.trim().toLowerCase();
+  final subject = subjectController.text;
+  final message = messageController.text;
+  emailController.dispose();
+  subjectController.dispose();
+  messageController.dispose();
+  if (result != true || message.trim().isEmpty || !context.mounted) return;
+
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    final adminService = ref.read(adminServiceProvider);
+    var userId = prefillUserId;
+    if (userId.isEmpty) {
+      if (email.isEmpty) throw StateError('Enter the user’s email.');
+      final accounts = await adminService.fetchAccounts();
+      final match = accounts.where((a) => a.email.toLowerCase() == email);
+      if (match.isEmpty) {
+        throw StateError('No account found with that email.');
+      }
+      userId = match.first.id;
+    }
+    await adminService.sendDirectMessage(
+      userId: userId,
+      subject: subject,
+      message: message,
+    );
+    messenger.showSnackBar(SnackBar(content: Text(settings.t('Message sent.'))));
+  } catch (error) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '${settings.t('Could not send message')}: ${friendlyErrorMessage(error)}',
+        ),
+      ),
     );
   }
 }
@@ -649,6 +800,129 @@ class _ProgressMetric extends StatelessWidget {
   }
 }
 
+class _RatingsPanel extends ConsumerWidget {
+  const _RatingsPanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsControllerProvider);
+    final scheme = Theme.of(context).colorScheme;
+    return FutureBuilder<RatingsSummary>(
+      future: ref.watch(adminServiceProvider).fetchRatingsSummary(),
+      builder: (context, snapshot) {
+        final summary = snapshot.data;
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.star_rounded, color: scheme.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      settings.t('Ratings'),
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (snapshot.connectionState == ConnectionState.waiting)
+                  const LinearProgressIndicator()
+                else if (summary == null || summary.total == 0)
+                  Text(settings.t('No ratings yet.'))
+                else ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        summary.average.toStringAsFixed(2),
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(width: 8),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          '${settings.t('average from')} ${summary.total} ${settings.t('ratings')}',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  for (var star = 5; star >= 1; star--)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 44,
+                            child: Row(
+                              children: [
+                                Text('$star'),
+                                const Icon(Icons.star, size: 14),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: summary.total == 0
+                                    ? 0
+                                    : (summary.distribution[star] ?? 0) /
+                                        summary.total,
+                                minHeight: 8,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 32,
+                            child: Text(
+                              '${summary.distribution[star] ?? 0}',
+                              textAlign: TextAlign.end,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (summary.topArtisans.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      settings.t('Top-rated artisans'),
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: summary.topArtisans
+                          .take(5)
+                          .map(
+                            (artisan) => Chip(
+                              avatar: const Icon(Icons.star, size: 16),
+                              label: Text(
+                                '${artisan.name} ${artisan.average.toStringAsFixed(1)} (${artisan.total})',
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                    ),
+                  ],
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _AdminWalletPanel extends ConsumerStatefulWidget {
   const _AdminWalletPanel();
 
@@ -1028,6 +1302,7 @@ class _RecentReportsPreview extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(appSettingsControllerProvider);
+    final myId = ref.watch(authStateProvider).valueOrNull?.id ?? '';
     return StreamBuilder<List<PlatformReport>>(
       stream: ref.watch(adminServiceProvider).watchReports(),
       builder: (context, snapshot) {
@@ -1052,7 +1327,7 @@ class _RecentReportsPreview extends ConsumerWidget {
             Text(settings.t('Needs review'),
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
-            ...reports.map((report) => _ReportTile(report: report)),
+            ...reports.map((report) => _ReportTile(report: report, myId: myId)),
           ],
         );
       },
@@ -1060,12 +1335,41 @@ class _RecentReportsPreview extends ConsumerWidget {
   }
 }
 
-class _ReportsPanel extends ConsumerWidget {
+enum _ReportFilter { queue, mine, all, resolved }
+
+class _ReportsPanel extends ConsumerStatefulWidget {
   const _ReportsPanel();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ReportsPanel> createState() => _ReportsPanelState();
+}
+
+class _ReportsPanelState extends ConsumerState<_ReportsPanel> {
+  _ReportFilter _filter = _ReportFilter.queue;
+
+  List<PlatformReport> _apply(List<PlatformReport> reports, String myId) {
+    switch (_filter) {
+      case _ReportFilter.queue:
+        // "Queued based on time": open and unclaimed, oldest first — the
+        // next agent to open this tab sees the longest-waiting ticket on top.
+        final queued = reports
+            .where((r) => r.status == 'open' && r.assignedTo.isEmpty)
+            .toList()
+          ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        return queued;
+      case _ReportFilter.mine:
+        return reports.where((r) => r.assignedTo == myId).toList();
+      case _ReportFilter.resolved:
+        return reports.where((r) => r.status != 'open').toList();
+      case _ReportFilter.all:
+        return reports;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final settings = ref.watch(appSettingsControllerProvider);
+    final myId = ref.watch(authStateProvider).valueOrNull?.id ?? '';
     return StreamBuilder<List<PlatformReport>>(
       stream: ref.watch(adminServiceProvider).watchReports(),
       builder: (context, snapshot) {
@@ -1077,10 +1381,42 @@ class _ReportsPanel extends ConsumerWidget {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final reports = snapshot.data!;
+        final allReports = snapshot.data!;
+        final reports = _apply(allReports, myId);
+        final queuedCount = allReports
+            .where((r) => r.status == 'open' && r.assignedTo.isEmpty)
+            .length;
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  label: Text('${settings.t('Queue')} ($queuedCount)'),
+                  selected: _filter == _ReportFilter.queue,
+                  onSelected: (_) => setState(() => _filter = _ReportFilter.queue),
+                ),
+                ChoiceChip(
+                  label: Text(settings.t('Assigned to me')),
+                  selected: _filter == _ReportFilter.mine,
+                  onSelected: (_) => setState(() => _filter = _ReportFilter.mine),
+                ),
+                ChoiceChip(
+                  label: Text(settings.t('Resolved/dismissed')),
+                  selected: _filter == _ReportFilter.resolved,
+                  onSelected: (_) =>
+                      setState(() => _filter = _ReportFilter.resolved),
+                ),
+                ChoiceChip(
+                  label: Text(settings.t('All')),
+                  selected: _filter == _ReportFilter.all,
+                  onSelected: (_) => setState(() => _filter = _ReportFilter.all),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             _ExportBar(
               label: settings.t('Reports'),
               count: reports.length,
@@ -1105,11 +1441,11 @@ class _ReportsPanel extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             if (reports.isEmpty)
-              Center(child: Text(settings.t('No reports yet.')))
+              Center(child: Text(settings.t('Nothing here right now.')))
             else
               ...reports.map((report) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: _ReportTile(report: report),
+                    child: _ReportTile(report: report, myId: myId),
                   )),
           ],
         );
@@ -1119,9 +1455,10 @@ class _ReportsPanel extends ConsumerWidget {
 }
 
 class _ReportTile extends ConsumerWidget {
-  const _ReportTile({required this.report});
+  const _ReportTile({required this.report, required this.myId});
 
   final PlatformReport report;
+  final String myId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1133,6 +1470,8 @@ class _ReportTile extends ConsumerWidget {
       'dismissed' => colors.neutralStatus,
       _ => Theme.of(context).colorScheme.primary,
     };
+    final claimedByMe = report.assignedTo == myId && myId.isNotEmpty;
+    final claimedByOther = report.assignedTo.isNotEmpty && !claimedByMe;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -1176,11 +1515,43 @@ class _ReportTile extends ConsumerWidget {
                       '${settings.t('reported')}: ${report.reportedUserId}',
                     ),
                   ),
+                if (claimedByMe)
+                  Chip(
+                    avatar: const Icon(Icons.person, size: 16),
+                    label: Text(settings.t('Claimed by you')),
+                  ),
+                if (claimedByOther)
+                  Chip(
+                    avatar: const Icon(Icons.person_outline, size: 16),
+                    label: Text(settings.t('Claimed by another agent')),
+                  ),
               ],
             ),
             const SizedBox(height: 8),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
+                if (!claimedByOther)
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      final service = ref.read(adminServiceProvider);
+                      claimedByMe
+                          ? service.unclaimReport(report.id)
+                          : service.claimReport(report.id);
+                    },
+                    icon: Icon(claimedByMe
+                        ? Icons.person_remove_outlined
+                        : Icons.pan_tool_outlined),
+                    label: Text(
+                        settings.t(claimedByMe ? 'Release' : 'Claim')),
+                  ),
+                if (report.reporterId.isNotEmpty)
+                  FilledButton.tonalIcon(
+                    onPressed: () => _showReplyDialog(context, ref, report),
+                    icon: const Icon(Icons.reply_outlined),
+                    label: Text(settings.t('Reply')),
+                  ),
                 OutlinedButton.icon(
                   onPressed: report.status == 'dismissed'
                       ? null
@@ -1191,7 +1562,6 @@ class _ReportTile extends ConsumerWidget {
                   icon: const Icon(Icons.close),
                   label: Text(settings.t('Dismiss')),
                 ),
-                const SizedBox(width: 8),
                 FilledButton.icon(
                   onPressed: report.status == 'resolved'
                       ? null
@@ -1205,6 +1575,88 @@ class _ReportTile extends ConsumerWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _showReplyDialog(
+  BuildContext context,
+  WidgetRef ref,
+  PlatformReport report,
+) async {
+  final settings = ref.read(appSettingsControllerProvider);
+  final controller = TextEditingController();
+  var resolveToo = true;
+  final result = await showDialog<String>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text(settings.t('Reply to report')),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                settings.t(
+                  'Sent as a notification and an email to the person who reported this.',
+                ),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                minLines: 3,
+                maxLines: 6,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: settings.t('Message'),
+                  hintText: settings.t('Reply politely and clearly.'),
+                ),
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: resolveToo,
+                onChanged: (value) =>
+                    setDialogState(() => resolveToo = value ?? true),
+                title: Text(settings.t('Mark this report resolved')),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(settings.t('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: Text(settings.t('Send reply')),
+          ),
+        ],
+      ),
+    ),
+  );
+  controller.dispose();
+  if (result == null || result.trim().isEmpty || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    await ref.read(adminServiceProvider).respondToReport(
+          report: report,
+          message: result,
+        );
+    messenger.showSnackBar(
+      SnackBar(content: Text(settings.t('Reply sent.'))),
+    );
+  } catch (error) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '${settings.t('Could not send reply')}: ${friendlyErrorMessage(error)}',
         ),
       ),
     );
@@ -1301,6 +1753,7 @@ class _AccountsPanel extends ConsumerWidget {
     final dateController = TextEditingController();
     var role = UserRole.admin;
     var gender = 'prefer_not_to_say';
+    var supportOnly = false;
     DateTime? dateOfBirth;
     var saving = false;
 
@@ -1336,7 +1789,8 @@ class _AccountsPanel extends ConsumerWidget {
               }
               setSheetState(() => saving = true);
               try {
-                final result = await ref.read(adminServiceProvider).createAccount(
+                final adminService = ref.read(adminServiceProvider);
+                final result = await adminService.createAccount(
                       email: emailController.text.trim(),
                       fullName: fullNameController.text.trim(),
                       role: role,
@@ -1345,6 +1799,14 @@ class _AccountsPanel extends ConsumerWidget {
                       phone: phoneController.text.trim(),
                       country: countryController.text.trim(),
                     );
+                if (role == UserRole.admin &&
+                    supportOnly &&
+                    result.userId.isNotEmpty) {
+                  await adminService.setStaffRole(
+                    userId: result.userId,
+                    isSupportStaff: true,
+                  );
+                }
                 if (!context.mounted) return;
                 Navigator.of(context).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -1429,6 +1891,20 @@ class _AccountsPanel extends ConsumerWidget {
                         if (value != null) role = value;
                       }),
                     ),
+                    if (role == UserRole.admin)
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        value: supportOnly,
+                        onChanged: (value) =>
+                            setSheetState(() => supportOnly = value ?? false),
+                        title: Text(settings.t('Customer care only')),
+                        subtitle: Text(
+                          settings.t(
+                            'Restricted to the Reports/Customer care queue — no wallet, tenant, or account management access.',
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       initialValue: gender,
@@ -1534,6 +2010,13 @@ class _AccountTile extends ConsumerWidget {
                   ),
                 ),
                 Chip(label: Text(account.role.name)),
+                if (account.isSupportStaff) ...[
+                  const SizedBox(width: 6),
+                  Chip(
+                    avatar: const Icon(Icons.support_agent_outlined, size: 16),
+                    label: Text(settings.t('Customer care')),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 8),
@@ -1649,6 +2132,38 @@ class _AccountTile extends ConsumerWidget {
                     icon: const Icon(Icons.timeline_outlined),
                     label: Text(settings.t('Activity')),
                   ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _showDirectMessageDialog(
+                      context,
+                      ref,
+                      prefillUserId: account.id,
+                      prefillEmail: account.email,
+                    ),
+                    icon: const Icon(Icons.outgoing_mail),
+                    label: Text(settings.t('Message')),
+                  ),
+                  if (account.role == UserRole.admin) ...[
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        await ref.read(adminServiceProvider).setStaffRole(
+                              userId: account.id,
+                              isSupportStaff: !account.isSupportStaff,
+                            );
+                      },
+                      icon: Icon(account.isSupportStaff
+                          ? Icons.admin_panel_settings_outlined
+                          : Icons.support_agent_outlined),
+                      label: Text(
+                        settings.t(
+                          account.isSupportStaff
+                              ? 'Make full admin'
+                              : 'Make customer care',
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: 8),
                   OutlinedButton.icon(
                     onPressed: account.role == UserRole.admin

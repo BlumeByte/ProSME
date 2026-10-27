@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.2';
 import { sendMail } from '../_shared/mailer.ts';
+import { wrapEmailHtml, escapeHtml } from '../_shared/email_template.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,18 +33,12 @@ const requiredEnv = (key: string) => {
 
 const clean = (value: unknown) => String(value ?? '').trim();
 
-const escapeHtml = (value: string) =>
-  value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-
-const toHtml = (body: string) =>
-  `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.55;color:#111827;">${escapeHtml(
-    body,
-  ).replaceAll('\n', '<br>')}</div>`;
+const toHtml = (heading: string, body: string) =>
+  wrapEmailHtml({
+    heading,
+    bodyHtml: escapeHtml(body).replaceAll('\n', '<br>'),
+    preheader: body.slice(0, 140),
+  });
 
 const humanizeBody = (body: string) => {
   const value = clean(body);
@@ -86,14 +81,24 @@ const authorize = async (
   req: Request,
   supabaseUrl: string,
   anonKey: string,
+  adminClient: ReturnType<typeof createClient>,
 ) => {
-  const dispatchSecret = Deno.env.get('EMAIL_DISPATCH_SECRET');
+  // The pg_cron job that drains this outbox every minute sends the secret it
+  // reads from Postgres Vault (vault.decrypted_secrets, name
+  // 'email_dispatch_secret') — not an Edge Function env var. Reading the
+  // same Vault value here (via a service_role-only RPC) keeps one source of
+  // truth instead of two secret stores that can silently drift apart.
+  const { data: dispatchSecret, error: secretError } = await adminClient.rpc(
+    'get_email_dispatch_secret',
+  );
+  if (secretError) {
+    console.error('get_email_dispatch_secret failed', secretError.message);
+  }
+  const provided = req.headers.get('x-email-dispatch-secret') || '';
   if (
-    dispatchSecret &&
-    timingSafeEqual(
-      req.headers.get('x-email-dispatch-secret') || '',
-      dispatchSecret,
-    )
+    typeof dispatchSecret === 'string' &&
+    dispatchSecret.length > 0 &&
+    timingSafeEqual(provided, dispatchSecret)
   ) {
     return { userId: null, canDispatchAll: true };
   }
@@ -112,7 +117,7 @@ const authorize = async (
   } = await userClient.auth.getUser();
   if (userError || !user) throw new Error('Invalid session.');
 
-  const { data: profile, error: profileError } = await userClient
+  const { data: profile, error: profileError } = await adminClient
     .from('profiles')
     .select('role')
     .eq('id', user.id)
@@ -150,16 +155,16 @@ Deno.serve(async (req) => {
     const anonKey = requiredEnv('SUPABASE_ANON_KEY');
     const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY');
 
-    const auth = await authorize(req, supabaseUrl, anonKey);
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    const auth = await authorize(req, supabaseUrl, anonKey, adminClient);
 
     const body = await req.json().catch(() => ({}));
     const limit = Math.min(Math.max(Number(body.limit || 20), 1), 50);
     const maxAttempts = Math.min(Math.max(Number(body.maxAttempts || 5), 1), 10);
     const requestedRelatedUserId = clean(body.relatedUserId);
-
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
 
     let query = adminClient
       .from('email_outbox')
@@ -188,7 +193,7 @@ Deno.serve(async (req) => {
           to,
           subject: row.subject,
           text,
-          html: row.html ?? toHtml(text),
+          html: row.html ?? toHtml(row.subject, text),
         });
 
         const { error: updateError } = await adminClient

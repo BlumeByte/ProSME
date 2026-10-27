@@ -27,6 +27,7 @@ class AppUser {
     this.twoFactorEnabled = false,
     this.twoFactorPending = false,
     this.roleConfirmed = true,
+    this.staffRole = '',
     required this.createdAt,
   });
 
@@ -58,7 +59,13 @@ class AppUser {
   final bool twoFactorPending;
   /// False for a new Google account until the user picks customer or artisan.
   final bool roleConfirmed;
+  /// 'support' for an admin account restricted to the Reports/Customer care
+  /// view; '' for a regular full admin (or any non-admin role, where it has
+  /// no effect).
+  final String staffRole;
   final DateTime createdAt;
+
+  bool get isSupportStaff => role == UserRole.admin && staffRole == 'support';
 
   AppUser copyWith({
     UserRole? role,
@@ -85,6 +92,7 @@ class AppUser {
     bool? twoFactorEnabled,
     bool? twoFactorPending,
     bool? roleConfirmed,
+    String? staffRole,
   }) {
     return AppUser(
       id: id,
@@ -114,6 +122,7 @@ class AppUser {
       twoFactorEnabled: twoFactorEnabled ?? this.twoFactorEnabled,
       twoFactorPending: twoFactorPending ?? this.twoFactorPending,
       roleConfirmed: roleConfirmed ?? this.roleConfirmed,
+      staffRole: staffRole ?? this.staffRole,
       createdAt: createdAt,
     );
   }
@@ -155,6 +164,7 @@ class AppUser {
         orElse: () => VerificationStatus.pending,
       ),
       twoFactorEnabled: (json['twoFactorEnabled'] as bool?) ?? false,
+      staffRole: (json['staffRole'] as String?) ?? '',
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
   }
@@ -186,6 +196,7 @@ class AppUser {
       'currencyCode': currencyCode,
       'verificationStatus': verificationStatus.name,
       'twoFactorEnabled': twoFactorEnabled,
+      'staffRole': staffRole,
       'createdAt': createdAt.toIso8601String(),
     };
   }

@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.2';
 import { sendMail } from '../_shared/mailer.ts';
+import { wrapEmailHtml } from '../_shared/email_template.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -89,11 +90,28 @@ const escapeHtml = (value: string) =>
 
 const sendEmail = async (to: string, code: string) => {
   const body = `Your ProSME verification code is ${code}. It expires in 10 minutes.`;
+  const codeBlock = `
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0">
+      <tr><td style="background:#f3faf6;border:1px solid #d6ece2;border-radius:10px;padding:16px 28px">
+        <span style="font-family:'Courier New',monospace;font-size:32px;font-weight:bold;letter-spacing:10px;color:#0F6B4A">${escapeHtml(
+          code,
+        )}</span>
+      </td></tr>
+    </table>`;
+  const html = wrapEmailHtml({
+    preheader: `Your ProSME verification code is ${code}.`,
+    heading: 'Verify it’s you',
+    bodyHtml: `
+      <p style="margin:0 0 4px">Enter this code in the app to finish signing in or verifying your email.</p>
+      ${codeBlock}
+      <p style="margin:0;color:#6b7280;font-size:13px">This code expires in 10 minutes. If you didn’t request it, you can ignore this email.</p>
+    `,
+  });
   await sendMail({
     to,
     subject: 'Your ProSME verification code',
     text: body,
-    html: `<p>${escapeHtml(body)}</p>`,
+    html,
   });
 };
 

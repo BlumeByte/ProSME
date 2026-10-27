@@ -108,7 +108,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (error is PendingEmailVerificationException) {
       return 'Account created. Click the verification link in your email, then sign in.';
     }
-    final message = error.toString().toLowerCase();
+    final raw = error.toString();
+    if (raw.contains('SocketException') ||
+        raw.contains('Failed host lookup') ||
+        raw.contains('Connection refused') ||
+        raw.contains('Connection reset') ||
+        raw.contains('Network is unreachable') ||
+        raw.contains('TimeoutException')) {
+      return 'No internet connection. Check your network and try again.';
+    }
+    final message = raw.toLowerCase();
     if (message.contains('was cancelled')) {
       return 'Sign-in was cancelled.';
     }

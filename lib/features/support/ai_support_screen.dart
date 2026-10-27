@@ -163,7 +163,7 @@ class _AiSupportScreenState extends ConsumerState<AiSupportScreen> {
         SnackBar(
           content: Text(
             settings.t(
-              'Support ticket sent. A Support response will appear as a no-reply notice.',
+              'Thanks — your message has been queued. A ProSME support agent will get back to you shortly.',
             ),
           ),
         ),

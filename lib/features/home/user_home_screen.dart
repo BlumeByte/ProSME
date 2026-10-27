@@ -55,8 +55,10 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     _bannerTimer = Timer.periodic(const Duration(seconds: 6), (_) {
       if (!mounted || !_shouldShowBanner) return;
       final banners = _buildBanners(ref.read(appSettingsControllerProvider));
-      if (banners.length < 2 || !_bannerController.hasClients) return;
-      final next = (_bannerIndex + 1) % banners.length;
+      // +1 for the AdMob slide spliced into the rotation (see _adSlideIndex).
+      final totalSlides = banners.length + 1;
+      if (totalSlides < 2 || !_bannerController.hasClients) return;
+      final next = (_bannerIndex + 1) % totalSlides;
       _bannerController.animateToPage(
         next,
         duration: const Duration(milliseconds: 420),
@@ -64,6 +66,12 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
       );
     });
   }
+
+  /// Where the AdMob slide lands among the content slides — stable for the
+  /// lifetime of this screen (seeded the same as the content shuffle) so it
+  /// doesn't jump around between the build above and the timer tick above.
+  int _adSlideIndex(int contentCount) =>
+      math.Random(_bannerSeed).nextInt(contentCount + 1);
 
   @override
   Widget build(BuildContext context) {
@@ -85,6 +93,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     }
     final currentIndex = user == null && _currentIndex > 0 ? 0 : _currentIndex;
     final banners = _buildBanners(settings);
+    final adSlideIndex = _adSlideIndex(banners.length);
     final pages = [
       ListingFeedScreen(
         openingBanner: _shouldShowBanner
@@ -95,6 +104,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
                   _BannerSlider(
                     controller: _bannerController,
                     banners: banners,
+                    adSlideIndex: adSlideIndex,
                     currentIndex: _bannerIndex,
                     onPageChanged: (index) => setState(() => _bannerIndex = index),
                   ),
@@ -362,12 +372,17 @@ class _BannerSlider extends StatelessWidget {
   const _BannerSlider({
     required this.controller,
     required this.banners,
+    required this.adSlideIndex,
     required this.currentIndex,
     required this.onPageChanged,
   });
 
   final PageController controller;
   final List<({String title, String body, String image})> banners;
+  /// Position (0..banners.length) of the AdMob slide spliced into the
+  /// rotation. The carousel's own auto-advance timer treats it like any
+  /// other slide, so it keeps sliding on to the next one automatically.
+  final int adSlideIndex;
   final int currentIndex;
   final ValueChanged<int> onPageChanged;
 
@@ -375,6 +390,7 @@ class _BannerSlider extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final height = screenWidth < 420 ? 196.0 : 234.0;
+    final slideCount = banners.length + 1;
     return SizedBox(
       height: height,
       child: Stack(
@@ -383,9 +399,13 @@ class _BannerSlider extends StatelessWidget {
           PageView.builder(
             controller: controller,
             onPageChanged: onPageChanged,
-            itemCount: banners.length,
+            itemCount: slideCount,
             itemBuilder: (context, index) {
-              final banner = banners[index];
+              if (index == adSlideIndex) {
+                return AdMobCarouselSlide(height: height);
+              }
+              final contentIndex = index < adSlideIndex ? index : index - 1;
+              final banner = banners[contentIndex];
               return SmePageBanner(
                 title: banner.title,
                 body: banner.body,
@@ -398,7 +418,7 @@ class _BannerSlider extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: List.generate(
-                banners.length,
+                slideCount,
                 (index) => AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   width: index == currentIndex ? 18 : 7,

@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../config/app_colors.dart';
 import '../../config/constants.dart';
 import '../../core/utils/currency.dart';
+import '../../core/utils/friendly_error.dart';
 import '../../core/utils/location_data.dart';
 import '../../core/utils/phone_validation.dart';
 import '../../models/app_user.dart';
@@ -348,7 +349,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       final settings = ref.read(appSettingsControllerProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text('${settings.t('Could not update image')}: $error')),
+          content: Text(
+            '${settings.t('Could not update image')}: ${settings.t(friendlyErrorMessage(error))}',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _uploadingPhoto = false);
@@ -922,7 +926,11 @@ Future<void> _showVerificationCodeDialog(
   } catch (error) {
     if (context.mounted && messenger != null) {
       messenger.showSnackBar(
-        SnackBar(content: Text('${settings.t('Could not send code')}: $error')),
+        SnackBar(
+          content: Text(
+            '${settings.t('Could not send code')}: ${settings.t(friendlyErrorMessage(error))}',
+          ),
+        ),
       );
     }
     return;
@@ -964,7 +972,10 @@ Future<void> _showVerificationCodeDialog(
     if (context.mounted && messenger != null) {
       messenger.showSnackBar(
         SnackBar(
-            content: Text('${settings.t('Could not verify code')}: $error')),
+          content: Text(
+            '${settings.t('Could not verify code')}: ${settings.t(friendlyErrorMessage(error))}',
+          ),
+        ),
       );
     }
   }

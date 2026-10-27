@@ -32,6 +32,7 @@ class PlatformAccount {
     required this.verificationStatus,
     required this.tenantId,
     required this.createdAt,
+    this.staffRole = '',
   });
 
   final String id;
@@ -59,6 +60,11 @@ class PlatformAccount {
   final VerificationStatus verificationStatus;
   final String tenantId;
   final DateTime createdAt;
+  /// 'support' for a role==admin account restricted to the Reports/Customer
+  /// care view; empty for a regular full admin.
+  final String staffRole;
+
+  bool get isSupportStaff => role == UserRole.admin && staffRole == 'support';
 }
 
 class PlatformModuleCounts {
@@ -152,6 +158,7 @@ class PlatformReport {
     required this.relatedTable,
     required this.relatedId,
     required this.createdAt,
+    this.assignedTo = '',
   });
 
   final String id;
@@ -163,6 +170,8 @@ class PlatformReport {
   final String body;
   final String status;
   final String relatedTable;
+  /// Admin/support account id that claimed this report, or '' if unclaimed.
+  final String assignedTo;
   final String relatedId;
   final DateTime createdAt;
 }
@@ -235,6 +244,74 @@ class AdminActivityItem {
   final String actorLabel;
   final String relatedId;
   final DateTime createdAt;
+}
+
+class RatedArtisan {
+  const RatedArtisan({
+    required this.id,
+    required this.name,
+    required this.average,
+    required this.total,
+  });
+
+  final String id;
+  final String name;
+  final double average;
+  final int total;
+
+  factory RatedArtisan.fromJson(Map<String, dynamic> json) => RatedArtisan(
+        id: (json['id'] ?? '').toString(),
+        name: (json['name'] ?? 'Artisan').toString(),
+        average: (json['average'] as num?)?.toDouble() ?? 0,
+        total: (json['total'] as num?)?.toInt() ?? 0,
+      );
+}
+
+class RatingsSummary {
+  const RatingsSummary({
+    required this.total,
+    required this.average,
+    required this.distribution,
+    required this.topArtisans,
+  });
+
+  final int total;
+  final double average;
+  /// Star value (1-5) to how many ratings gave that many stars.
+  final Map<int, int> distribution;
+  final List<RatedArtisan> topArtisans;
+
+  static const empty = RatingsSummary(
+    total: 0,
+    average: 0,
+    distribution: {1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
+    topArtisans: [],
+  );
+
+  factory RatingsSummary.fromJson(Map<String, dynamic> json) {
+    final rawDistribution = json['distribution'];
+    final distribution = <int, int>{for (var star = 1; star <= 5; star++) star: 0};
+    if (rawDistribution is Map) {
+      for (final entry in rawDistribution.entries) {
+        final star = int.tryParse(entry.key.toString());
+        if (star != null && star >= 1 && star <= 5) {
+          distribution[star] = (entry.value as num?)?.toInt() ?? 0;
+        }
+      }
+    }
+    final rawTop = json['top_artisans'];
+    return RatingsSummary(
+      total: (json['total'] as num?)?.toInt() ?? 0,
+      average: (json['average'] as num?)?.toDouble() ?? 0,
+      distribution: distribution,
+      topArtisans: rawTop is List
+          ? rawTop
+              .whereType<Map>()
+              .map((row) => RatedArtisan.fromJson(Map<String, dynamic>.from(row)))
+              .toList(growable: false)
+          : const [],
+    );
+  }
 }
 
 class AdminService {
@@ -1025,10 +1102,14 @@ class AdminService {
         .maybeSingle();
 
     final ticketId = (inserted?['id'] ?? '').toString();
+    // A reassurance notice for the sender — the Reports panel (watchReports)
+    // is how admins/customer-care actually see the new ticket to queue and
+    // claim it; this is purely "we got it, an agent is on the way".
     await client.from('admin_notifications').insert({
-      'type': 'support_ticket',
-      'title': 'New support ticket',
-      'body': body,
+      'type': 'ticket_queued',
+      'title': 'We got your message',
+      'body':
+          'Thanks for reaching out — your message has been queued. A ProSME support agent will get back to you shortly.',
       'actor_id': userId,
       'related_user_id': userId,
       'related_table': 'reports',
@@ -1179,7 +1260,7 @@ class AdminService {
     final rows = await client
         .from('reports')
         .select(
-          'id,reporter_id,reported_user_id,type,category,title,body,message,status,related_table,related_id,created_at',
+          'id,reporter_id,reported_user_id,type,category,title,body,message,status,related_table,related_id,created_at,assigned_to',
         )
         .order('created_at', ascending: false)
         .limit(100);
@@ -1225,6 +1306,144 @@ class AdminService {
           ),
         )
         .toList(growable: false);
+  }
+
+  /// Replies to a report/ticket: the reporter sees it as a "Support
+  /// response" notice (AI Support screen already polls for
+  /// type=admin_response) and gets the same text by email.
+  Future<void> respondToReport({
+    required PlatformReport report,
+    required String message,
+    bool markResolved = true,
+  }) async {
+    final client = _supabase;
+    if (client == null) return;
+    final body = message.trim();
+    final userId = report.reporterId;
+    if (body.isEmpty || userId.isEmpty) return;
+    final adminId = client.auth.currentUser?.id;
+
+    await client.from('admin_notifications').insert({
+      'type': 'admin_response',
+      'title': report.title.isEmpty ? 'Support response' : report.title,
+      'body': body,
+      'actor_id': adminId,
+      'related_user_id': userId,
+      'related_table': 'reports',
+      'related_id': report.id.isEmpty ? null : report.id,
+    });
+    await client.from('email_outbox').insert({
+      'to_email': null,
+      'subject': 'A ProSME agent replied to your report',
+      'body': body,
+      'related_user_id': userId,
+    });
+    await _flushEmailOutbox(relatedUserId: userId);
+
+    if (markResolved) {
+      await updateReportStatus(reportId: report.id, status: 'resolved');
+    }
+  }
+
+  /// Claims an unassigned report for the current admin/support agent, so two
+  /// agents don't answer the same ticket. First-come-first-served: this is
+  /// the "available agent" in "queued based on time" — whoever opens the
+  /// report queue and claims the oldest one next.
+  Future<void> claimReport(String reportId) async {
+    final client = _supabase;
+    if (client == null) return;
+    final adminId = client.auth.currentUser?.id;
+    if (adminId == null) return;
+    await client
+        .from('reports')
+        .update({'assigned_to': adminId})
+        .eq('id', reportId)
+        .isFilter('assigned_to', null);
+  }
+
+  Future<void> unclaimReport(String reportId) async {
+    final client = _supabase;
+    if (client == null) return;
+    await client
+        .from('reports')
+        .update({'assigned_to': null})
+        .eq('id', reportId);
+  }
+
+  /// A one-off message from admin straight to a user's notifications + email
+  /// — for conflicts, platform errors, policy notes, or anything that isn't
+  /// tied to an existing report.
+  Future<void> sendDirectMessage({
+    required String userId,
+    required String subject,
+    required String message,
+  }) async {
+    final client = _supabase;
+    if (client == null) return;
+    final body = message.trim();
+    final title = subject.trim();
+    if (body.isEmpty || userId.isEmpty) return;
+    final adminId = client.auth.currentUser?.id;
+
+    await client.from('admin_notifications').insert({
+      'type': 'admin_message',
+      'title': title.isEmpty ? 'Message from ProSME' : title,
+      'body': body,
+      'actor_id': adminId,
+      'related_user_id': userId,
+    });
+    await client.from('email_outbox').insert({
+      'to_email': null,
+      'subject': title.isEmpty ? 'Message from ProSME' : title,
+      'body': body,
+      'related_user_id': userId,
+    });
+    await _flushEmailOutbox(relatedUserId: userId);
+  }
+
+  /// Marks (or clears) an existing admin account as customer-care staff: the
+  /// app shows them a restricted dashboard scoped to Reports/Customer care.
+  Future<void> setStaffRole({
+    required String userId,
+    required bool isSupportStaff,
+  }) async {
+    await _callAdminFunction('updateProfile', {
+      'id': userId,
+      'patch': {'staff_role': isSupportStaff ? 'support' : null},
+    });
+  }
+
+  Future<Map<String, dynamic>> _callAdminFunction(
+    String action,
+    Map<String, dynamic> body,
+  ) async {
+    final client = _supabase;
+    if (client == null) throw StateError('Supabase is not configured.');
+    final response = await client.functions.invoke(
+      'admin-dashboard',
+      body: {'action': action, ...body},
+    );
+    final data = response.data is Map
+        ? Map<String, dynamic>.from(response.data as Map)
+        : <String, dynamic>{};
+    if (response.status < 200 || response.status >= 300 || data['ok'] != true) {
+      throw StateError((data['error'] ?? 'The admin request failed.').toString());
+    }
+    return data;
+  }
+
+  /// Platform-wide star rating summary for the admin overview: average,
+  /// the 1-5 star distribution, and the top-rated artisans.
+  Future<RatingsSummary> fetchRatingsSummary() async {
+    final client = _supabase;
+    if (client == null) return RatingsSummary.empty;
+    try {
+      final data = await client.rpc('admin_ratings_summary');
+      if (data is! Map) return RatingsSummary.empty;
+      return RatingsSummary.fromJson(Map<String, dynamic>.from(data));
+    } catch (_) {
+      return RatingsSummary.empty;
+    }
   }
 
   Future<List<DiscountOffer>> fetchDiscounts() async {
@@ -1315,6 +1534,7 @@ PlatformAccount _accountFromRow(Map<String, dynamic> row) {
     tenantId: (row['tenant_id'] ?? 'default').toString(),
     createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()) ??
         DateTime.now(),
+    staffRole: (row['staff_role'] ?? '').toString(),
   );
 }
 
@@ -1333,6 +1553,7 @@ PlatformReport _reportFromRow(Map<String, dynamic> row) {
     relatedId: (row['related_id'] ?? '').toString(),
     createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()) ??
         DateTime.now(),
+    assignedTo: (row['assigned_to'] ?? '').toString(),
   );
 }
 

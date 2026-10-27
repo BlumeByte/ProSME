@@ -713,6 +713,7 @@ class SupabaseAuthService implements AuthService {
               source['twoFactorEnabled'] == true,
       twoFactorPending: _isTwoFactorPendingFor(user),
       roleConfirmed: source['role_confirmed'] != false,
+      staffRole: (source['staff_role'] ?? metadata['staff_role'] ?? '').toString(),
       createdAt: DateTime.tryParse(
             (source['created_at'] ?? user.createdAt).toString(),
           ) ??

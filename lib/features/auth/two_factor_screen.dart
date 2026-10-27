@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/utils/friendly_error.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
 import '../../services/service_providers.dart';
@@ -35,12 +36,7 @@ class _TwoFactorScreenState extends ConsumerState<TwoFactorScreen> {
     super.dispose();
   }
 
-  String _friendly(Object error) {
-    return error
-        .toString()
-        .replaceFirst(RegExp(r'^(StateError|Exception|Bad state):\s*'), '')
-        .trim();
-  }
+  String _friendly(Object error) => friendlyErrorMessage(error);
 
   String _maskEmail(String email) {
     final at = email.indexOf('@');

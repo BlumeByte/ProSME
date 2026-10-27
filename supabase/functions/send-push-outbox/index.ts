@@ -169,17 +169,34 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json(405, { ok: false, error: 'Method not allowed' });
 
-  const dispatchSecret = Deno.env.get('EMAIL_DISPATCH_SECRET');
-  if (
-    !dispatchSecret ||
-    !timingSafeEqual(req.headers.get('x-email-dispatch-secret') || '', dispatchSecret)
-  ) {
-    return json(401, { ok: false, error: 'Unauthorized' });
-  }
-
   try {
     const supabaseUrl = requiredEnv('SUPABASE_URL');
     const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY');
+
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    // The pg_cron job that drains this outbox every minute sends the secret
+    // it reads from Postgres Vault (vault.decrypted_secrets, name
+    // 'email_dispatch_secret') — not an Edge Function env var. Reading the
+    // same Vault value here (via a service_role-only RPC) keeps one source
+    // of truth instead of two secret stores that can silently drift apart.
+    const { data: dispatchSecret, error: secretError } = await adminClient.rpc(
+      'get_email_dispatch_secret',
+    );
+    if (secretError) {
+      console.error('get_email_dispatch_secret failed', secretError.message);
+    }
+    const provided = req.headers.get('x-email-dispatch-secret') || '';
+    if (
+      typeof dispatchSecret !== 'string' ||
+      dispatchSecret.length === 0 ||
+      !timingSafeEqual(provided, dispatchSecret)
+    ) {
+      return json(401, { ok: false, error: 'Unauthorized' });
+    }
+
     const firebaseProjectId = requiredEnv('FIREBASE_PROJECT_ID');
     const firebaseClientEmail = requiredEnv('FIREBASE_CLIENT_EMAIL');
     const firebasePrivateKey = requiredEnv('FIREBASE_PRIVATE_KEY');
@@ -187,10 +204,6 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const limit = Math.min(Math.max(Number(body.limit || 25), 1), 50);
     const maxAttempts = Math.min(Math.max(Number(body.maxAttempts || 5), 1), 10);
-
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
 
     const { data, error } = await adminClient
       .from('push_outbox')

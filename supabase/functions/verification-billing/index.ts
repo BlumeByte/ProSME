@@ -428,12 +428,22 @@ const syncExpired = async (adminClient: ReturnType<typeof createClient>) => {
   if (error) throw new Error(error.message);
 };
 
-const isDispatchSecret = (req: Request) => {
-  const expected =
-    clean(Deno.env.get('EMAIL_DISPATCH_SECRET')) ||
-    clean(Deno.env.get('BILLING_DISPATCH_SECRET'));
+// The pg_cron jobs that trigger renewals/reconciliation/reminders send the
+// secret they read from Postgres Vault (vault.decrypted_secrets, name
+// 'email_dispatch_secret') — not an Edge Function env var. Reading the same
+// Vault value here (via a service_role-only RPC) keeps one source of truth
+// instead of two secret stores that can silently drift apart.
+const isDispatchSecret = async (
+  req: Request,
+  adminClient: ReturnType<typeof createClient>,
+) => {
+  const { data: expected, error } = await adminClient.rpc(
+    'get_email_dispatch_secret',
+  );
+  if (error) console.error('get_email_dispatch_secret failed', error.message);
   return Boolean(
-    expected &&
+    typeof expected === 'string' &&
+      expected.length > 0 &&
       timingSafeEqual(req.headers.get('x-email-dispatch-secret') || '', expected),
   );
 };
@@ -442,12 +452,14 @@ const assertAdmin = async ({
   req,
   supabaseUrl,
   anonKey,
+  adminClient,
 }: {
   req: Request;
   supabaseUrl: string;
   anonKey: string;
+  adminClient: ReturnType<typeof createClient>;
 }) => {
-  if (isDispatchSecret(req)) return { userId: null, profile: null };
+  if (await isDispatchSecret(req, adminClient)) return { userId: null, profile: null };
   const authorization = req.headers.get('Authorization') || '';
   if (!authorization.startsWith('Bearer '))
     throw new Error('Missing admin session.');
@@ -459,7 +471,10 @@ const assertAdmin = async ({
     error: userError,
   } = await userClient.auth.getUser();
   if (userError || !user) throw new Error('Invalid admin session.');
-  const { data: profile, error: profileError } = await userClient
+  // Service-role lookup: the authenticated client intentionally lacks
+  // direct SELECT access to sensitive profile columns (e.g. email) after
+  // the PII lockdown. Identity is already proven via auth.getUser() above.
+  const { data: profile, error: profileError } = await adminClient
     .from('profiles')
     .select('id,role,email')
     .eq('id', user.id)
@@ -862,7 +877,7 @@ Deno.serve(async (req) => {
         'sendExpiryReminders',
       ].includes(action)
     ) {
-      await assertAdmin({ req, supabaseUrl, anonKey });
+      await assertAdmin({ req, supabaseUrl, anonKey, adminClient });
       if (action === 'syncExpirations') {
         await syncExpired(adminClient);
         return json(200, { ok: true });
@@ -892,7 +907,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'adminVerifyReference') {
-      await assertAdmin({ req, supabaseUrl, anonKey });
+      await assertAdmin({ req, supabaseUrl, anonKey, adminClient });
       const reference = clean(body.reference);
       if (!reference)
         return json(400, {

@@ -819,6 +819,7 @@ Deno.serve(async (req) => {
         'verification_notes',
         'verification_reviewed_at',
         'verification_retry_after',
+        'staff_role',
       ]) {
         if (hasOwn(patch, key)) sanitized[key] = cleanNullable(patch[key]);
       }
