@@ -75,6 +75,113 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     setState(() => _future = _loadNotifications());
   }
 
+  Future<void> _openNotificationDetail(
+    _NotificationItem item,
+    AppSettings settings,
+  ) async {
+    if (!item.isRead) {
+      try {
+        await _markRead(item);
+      } catch (_) {
+        // Detail viewing should still work even if marking read fails.
+      }
+    }
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.62,
+            maxChildSize: 0.92,
+            minChildSize: 0.4,
+            builder: (context, scrollController) {
+              return ListView(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        item.isRead
+                            ? Icons.notifications_none
+                            : Icons.notifications_active,
+                        size: 28,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          settings.t(item.title),
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (item.body.trim().isNotEmpty)
+                    SelectableText(
+                      settings.t(item.body),
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            height: 1.45,
+                          ),
+                    ),
+                  const SizedBox(height: 20),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  _NotificationMetaRow(
+                    icon: Icons.schedule_outlined,
+                    label: settings.t('Date'),
+                    value: DateFormat('MMM d, y h:mm a')
+                        .format(item.createdAt.toLocal()),
+                  ),
+                  _NotificationMetaRow(
+                    icon: Icons.category_outlined,
+                    label: settings.t('Type'),
+                    value: settings.t(item.type.replaceAll('_', ' ')),
+                  ),
+                  if (item.relatedTable.isNotEmpty)
+                    _NotificationMetaRow(
+                      icon: Icons.link_outlined,
+                      label: settings.t('Related to'),
+                      value: item.relatedTable.replaceAll('_', ' '),
+                    ),
+                  if (item.relatedId.isNotEmpty)
+                    _NotificationMetaRow(
+                      icon: Icons.tag_outlined,
+                      label: settings.t('Reference'),
+                      value: item.relatedId,
+                    ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _deletingIds.contains(item.id)
+                          ? null
+                          : () async {
+                              final deleted = await _deleteNotification(item);
+                              if (deleted && sheetContext.mounted) {
+                                Navigator.of(sheetContext).pop();
+                              }
+                            },
+                      icon: const Icon(Icons.delete_outline),
+                      label: Text(settings.t('Delete')),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   Future<bool> _deleteNotification(_NotificationItem item) async {
     if (_deletingIds.contains(item.id)) return false;
     final settings = ref.read(appSettingsControllerProvider);
@@ -305,46 +412,111 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       return false;
                     },
                     child: Card(
-                      child: ListTile(
-                        leading: Icon(
-                          item.isRead
-                              ? Icons.notifications_none
-                              : Icons.notifications_active,
-                        ),
-                        title: Text(settings.t(item.title)),
-                        subtitle: Text(
-                          [
-                            if (item.body.isNotEmpty) settings.t(item.body),
-                            DateFormat('MMM d, y h:mm a')
-                                .format(item.createdAt),
-                            settings.t(item.type.replaceAll('_', ' ')),
-                          ].join('\n'),
-                        ),
-                        isThreeLine: true,
-                        trailing: Wrap(
-                          spacing: 4,
-                          children: [
-                            if (!item.isRead)
-                              IconButton(
-                                onPressed: () => _markRead(item),
-                                icon: const Icon(Icons.done),
-                                tooltip: settings.t('Mark read'),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => _openNotificationDetail(item, settings),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Icon(
+                                      item.isRead
+                                          ? Icons.notifications_none
+                                          : Icons.notifications_active,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      settings.t(item.title),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            fontWeight: item.isRead
+                                                ? FontWeight.w600
+                                                : FontWeight.w800,
+                                          ),
+                                    ),
+                                  ),
+                                  if (!item.isRead)
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      onPressed: () => _markRead(item),
+                                      icon: const Icon(Icons.done),
+                                      tooltip: settings.t('Mark read'),
+                                    ),
+                                  IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: _deletingIds.contains(item.id)
+                                        ? null
+                                        : () => _deleteNotification(item),
+                                    icon: _deletingIds.contains(item.id)
+                                        ? const SizedBox.square(
+                                            dimension: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.delete_outline),
+                                    tooltip: settings.t('Delete'),
+                                  ),
+                                ],
                               ),
-                            IconButton(
-                              onPressed: _deletingIds.contains(item.id)
-                                  ? null
-                                  : () => _deleteNotification(item),
-                              icon: _deletingIds.contains(item.id)
-                                  ? const SizedBox.square(
-                                      dimension: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.delete_outline),
-                              tooltip: settings.t('Delete'),
-                            ),
-                          ],
+                              if (item.body.trim().isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 36),
+                                  child: Text(
+                                    settings.t(item.body),
+                                    maxLines: 4,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(height: 1.35),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 10),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 36),
+                                child: Wrap(
+                                  spacing: 10,
+                                  runSpacing: 4,
+                                  children: [
+                                    Text(
+                                      DateFormat('MMM d, y h:mm a')
+                                          .format(item.createdAt.toLocal()),
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                    Text(
+                                      settings
+                                          .t(item.type.replaceAll('_', ' ')),
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                    Text(
+                                      settings.t('Tap to view'),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -377,6 +549,48 @@ class _DeleteBackground extends StatelessWidget {
   }
 }
 
+class _NotificationMetaRow extends StatelessWidget {
+  const _NotificationMetaRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    if (value.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 92,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _NotificationItem {
   const _NotificationItem({
     required this.id,
@@ -385,6 +599,8 @@ class _NotificationItem {
     required this.body,
     required this.createdAt,
     required this.readAt,
+    required this.relatedTable,
+    required this.relatedId,
   });
 
   final String id;
@@ -393,6 +609,8 @@ class _NotificationItem {
   final String body;
   final DateTime createdAt;
   final DateTime? readAt;
+  final String relatedTable;
+  final String relatedId;
 
   bool get isRead => readAt != null;
 
@@ -405,6 +623,8 @@ class _NotificationItem {
       createdAt: DateTime.tryParse((json['created_at'] ?? '').toString()) ??
           DateTime.now(),
       readAt: DateTime.tryParse((json['read_at'] ?? '').toString()),
+      relatedTable: (json['related_table'] ?? '').toString(),
+      relatedId: (json['related_id'] ?? '').toString(),
     );
   }
 }
