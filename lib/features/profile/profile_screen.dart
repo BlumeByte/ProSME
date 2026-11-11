@@ -416,6 +416,74 @@ Future<void> _showVerificationBillingSheet(
           }
         }
 
+        Future<void> choosePaymentMethod(String selectedInterval) async {
+          if (busy) return;
+          final channel = await showModalBottomSheet<String>(
+            context: context,
+            showDragHandle: true,
+            builder: (methodContext) {
+              return SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        settings.t('Choose payment method'),
+                        style: Theme.of(methodContext).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        selectedInterval == 'yearly'
+                            ? settings.t('Yearly verification subscription')
+                            : settings.t('Monthly verification subscription'),
+                        style: Theme.of(methodContext).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.credit_card_outlined),
+                        title: Text(settings.t('Card')),
+                        subtitle: Text(settings.t(
+                          'Pay securely by card through Paystack.',
+                        )),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () =>
+                            Navigator.of(methodContext).pop('card'),
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.phone_android_outlined),
+                        title: Text(settings.t('Mobile money')),
+                        subtitle: Text(settings.t(
+                          'Pay with a supported mobile money wallet through Paystack.',
+                        )),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () =>
+                            Navigator.of(methodContext).pop('mobile_money'),
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.account_balance_outlined),
+                        title: Text(settings.t('Bank transfer')),
+                        subtitle: Text(settings.t(
+                          'Pay by bank transfer through Paystack.',
+                        )),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () =>
+                            Navigator.of(methodContext).pop('bank_transfer'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+          if (channel == null || !context.mounted) return;
+          await startPayment(selectedInterval, channel: channel);
+        }
+
         Future<void> verifyPending() async {
           final pendingReference = subscription?.paystackReference ?? '';
           if (pendingReference.trim().isEmpty) return;
@@ -559,21 +627,13 @@ Future<void> _showVerificationBillingSheet(
                     ],
                     const SizedBox(height: 12),
                     Text(
-                      settings.t('Recommended · pay by card'),
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                    ),
-                    Text(
-                      settings.t(
-                        'Card payments save automatically for renewal, so your badge never lapses.',
-                      ),
-                      style: Theme.of(context).textTheme.bodySmall,
+                      settings.t('Choose a plan'),
+                      style: Theme.of(context).textTheme.labelLarge,
                     ),
                     const SizedBox(height: 4),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.credit_card_outlined),
+                      leading: const Icon(Icons.calendar_view_month_outlined),
                       title: Text(settings.t('Monthly')),
                       subtitle: Text(paymentService.verificationPriceLabel(
                         role: role,
@@ -584,11 +644,11 @@ Future<void> _showVerificationBillingSheet(
                       trailing: const Icon(Icons.chevron_right),
                       onTap: busy
                           ? null
-                          : () => startPayment('monthly', channel: 'card'),
+                          : () => choosePaymentMethod('monthly'),
                     ),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.credit_card_outlined),
+                      leading: const Icon(Icons.calendar_today_outlined),
                       title: Text(settings.t('Yearly')),
                       subtitle: Text(paymentService.verificationPriceLabel(
                         role: role,
@@ -599,36 +659,7 @@ Future<void> _showVerificationBillingSheet(
                       trailing: const Icon(Icons.chevron_right),
                       onTap: busy
                           ? null
-                          : () => startPayment('yearly', channel: 'card'),
-                    ),
-                    const Divider(),
-                    Text(
-                      settings.t('Other payment methods'),
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.phone_android_outlined),
-                      title: Text(settings.t('Pay with mobile money')),
-                      subtitle: Text(settings.t(
-                        'Mobile money may need manual renewal if Paystack does not return a reusable method.',
-                      )),
-                      onTap: busy
-                          ? null
-                          : () =>
-                              startPayment(interval, channel: 'mobile_money'),
-                    ),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.account_balance_outlined),
-                      title: Text(settings.t('Pay by bank transfer')),
-                      subtitle: Text(settings.t(
-                        'Bank transfer payments are tracked after Paystack confirms them.',
-                      )),
-                      onTap: busy
-                          ? null
-                          : () =>
-                              startPayment(interval, channel: 'bank_transfer'),
+                          : () => choosePaymentMethod('yearly'),
                     ),
                   ],
                   if (pendingReference.trim().isNotEmpty) ...[
