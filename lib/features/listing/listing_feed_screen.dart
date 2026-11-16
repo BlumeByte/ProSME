@@ -13,7 +13,9 @@ import '../../config/constants.dart';
 import '../ads/search_ad.dart';
 import '../../core/utils/currency.dart';
 import '../../core/utils/location_data.dart';
+import '../../core/utils/online_category_icon.dart';
 import '../../core/utils/service_categories.dart';
+import '../../core/widgets/fade_slide_in.dart';
 import '../../core/utils/town_neighborhood_data.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
@@ -58,8 +60,8 @@ List<Listing> _sortedArtisanUpdates(
       break;
     case _ArtisanUpdateSort.category:
       sorted.sort((a, b) {
-        final category = normalizeServiceCategory(a.category)
-            .compareTo(normalizeServiceCategory(b.category));
+        final category = resolveListingCategory(a.category)
+            .compareTo(resolveListingCategory(b.category));
         return category == 0 ? b.createdAt.compareTo(a.createdAt) : category;
       });
       break;
@@ -468,7 +470,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
           final serviceMatches = _serviceQuery.isEmpty ||
               fuzzyContains(serviceText, _serviceQuery);
           final categoryMatches = _selectedCategory == null ||
-              normalizeServiceCategory(listing.category) == _selectedCategory ||
+              resolveListingCategory(listing.category) == _selectedCategory ||
               fuzzyContains(listing.category, _selectedCategory!);
           final locationMatches = _locationQuery.isEmpty ||
               _matchesLocation(locationText, _locationQuery);
@@ -477,17 +479,12 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
 
         final categoryCounts = <String, int>{};
         for (final listing in filtered) {
-          final category = normalizeServiceCategory(listing.category);
+          final category = resolveListingCategory(listing.category);
           categoryCounts.update(category, (value) => value + 1,
               ifAbsent: () => 1);
         }
-        final categoryCards = kServiceCategories
-            .map((item) => _CategoryPreview(
-                  item.name,
-                  item.icon,
-                  categoryCounts[item.name] ?? 0,
-                ))
-            .where((item) => item.count > 0)
+        final categoryCards = categoryCounts.entries
+            .map((entry) => _CategoryPreview(entry.key, entry.value))
             .toList(growable: true)
           ..sort((a, b) => b.count.compareTo(a.count));
 
@@ -504,7 +501,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               avatarUrl: listing.artisanPhotoUrl,
               location: listing.location,
               minPrice: listing.priceMin,
-              categories: {normalizeServiceCategory(listing.category)},
+              categories: {resolveListingCategory(listing.category)},
               isVerified: listing.verifiedOnly,
               listingCount: 1,
               ratingAverage: listing.ratingAverage,
@@ -523,7 +520,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                 : existing.minPrice,
             categories: {
               ...existing.categories,
-              normalizeServiceCategory(listing.category),
+              resolveListingCategory(listing.category),
             },
             isVerified: existing.isVerified || listing.verifiedOnly,
             listingCount: existing.listingCount + 1,
@@ -552,7 +549,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               ? rawCategories
                   .map((item) => item.toString().trim())
                   .where((item) => item.isNotEmpty)
-                  .map(normalizeServiceCategory)
+                  .map(resolveListingCategory)
                   .toSet()
               : <String>{};
           final name = [
@@ -813,35 +810,42 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                 ),
                 itemBuilder: (context, index) {
                   final item = categoryCards[index];
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () {
-                      _applyCategory(item.name);
-                    },
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 10,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(item.icon, color: scheme.primary),
-                            const SizedBox(height: 8),
-                            Text(
-                              item.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${item.count} ${settings.t('pros')}',
-                              style: TextStyle(color: scheme.onSurfaceVariant),
-                            ),
-                          ],
+                  return FadeSlideIn(
+                    index: index,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () {
+                        _applyCategory(item.name);
+                      },
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 10,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CategoryIcon(
+                                categoryName: item.name,
+                                color: scheme.primary,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                item.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${item.count} ${settings.t('pros')}',
+                                style:
+                                    TextStyle(color: scheme.onSurfaceVariant),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -915,7 +919,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                               leading: const Icon(Icons.campaign_outlined),
                               title: Text(listing.title),
                               subtitle: Text(
-                                '${normalizeServiceCategory(listing.category)} - ${listing.location}',
+                                '${resolveListingCategory(listing.category)} - ${listing.location}',
                               ),
                               trailing: const Icon(Icons.chevron_right),
                               onTap: user == null
@@ -1031,20 +1035,25 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                     spacing: 12,
                     runSpacing: 12,
                     children: professionals
+                        .asMap()
+                        .entries
                         .map(
-                          (pro) => SizedBox(
-                            width: cardWidth,
-                            child: _ProfessionalCard(
-                              pro: pro,
-                              currencyCode: currencyCode,
-                              settings: settings,
-                              onOpenProfile: () {
-                                widget.onLeaveHomeContent?.call();
-                                context.push(
-                                  '${RouteNames.artisanProfile}/${pro.artisanId}',
-                                );
-                              },
-                              onBook: () => _bookProfessional(pro),
+                          (entry) => FadeSlideIn(
+                            index: entry.key,
+                            child: SizedBox(
+                              width: cardWidth,
+                              child: _ProfessionalCard(
+                                pro: entry.value,
+                                currencyCode: currencyCode,
+                                settings: settings,
+                                onOpenProfile: () {
+                                  widget.onLeaveHomeContent?.call();
+                                  context.push(
+                                    '${RouteNames.artisanProfile}/${entry.value.artisanId}',
+                                  );
+                                },
+                                onBook: () => _bookProfessional(entry.value),
+                              ),
                             ),
                           ),
                         )
@@ -1176,7 +1185,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                                   ),
                             title: Text(listing.title),
                             subtitle: Text(
-                              '${normalizeServiceCategory(listing.category)} - ${listing.location}\n${formatMoney(listing.priceMin, settings.currencyCode)} - ${listing.ratingAverage.toStringAsFixed(1)}/5',
+                              '${resolveListingCategory(listing.category)} - ${listing.location}\n${formatMoney(listing.priceMin, settings.currencyCode)} - ${listing.ratingAverage.toStringAsFixed(1)}/5',
                             ),
                             isThreeLine: true,
                             trailing: const Icon(Icons.chevron_right),
@@ -1207,10 +1216,9 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
 }
 
 class _CategoryPreview {
-  const _CategoryPreview(this.name, this.icon, this.count);
+  const _CategoryPreview(this.name, this.count);
 
   final String name;
-  final IconData icon;
   final int count;
 }
 
@@ -1759,17 +1767,21 @@ class _ProfessionalCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                    radius: 24,
-                    foregroundImage: (pro.avatarUrl?.isNotEmpty ?? false)
-                        ? CachedNetworkImageProvider(pro.avatarUrl!)
-                        : null,
-                    onForegroundImageError: (pro.avatarUrl?.isNotEmpty ?? false)
-                        ? (_, __) {}
-                        : null,
-                    child: Text(
-                      (pro.name.trim().isNotEmpty ? pro.name.trim()[0] : 'P')
-                          .toUpperCase(),
+                  Hero(
+                    tag: 'artisan-avatar-${pro.artisanId}',
+                    child: CircleAvatar(
+                      radius: 24,
+                      foregroundImage: (pro.avatarUrl?.isNotEmpty ?? false)
+                          ? CachedNetworkImageProvider(pro.avatarUrl!)
+                          : null,
+                      onForegroundImageError:
+                          (pro.avatarUrl?.isNotEmpty ?? false)
+                              ? (_, __) {}
+                              : null,
+                      child: Text(
+                        (pro.name.trim().isNotEmpty ? pro.name.trim()[0] : 'P')
+                            .toUpperCase(),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),

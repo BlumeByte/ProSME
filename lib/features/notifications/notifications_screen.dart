@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../config/constants.dart';
+import '../../core/widgets/fade_slide_in.dart';
 import '../../core/widgets/loading_state.dart';
 import '../../core/widgets/safe_back_button.dart';
 import '../../models/app_user.dart';
@@ -397,134 +398,134 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   ),
                 )
               else
-                ...filtered.map(
-                  (item) => Dismissible(
-                    key: ValueKey(item.id),
-                    direction: DismissDirection.horizontal,
-                    background: const _DeleteBackground(
-                        alignment: Alignment.centerLeft),
-                    secondaryBackground: const _DeleteBackground(
-                        alignment: Alignment.centerRight),
-                    confirmDismiss: (_) async {
-                      await _deleteNotification(item);
-                      // The refreshed Future owns list removal. Returning true
-                      // would make Dismissible remove the same row a second time.
-                      return false;
-                    },
-                    child: Card(
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () => _openNotificationDetail(item, settings),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 2),
-                                    child: Icon(
-                                      item.isRead
-                                          ? Icons.notifications_none
-                                          : Icons.notifications_active,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      settings.t(item.title),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(
-                                            fontWeight: item.isRead
-                                                ? FontWeight.w600
-                                                : FontWeight.w800,
-                                          ),
-                                    ),
-                                  ),
-                                  if (!item.isRead)
-                                    IconButton(
-                                      visualDensity: VisualDensity.compact,
-                                      onPressed: () => _markRead(item),
-                                      icon: const Icon(Icons.done),
-                                      tooltip: settings.t('Mark read'),
-                                    ),
-                                  IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    onPressed: _deletingIds.contains(item.id)
-                                        ? null
-                                        : () => _deleteNotification(item),
-                                    icon: _deletingIds.contains(item.id)
-                                        ? const SizedBox.square(
-                                            dimension: 18,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Icon(Icons.delete_outline),
-                                    tooltip: settings.t('Delete'),
-                                  ),
-                                ],
-                              ),
-                              if (item.body.trim().isNotEmpty) ...[
-                                const SizedBox(height: 6),
-                                Padding(
-                                  padding: const EdgeInsets.only(left: 36),
-                                  child: Text(
-                                    settings.t(item.body),
-                                    maxLines: 4,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(height: 1.35),
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 10),
-                              Padding(
-                                padding: const EdgeInsets.only(left: 36),
-                                child: Wrap(
-                                  spacing: 10,
-                                  runSpacing: 4,
-                                  children: [
-                                    Text(
-                                      DateFormat('MMM d, y h:mm a')
-                                          .format(item.createdAt.toLocal()),
-                                      style:
-                                          Theme.of(context).textTheme.bodySmall,
-                                    ),
-                                    Text(
-                                      settings
-                                          .t(item.type.replaceAll('_', ' ')),
-                                      style:
-                                          Theme.of(context).textTheme.bodySmall,
-                                    ),
-                                    Text(
-                                      settings.t('Tap to view'),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                ...filtered.asMap().entries.map(
+                  (entry) => FadeSlideIn(
+                    index: entry.key,
+                    child: _notificationTile(entry.value, settings),
                   ),
                 ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _notificationTile(_NotificationItem item, AppSettings settings) {
+    return Dismissible(
+      key: ValueKey(item.id),
+      direction: DismissDirection.horizontal,
+      background: const _DeleteBackground(alignment: Alignment.centerLeft),
+      secondaryBackground:
+          const _DeleteBackground(alignment: Alignment.centerRight),
+      confirmDismiss: (_) async {
+        await _deleteNotification(item);
+        // The refreshed Future owns list removal. Returning true
+        // would make Dismissible remove the same row a second time.
+        return false;
+      },
+      child: Card(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _openNotificationDetail(item, settings),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Icon(
+                        item.isRead
+                            ? Icons.notifications_none
+                            : Icons.notifications_active,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        settings.t(item.title),
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(
+                              fontWeight: item.isRead
+                                  ? FontWeight.w600
+                                  : FontWeight.w800,
+                            ),
+                      ),
+                    ),
+                    if (!item.isRead)
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => _markRead(item),
+                        icon: const Icon(Icons.done),
+                        tooltip: settings.t('Mark read'),
+                      ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _deletingIds.contains(item.id)
+                          ? null
+                          : () => _deleteNotification(item),
+                      icon: _deletingIds.contains(item.id)
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Icon(Icons.delete_outline),
+                      tooltip: settings.t('Delete'),
+                    ),
+                  ],
+                ),
+                if (item.body.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 36),
+                    child: Text(
+                      settings.t(item.body),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(height: 1.35),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.only(left: 36),
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 4,
+                    children: [
+                      Text(
+                        DateFormat('MMM d, y h:mm a')
+                            .format(item.createdAt.toLocal()),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      Text(
+                        settings.t(item.type.replaceAll('_', ' ')),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      Text(
+                        settings.t('Tap to view'),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

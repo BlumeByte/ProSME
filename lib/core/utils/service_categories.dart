@@ -94,6 +94,31 @@ String normalizeServiceCategory(String input) {
   return 'Other';
 }
 
+/// Like [normalizeServiceCategory], but for a listing's own category: an
+/// artisan-typed category that doesn't match any built-in [kServiceCategory]
+/// keeps its own name (title-cased) instead of collapsing into a generic
+/// "Other" bucket, so it can show its own label and icon.
+String resolveListingCategory(String input) {
+  final trimmed = input.trim();
+  if (trimmed.isEmpty) return 'Other';
+  final value = trimmed.toLowerCase();
+  for (final category in kServiceCategories) {
+    if (category.name.toLowerCase() == value) return category.name;
+    if (category.keywords.any(value.contains)) return category.name;
+  }
+  if (value == 'other') return 'Other';
+  return _titleCase(trimmed);
+}
+
+String _titleCase(String value) {
+  final words = value.split(RegExp(r'\s+')).where((word) => word.isNotEmpty);
+  final titled = words.map((word) {
+    final lower = word.toLowerCase();
+    return '${lower[0].toUpperCase()}${lower.substring(1)}';
+  }).join(' ');
+  return titled.length > 40 ? titled.substring(0, 40).trimRight() : titled;
+}
+
 bool fuzzyContains(String text, String query) {
   final normalizedText = text.toLowerCase();
   final tokens = query

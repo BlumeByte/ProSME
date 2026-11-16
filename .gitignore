@@ -7,6 +7,9 @@
 .buildlog/
 .history
 
+# Local JDK used for Android builds (not system-wide)
+/android/.jdk17/
+
 
 
 # Flutter repo-specific

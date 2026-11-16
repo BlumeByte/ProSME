@@ -2,6 +2,57 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 
+/// A soft fade + gentle upward slide used for every screen transition in
+/// the app (set once below via [PageTransitionsTheme]), replacing each
+/// platform's default so navigation feels like one consistent, seamless
+/// motion instead of abrupt platform-default cuts/zooms.
+class _SmoothPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _SmoothPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final entering = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    final leaving = CurvedAnimation(
+      parent: secondaryAnimation,
+      curve: Curves.easeInCubic,
+    );
+    return FadeTransition(
+      opacity: entering,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.035),
+          end: Offset.zero,
+        ).animate(entering),
+        child: FadeTransition(
+          opacity: Tween<double>(begin: 1, end: 0.85).animate(leaving),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+const _smoothPageTransitionsTheme = PageTransitionsTheme(
+  builders: {
+    TargetPlatform.android: _SmoothPageTransitionsBuilder(),
+    TargetPlatform.iOS: _SmoothPageTransitionsBuilder(),
+    TargetPlatform.macOS: _SmoothPageTransitionsBuilder(),
+    TargetPlatform.windows: _SmoothPageTransitionsBuilder(),
+    TargetPlatform.linux: _SmoothPageTransitionsBuilder(),
+    TargetPlatform.fuchsia: _SmoothPageTransitionsBuilder(),
+  },
+);
+
 ThemeData buildLightTheme() => _buildTheme(
       brightness: Brightness.light,
       colors: AppColors.light,
@@ -64,6 +115,7 @@ ThemeData _buildTheme({
     splashColor: colors.primary.withValues(alpha: isDark ? 0.18 : 0.10),
     highlightColor: colors.primary.withValues(alpha: isDark ? 0.16 : 0.08),
     focusColor: colors.primary.withValues(alpha: isDark ? 0.30 : 0.18),
+    pageTransitionsTheme: _smoothPageTransitionsTheme,
   );
 
   final textTheme = _buildTextTheme(base.textTheme, colors);

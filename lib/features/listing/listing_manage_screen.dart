@@ -451,7 +451,7 @@ Future<void> _openListingSheet(
                         }
 
                         try {
-                          final category = normalizeServiceCategory(
+                          final category = resolveListingCategory(
                               selectedCategory == 'Other'
                                   ? otherCategoryController.text
                                   : selectedCategory);

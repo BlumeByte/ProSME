@@ -80,7 +80,7 @@ class ArtisanProfileScreen extends ConsumerWidget {
           final isBusy = listings.any((listing) => listing.artisanBusy);
           final wonBids = bids.where((bid) => bid.status == 'accepted').length;
           final categories = listings
-              .map((listing) => normalizeServiceCategory(listing.category))
+              .map((listing) => resolveListingCategory(listing.category))
               .where((category) => category.trim().isNotEmpty)
               .toSet()
               .toList(growable: false);
@@ -93,18 +93,22 @@ class ArtisanProfileScreen extends ConsumerWidget {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-                      CircleAvatar(
-                        radius: 42,
-                        foregroundImage: avatarUrl?.trim().isNotEmpty == true
-                            ? CachedNetworkImageProvider(avatarUrl!)
-                            : null,
-                        onForegroundImageError:
-                            avatarUrl?.trim().isNotEmpty == true
-                                ? (_, __) {}
-                                : null,
-                        child: Text(
-                          name.isEmpty ? 'P' : name[0].toUpperCase(),
-                          style: Theme.of(context).textTheme.titleLarge,
+                      Hero(
+                        tag: 'artisan-avatar-$artisanId',
+                        child: CircleAvatar(
+                          radius: 42,
+                          foregroundImage:
+                              avatarUrl?.trim().isNotEmpty == true
+                                  ? CachedNetworkImageProvider(avatarUrl!)
+                                  : null,
+                          onForegroundImageError:
+                              avatarUrl?.trim().isNotEmpty == true
+                                  ? (_, __) {}
+                                  : null,
+                          child: Text(
+                            name.isEmpty ? 'P' : name[0].toUpperCase(),
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 12),
