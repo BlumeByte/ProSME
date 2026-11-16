@@ -13,8 +13,11 @@ const types = {
 
 http.createServer((req, res) => {
   const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
-  let file = path.join(root, urlPath === '/' ? 'index.html' : urlPath);
-  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+  const requested = path.normalize(path.join(root, urlPath === '/' ? 'index.html' : urlPath));
+  const relative = path.relative(root, requested);
+  const withinRoot = relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  let file = requested;
+  if (!withinRoot || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
     file = path.join(root, 'index.html');
   }
   res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });

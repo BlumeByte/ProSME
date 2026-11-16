@@ -115,7 +115,11 @@ const sessionAnalyticsId = (() => {
   const key = 'prosme_analytics_session_id';
   const existing = window.sessionStorage.getItem(key);
   if (existing) return existing;
-  const created = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+  const created =
+    crypto.randomUUID?.() ||
+    `${Date.now()}-${Array.from(crypto.getRandomValues(new Uint32Array(2)))
+      .map((n) => n.toString(16))
+      .join('')}`;
   window.sessionStorage.setItem(key, created);
   return created;
 })();
