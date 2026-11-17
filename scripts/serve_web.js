@@ -11,15 +11,60 @@ const types = {
   '.bin': 'application/octet-stream', '.ico': 'image/x-icon', '.txt': 'text/plain',
 };
 
-http.createServer((req, res) => {
-  const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
-  const requested = path.normalize(path.join(root, urlPath === '/' ? 'index.html' : urlPath));
-  const relative = path.relative(root, requested);
-  const withinRoot = relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-  let file = requested;
-  if (!withinRoot || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
-    file = path.join(root, 'index.html');
+// Build a trusted file catalogue at startup. Request strings are only Map keys;
+// they never become filesystem paths. Restart after rebuilding the web app.
+function catalogue(directory, prefix = '', files = new Map()) {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) continue;
+    const file = path.join(directory, entry.name);
+    const key = `${prefix}/${entry.name}`;
+    if (entry.isDirectory()) catalogue(file, key, files);
+    else if (entry.isFile()) files.set(key, file);
   }
-  res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
-  fs.createReadStream(file).pipe(res);
-}).listen(port, '127.0.0.1', () => console.log(`serving ${root} on ${port}`));
+  return files;
+}
+
+function createServer(directory = root) {
+  const files = catalogue(directory);
+  return http.createServer((req, res) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.writeHead(405, { Allow: 'GET, HEAD' }).end();
+      return;
+    }
+    let urlPath;
+    try {
+      urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
+    } catch {
+      res.writeHead(400).end('Invalid URL');
+      return;
+    }
+    if (urlPath.includes('\0') || urlPath.includes('\\') ||
+        urlPath.split('/').some((part) => part === '..' || part === '.')) {
+      res.writeHead(400).end('Invalid path');
+      return;
+    }
+    const file = files.get(urlPath) || files.get('/index.html');
+    if (!file) {
+      res.writeHead(404).end('Not found');
+      return;
+    }
+    const stream = fs.createReadStream(file);
+    stream.once('error', () => {
+      if (!res.headersSent) res.writeHead(404).end('Not found');
+      else res.destroy();
+    });
+    stream.once('open', () => {
+      res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
+      if (req.method === 'HEAD') {
+        stream.destroy();
+        res.end();
+      } else stream.pipe(res);
+    });
+    res.once('close', () => stream.destroy());
+  });
+}
+
+if (require.main === module) {
+  createServer().listen(port, '127.0.0.1', () => console.log(`serving ${root} on ${port}`));
+}
+module.exports = { createServer };
