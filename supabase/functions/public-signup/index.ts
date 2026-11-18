@@ -34,8 +34,7 @@ const clientIp = (req: Request) =>
 
 // Fixed-window counter in the database (public.rate_limit_hit). Anonymous
 // callers can otherwise trigger unlimited confirmation e-mails and Twilio
-// SMS (cost abuse / harassment of third parties). Fails open on DB errors so
-// a transient outage does not block legitimate sign-ups.
+// SMS. Deny requests when the limiter cannot confirm capacity.
 const allowRequest = async (
   adminClient: ReturnType<typeof createClient>,
   bucket: string,
@@ -49,7 +48,7 @@ const allowRequest = async (
   });
   if (error) {
     console.error("rate limit check failed", error.message);
-    return true;
+    return false;
   }
   return data === true;
 };

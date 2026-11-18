@@ -16,7 +16,7 @@ SUPABASE_KEY_VALUE="${VITE_SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_ANON_KEY:-}}"
 # Vite validates the selected browser key before either bundle is emitted.
 export VITE_SUPABASE_URL="${SUPABASE_URL_VALUE}"
 export VITE_SUPABASE_PUBLISHABLE_KEY="${SUPABASE_KEY_VALUE}"
-npm --prefix "${ADMIN_WEB_DIR}" install
+npm --prefix "${ADMIN_WEB_DIR}" ci --include=dev
 npm --prefix "${ADMIN_WEB_DIR}" run build
 
 # Build the same Flutter application used on Android as the authenticated web app.

@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "vite --host 127.0.0.1",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.106.2",
-    "read-excel-file": "9.1.1",
+    "read-excel-file": "9.1.1"
+  },
+  "devDependencies": {
     "vite": "6.4.6"
   }
 }
