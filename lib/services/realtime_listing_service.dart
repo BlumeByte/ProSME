@@ -12,7 +12,7 @@ import 'listing_service.dart';
 /// A global Postgres Changes subscription does not scale for a public feed:
 /// every listing write must be authorized and fanned out to every connected
 /// user. The feed is therefore loaded once per app session, capped to 100 rows,
-/// and refreshed after local writes or an explicit [fetchListings] call.
+/// and refreshed after local writes or an explicit [refreshListings] call.
 class RealtimeListingService implements ListingService {
   RealtimeListingService(this._supabase, this._localDb);
 
@@ -54,10 +54,11 @@ class RealtimeListingService implements ListingService {
       debugPrint('Could not read cached listings: $error');
     }
 
-    await _refresh();
+    await refreshListings();
   }
 
-  Future<void> _refresh() async {
+  @override
+  Future<void> refreshListings() async {
     if (_refreshing) {
       _refreshQueued = true;
       return;
@@ -66,11 +67,13 @@ class RealtimeListingService implements ListingService {
     try {
       final data = await fetchListings();
       _emit(data);
+    } catch (error) {
+      debugPrint('Could not refresh listings: $error');
     } finally {
       _refreshing = false;
       if (_refreshQueued) {
         _refreshQueued = false;
-        unawaited(_refresh());
+        unawaited(refreshListings());
       }
     }
   }
@@ -153,8 +156,8 @@ class RealtimeListingService implements ListingService {
       };
       artisanAvatars = {
         for (final profile in profiles)
-          (profile['id'] ?? '').toString(): (profile['avatar_url'] ?? '')
-              .toString(),
+          (profile['id'] ?? '').toString():
+              (profile['avatar_url'] ?? '').toString(),
       };
       artisanBusy = {
         for (final profile in profiles)
@@ -208,23 +211,21 @@ class RealtimeListingService implements ListingService {
       debugPrintStack(stackTrace: stackTrace);
     }
 
-    return rows
-        .map((row) {
-          final artisanId = (row['artisan_id'] ?? row['artisanId'])?.toString();
-          final hydrated = Map<String, dynamic>.from(row);
-          if (artisanId != null && artisanId.isNotEmpty) {
-            hydrated['artisanName'] = artisanNames[artisanId] ?? '';
-            hydrated['artisanPhotoUrl'] = artisanAvatars[artisanId] ?? '';
-            hydrated['artisanBusy'] = artisanBusy[artisanId] ?? false;
-            hydrated['artisanDescription'] = artisanDescriptions[artisanId] ?? '';
-            hydrated['verified_only'] = artisanVerified[artisanId] ?? false;
-            hydrated['ratingAverage'] = ratingAverages[artisanId] ?? 0;
-            hydrated['ratingCount'] = ratingCounts[artisanId] ?? 0;
-            hydrated['wonBidCount'] = wonBidCounts[artisanId] ?? 0;
-          }
-          return Listing.fromJson(hydrated);
-        })
-        .toList(growable: false);
+    return rows.map((row) {
+      final artisanId = (row['artisan_id'] ?? row['artisanId'])?.toString();
+      final hydrated = Map<String, dynamic>.from(row);
+      if (artisanId != null && artisanId.isNotEmpty) {
+        hydrated['artisanName'] = artisanNames[artisanId] ?? '';
+        hydrated['artisanPhotoUrl'] = artisanAvatars[artisanId] ?? '';
+        hydrated['artisanBusy'] = artisanBusy[artisanId] ?? false;
+        hydrated['artisanDescription'] = artisanDescriptions[artisanId] ?? '';
+        hydrated['verified_only'] = artisanVerified[artisanId] ?? false;
+        hydrated['ratingAverage'] = ratingAverages[artisanId] ?? 0;
+        hydrated['ratingCount'] = ratingCounts[artisanId] ?? 0;
+        hydrated['wonBidCount'] = wonBidCounts[artisanId] ?? 0;
+      }
+      return Listing.fromJson(hydrated);
+    }).toList(growable: false);
   }
 
   @override
@@ -277,7 +278,7 @@ class RealtimeListingService implements ListingService {
         .select()
         .single();
     final hydrated = await _hydrateListings([Map<String, dynamic>.from(row)]);
-    unawaited(_refresh());
+    unawaited(refreshListings());
     return hydrated.first;
   }
 
@@ -300,7 +301,7 @@ class RealtimeListingService implements ListingService {
         .select()
         .single();
     final hydrated = await _hydrateListings([Map<String, dynamic>.from(row)]);
-    unawaited(_refresh());
+    unawaited(refreshListings());
     return hydrated.first;
   }
 

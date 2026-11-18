@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../core/widgets/app_scaffold.dart';
 import '../../routes/route_names.dart';
 import '../../services/app_settings_controller.dart';
@@ -71,8 +74,10 @@ class _ArtisanHomeScreenState extends ConsumerState<ArtisanHomeScreen> {
       child: StreamBuilder(
         stream: user == null ? null : chatService.watchThreads(user.id),
         builder: (context, snapshot) {
-          final unread = (snapshot.data ?? const [])
-              .fold<int>(0, (sum, thread) => sum + thread.unreadCount);
+          final unread = (snapshot.data ?? const []).fold<int>(
+            0,
+            (sum, thread) => sum + thread.unreadCount,
+          );
           final navigationItems = [
             BottomNavigationBarItem(
               icon: const Icon(Icons.dashboard_outlined),
@@ -118,9 +123,8 @@ class _ArtisanHomeScreenState extends ConsumerState<ArtisanHomeScreen> {
             title: settings.t('Artisan Dashboard'),
             actions: [
               IconButton(
-                onPressed: () async {
-                  await ref.read(listingServiceProvider).fetchListings();
-                  ref.invalidate(listingsStreamProvider);
+                onPressed: () {
+                  unawaited(ref.read(listingServiceProvider).refreshListings());
                   ref.invalidate(jobsStreamProvider);
                 },
                 icon: const Icon(Icons.refresh),
@@ -134,22 +138,8 @@ class _ArtisanHomeScreenState extends ConsumerState<ArtisanHomeScreen> {
             ],
             selectedIndex: currentIndex,
             onDestinationSelected: selectDestination,
-            desktopDestinations: navigationItems
-                .map(
-                  (item) => NavigationRailDestination(
-                    icon: item.icon,
-                    selectedIcon: item.activeIcon,
-                    label: Text(item.label ?? ''),
-                  ),
-                )
-                .toList(growable: false),
+            destinations: navigationItems,
             body: IndexedStack(index: currentIndex, children: _pages),
-            bottomNavigationBar: BottomNavigationBar(
-              currentIndex: currentIndex,
-              onTap: selectDestination,
-              type: BottomNavigationBarType.fixed,
-              items: navigationItems,
-            ),
           );
         },
       ),

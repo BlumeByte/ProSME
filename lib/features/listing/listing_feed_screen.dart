@@ -70,11 +70,12 @@ List<Listing> _sortedArtisanUpdates(
 }
 
 class ListingFeedScreen extends ConsumerStatefulWidget {
-  const ListingFeedScreen(
-      {super.key,
-      this.openingBanner,
-      this.onOpenUploadTab,
-      this.onLeaveHomeContent});
+  const ListingFeedScreen({
+    super.key,
+    this.openingBanner,
+    this.onOpenUploadTab,
+    this.onLeaveHomeContent,
+  });
 
   final Widget? openingBanner;
   final VoidCallback? onOpenUploadTab;
@@ -88,11 +89,6 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   final _serviceController = TextEditingController();
   final _locationController = TextEditingController();
   final _locationLookup = LocationLookupService();
-  final PageController _featuredController =
-      PageController(viewportFraction: 0.88);
-  Timer? _featuredTimer;
-  int _featuredPage = 0;
-  int _featuredCount = 0;
   final int _contentSeed = DateTime.now().microsecondsSinceEpoch;
   String _serviceQuery = '';
   String _locationQuery = '';
@@ -105,6 +101,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   bool _appliedUserCountry = false;
   bool _loadingCountries = false;
   bool _loadingRegions = false;
+  int _countrySelection = 0;
   bool _showSearchResults = false;
   bool _locating = false;
   bool _locationLookupBusy = false;
@@ -118,25 +115,10 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     super.initState();
     _loadRecentSearches();
     _loadCountries();
-    _featuredTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!mounted ||
-          _featuredCount < 2 ||
-          !_featuredController.hasClients) {
-        return;
-      }
-      _featuredPage = (_featuredPage + 1) % _featuredCount;
-      _featuredController.animateToPage(
-        _featuredPage,
-        duration: const Duration(milliseconds: 420),
-        curve: Curves.easeOutCubic,
-      );
-    });
   }
 
   @override
   void dispose() {
-    _featuredTimer?.cancel();
-    _featuredController.dispose();
     _serviceController.dispose();
     _locationController.dispose();
     super.dispose();
@@ -161,10 +143,11 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     final typedLocation = _locationController.text.trim();
     final parts = [
       typedLocation,
-      _selectedTown,
-      _selectedCity?.name,
-      _selectedRegion?.name,
-      _selectedCountry?.name,
+      if (typedLocation.isEmpty)
+        _selectedTown ??
+            _selectedCity?.name ??
+            _selectedRegion?.name ??
+            _selectedCountry?.name,
     ].whereType<String>().where((item) => item.trim().isNotEmpty).toList();
     setState(() {
       _serviceQuery = _serviceController.text.trim().toLowerCase();
@@ -240,17 +223,18 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   }
 
   Future<void> _selectCountry(CountryOption? country) async {
+    final selection = ++_countrySelection;
     setState(() {
+      _loadingRegions = country != null;
       _selectedCountry = country;
       _selectedRegion = null;
       _selectedCity = null;
       _selectedTown = null;
     });
     if (country == null) return;
-    setState(() => _loadingRegions = true);
     try {
       final hydrated = await loadCountryRegions(country);
-      if (!mounted) return;
+      if (!mounted || selection != _countrySelection) return;
       setState(() {
         _selectedCountry = hydrated;
         _countries = _countries
@@ -260,7 +244,9 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
     } catch (_) {
       // Region/city/town typing remains available when hydration fails.
     } finally {
-      if (mounted) setState(() => _loadingRegions = false);
+      if (mounted && selection == _countrySelection) {
+        setState(() => _loadingRegions = false);
+      }
     }
   }
 
@@ -274,9 +260,10 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
           '',
     ].where((item) => item.isNotEmpty).join(' in ');
     if (query.trim().isEmpty) return;
-    final next = [query, ..._recentSearches.where((item) => item != query)]
-        .take(8)
-        .toList(growable: false);
+    final next = [
+      query,
+      ..._recentSearches.where((item) => item != query),
+    ].take(8).toList(growable: false);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('recent_searches', next);
     if (mounted) setState(() => _recentSearches = next);
@@ -335,7 +322,9 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
   }
 
   void _clearSearchResults() {
+    _locationLookupRun++;
     setState(() {
+      _locationLookupBusy = false;
       _showSearchResults = false;
       _serviceQuery = '';
       _locationQuery = '';
@@ -436,7 +425,12 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
         );
         if (country.name.toLowerCase() == userCountry ||
             country.code.toLowerCase() == userCountry) {
-          unawaited(_selectCountry(country));
+          final selection = _countrySelection;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && selection == _countrySelection) {
+              unawaited(_selectCountry(country));
+            }
+          });
         }
       }
     }
@@ -480,14 +474,21 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
         final categoryCounts = <String, int>{};
         for (final listing in filtered) {
           final category = resolveListingCategory(listing.category);
-          categoryCounts.update(category, (value) => value + 1,
-              ifAbsent: () => 1);
+          categoryCounts.update(
+            category,
+            (value) => value + 1,
+            ifAbsent: () => 1,
+          );
         }
         final categoryCards = categoryCounts.entries
             .map((entry) => _CategoryPreview(entry.key, entry.value))
             .toList(growable: true)
           ..sort((a, b) => b.count.compareTo(a.count));
 
+        final artisanNames = {
+          for (final profile in marketplaceArtisans)
+            profile['id']?.toString(): profile['full_name']?.toString().trim(),
+        };
         final professionalsById = <String, _ProfessionalPreview>{};
         for (final listing in filtered) {
           final existing = professionalsById[listing.artisanId];
@@ -498,7 +499,12 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
               name: (listing.artisanName?.trim().isNotEmpty ?? false)
                   ? listing.artisanName!.trim()
                   : 'Professional',
+              artisanName: artisanNames[listing.artisanId],
               avatarUrl: listing.artisanPhotoUrl,
+              coverUrl: listing.images.firstWhere(
+                (url) => url.trim().isNotEmpty,
+                orElse: () => '',
+              ),
               location: listing.location,
               minPrice: listing.priceMin,
               categories: {resolveListingCategory(listing.category)},
@@ -515,6 +521,9 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             location: existing.location.isNotEmpty
                 ? existing.location
                 : listing.location,
+            listingId: listing.priceMin < existing.minPrice
+                ? listing.id
+                : existing.listingId,
             minPrice: listing.priceMin < existing.minPrice
                 ? listing.priceMin
                 : existing.minPrice,
@@ -555,7 +564,10 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
           final name = [
             (profile['full_name'] ?? '').toString().trim(),
             (profile['username'] ?? '').toString().trim(),
-          ].firstWhere((value) => value.isNotEmpty, orElse: () => 'Professional');
+          ].firstWhere(
+            (value) => value.isNotEmpty,
+            orElse: () => 'Professional',
+          );
           final location = (profile['location'] ?? profile['country'] ?? '')
               .toString()
               .trim();
@@ -565,8 +577,8 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             (profile['bio'] ?? '').toString(),
             ...categories,
           ].join(' ').toLowerCase();
-          final serviceMatches =
-              _serviceQuery.isEmpty || fuzzyContains(serviceText, _serviceQuery);
+          final serviceMatches = _serviceQuery.isEmpty ||
+              fuzzyContains(serviceText, _serviceQuery);
           final categoryMatches = _selectedCategory == null ||
               categories.contains(_selectedCategory) ||
               categories.any((item) => fuzzyContains(item, _selectedCategory!));
@@ -585,8 +597,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             isVerified: (profile['verification_status'] ?? '').toString() ==
                 VerificationStatus.verified.name,
             listingCount: 0,
-            ratingAverage:
-                (profile['rating_summary'] as num?)?.toDouble() ?? 0,
+            ratingAverage: (profile['rating_summary'] as num?)?.toDouble() ?? 0,
             ratingCount: 0,
             wonBidCount: 0,
             isBusy: profile['is_busy'] == true,
@@ -604,7 +615,6 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
         final featured = allProfessionals
             .where((pro) => pro.isVerified)
             .toList(growable: false);
-        _featuredCount = featured.length;
         final featuredIds = featured.map((pro) => pro.artisanId).toSet();
         final professionals = allProfessionals
             .where((pro) => !featuredIds.contains(pro.artisanId))
@@ -684,10 +694,11 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                   const SizedBox(height: 16),
                 ],
                 Text(
-                    showingAllProfessionals
-                        ? settings.t('Open service requests')
-                        : settings.t('Matching requests'),
-                    style: Theme.of(context).textTheme.titleLarge),
+                  showingAllProfessionals
+                      ? settings.t('Open service requests')
+                      : settings.t('Matching requests'),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const SizedBox(height: 8),
                 _OpenJobsPreview(
                   userId: user?.id,
@@ -699,42 +710,16 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                 ),
                 const SizedBox(height: 18),
                 Text(
-                    showingAllProfessionals
-                        ? settings.t('All professionals')
-                        : settings.t('Matching professionals'),
-                    style: Theme.of(context).textTheme.titleLarge),
+                  showingAllProfessionals
+                      ? settings.t('All professionals')
+                      : settings.t('Matching professionals'),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const SizedBox(height: 8),
                 if (allProfessionals.isEmpty)
                   Text(settings.t('No professionals found.'))
                 else
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final cardWidth = constraints.maxWidth < 360
-                          ? constraints.maxWidth
-                          : 360.0;
-                      return Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: allProfessionals
-                            .map((pro) => SizedBox(
-                                  width: cardWidth,
-                                  child: _ProfessionalCard(
-                                    pro: pro,
-                                    currencyCode: currencyCode,
-                                    settings: settings,
-                                    onOpenProfile: () {
-                                      widget.onLeaveHomeContent?.call();
-                                      context.push(
-                                        '${RouteNames.artisanProfile}/${pro.artisanId}',
-                                      );
-                                    },
-                                    onBook: () => _bookProfessional(pro),
-                                  ),
-                                ))
-                            .toList(growable: false),
-                      );
-                    },
-                  ),
+                  _professionalGrid(allProfessionals, currencyCode, settings),
               ],
             ),
           );
@@ -792,65 +777,67 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: categoryCards.length,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  // 3 across fits a phone; a wide/web window gets more
-                  // columns instead of the same 3 tiles stretched huge.
-                  crossAxisCount:
-                      (MediaQuery.sizeOf(context).width / 170).floor().clamp(
-                            3,
-                            8,
-                          ),
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 0.9,
-                ),
-                itemBuilder: (context, index) {
-                  final item = categoryCards[index];
-                  return FadeSlideIn(
-                    index: index,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () {
-                        _applyCategory(item.name);
-                      },
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 10,
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              CategoryIcon(
-                                categoryName: item.name,
-                                color: scheme.primary,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                item.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w700),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${item.count} ${settings.t('pros')}',
-                                style:
-                                    TextStyle(color: scheme.onSurfaceVariant),
-                              ),
-                            ],
+              LayoutBuilder(
+                builder: (context, constraints) => GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: categoryCards.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: (constraints.maxWidth / 175).floor().clamp(
+                          2,
+                          6,
+                        ),
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    mainAxisExtent:
+                        110 + MediaQuery.textScalerOf(context).scale(24),
+                  ),
+                  itemBuilder: (context, index) {
+                    final item = categoryCards[index];
+                    return FadeSlideIn(
+                      index: index,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () {
+                          _applyCategory(item.name);
+                        },
+                        child: Card(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 10,
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                CategoryIcon(
+                                  categoryName: item.name,
+                                  color: scheme.primary,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  item.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${item.count} ${settings.t(item.count == 1 ? 'service' : 'services')}',
+                                  style: TextStyle(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
               const SizedBox(height: 20),
             ],
@@ -902,41 +889,31 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             if (listings.isEmpty)
               Text(settings.t('No artisan updates yet.'))
             else
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final cardWidth = constraints.maxWidth < 420
-                      ? constraints.maxWidth
-                      : 420.0;
-                  return Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: recentUpdates.take(3).map(
-                      (listing) {
-                        return SizedBox(
-                          width: cardWidth,
-                          child: Card(
-                            child: ListTile(
-                              leading: const Icon(Icons.campaign_outlined),
-                              title: Text(listing.title),
-                              subtitle: Text(
-                                '${resolveListingCategory(listing.category)} - ${listing.location}',
-                              ),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: user == null
-                                  ? () => context.go(RouteNames.auth)
-                                  : () {
-                                      widget.onLeaveHomeContent?.call();
-                                      context.push(
-                                        '${RouteNames.listingDetail}/${listing.id}',
-                                      );
-                                    },
-                            ),
-                          ),
-                        );
-                      },
-                    ).toList(growable: false),
+              _professionalGrid(
+                recentUpdates.take(4).map((listing) {
+                  return _ProfessionalPreview(
+                    artisanId: listing.artisanId,
+                    listingId: listing.id,
+                    title: listing.title,
+                    name: listing.artisanName?.trim().isNotEmpty == true
+                        ? listing.artisanName!.trim()
+                        : settings.t('Professional'),
+                    artisanName: artisanNames[listing.artisanId],
+                    avatarUrl: listing.artisanPhotoUrl,
+                    coverUrl: listing.images.firstOrNull?.trim() ?? '',
+                    location: listing.location,
+                    minPrice: listing.priceMin,
+                    categories: {resolveListingCategory(listing.category)},
+                    isVerified: listing.verifiedOnly,
+                    listingCount: 1,
+                    ratingAverage: listing.ratingAverage,
+                    ratingCount: listing.ratingCount,
+                    wonBidCount: listing.wonBidCount,
+                    isBusy: listing.artisanBusy,
                   );
-                },
+                }).toList(growable: false),
+                currencyCode,
+                settings,
               ),
             const SizedBox(height: 20),
             Row(
@@ -969,32 +946,7 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             if (featured.isEmpty)
               Text(settings.t('No verified professionals available yet.'))
             else
-              SizedBox(
-                height: 360,
-                child: PageView.builder(
-                  controller: _featuredController,
-                  onPageChanged: (index) => _featuredPage = index,
-                  itemCount: featured.length,
-                  itemBuilder: (context, index) {
-                    final pro = featured[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: _ProfessionalCard(
-                        pro: pro,
-                        currencyCode: currencyCode,
-                        settings: settings,
-                        onOpenProfile: () {
-                          widget.onLeaveHomeContent?.call();
-                          context.push(
-                            '${RouteNames.artisanProfile}/${pro.artisanId}',
-                          );
-                        },
-                        onBook: () => _bookProfessional(pro),
-                      ),
-                    );
-                  },
-                ),
-              ),
+              _professionalGrid(featured, currencyCode, settings),
             const SizedBox(height: 20),
             Row(
               children: [
@@ -1026,42 +978,67 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
             if (professionals.isEmpty)
               Text(settings.t('No other professionals available yet.'))
             else
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final cardWidth = constraints.maxWidth < 360
-                      ? constraints.maxWidth
-                      : 360.0;
-                  return Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: professionals
-                        .asMap()
-                        .entries
-                        .map(
-                          (entry) => FadeSlideIn(
-                            index: entry.key,
-                            child: SizedBox(
-                              width: cardWidth,
-                              child: _ProfessionalCard(
-                                pro: entry.value,
-                                currencyCode: currencyCode,
-                                settings: settings,
-                                onOpenProfile: () {
-                                  widget.onLeaveHomeContent?.call();
-                                  context.push(
-                                    '${RouteNames.artisanProfile}/${entry.value.artisanId}',
-                                  );
-                                },
-                                onBook: () => _bookProfessional(entry.value),
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(growable: false),
-                  );
-                },
-              ),
+              _professionalGrid(professionals, currencyCode, settings),
             const SizedBox(height: 20),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _professionalGrid(
+    List<_ProfessionalPreview> professionals,
+    String currencyCode,
+    AppSettings settings,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 16.0;
+        final width = constraints.maxWidth;
+        final columns = width >= 1180
+            ? 4
+            : width >= 864
+                ? 3
+                : width >= 560
+                    ? 2
+                    : 1;
+        final cardWidth =
+            ((width - spacing * (columns - 1)) / columns).floorToDouble();
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final pro in professionals)
+              SizedBox(
+                key: ValueKey(
+                  pro.title == null ? pro.artisanId : pro.listingId,
+                ),
+                width: cardWidth,
+                child: _ProfessionalCard(
+                  pro: pro,
+                  currencyCode: currencyCode,
+                  settings: settings,
+                  onOpenProfile: () {
+                    widget.onLeaveHomeContent?.call();
+                    context.push(
+                      '${RouteNames.artisanProfile}/${pro.artisanId}',
+                    );
+                  },
+                  onOpenListing: pro.title == null
+                      ? null
+                      : () {
+                          if (ref.read(authStateProvider).valueOrNull == null) {
+                            context.go(RouteNames.auth);
+                            return;
+                          }
+                          widget.onLeaveHomeContent?.call();
+                          context.push(
+                            '${RouteNames.listingDetail}/${pro.listingId}',
+                          );
+                        },
+                  onBook: () => _bookProfessional(pro),
+                ),
+              ),
           ],
         );
       },
@@ -1178,9 +1155,8 @@ class _ListingFeedScreenState extends ConsumerState<ListingFeedScreen> {
                                       width: 52,
                                       height: 52,
                                       fit: BoxFit.cover,
-                                      errorWidget: (_, __, ___) => const Icon(
-                                        Icons.campaign_outlined,
-                                      ),
+                                      errorWidget: (_, __, ___) =>
+                                          const Icon(Icons.campaign_outlined),
                                     ),
                                   ),
                             title: Text(listing.title),
@@ -1263,164 +1239,160 @@ class _SearchControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final regions = selectedCountry?.regions ?? const <RegionOption>[];
     final cities = selectedRegion?.cities ?? const <CityOption>[];
     final towns = selectedCity?.towns ?? const <String>[];
-    // On a wide (web/desktop) window these fields would otherwise stretch
-    // full-width and look like a phone UI blown up — cap and center the
-    // search card instead, like a real search bar rather than a mobile form.
-    final isWide = MediaQuery.sizeOf(context).width >= 700;
-    final column = Column(
-      children: [
-        TextField(
-          controller: serviceController,
-          onSubmitted: (_) => onSearch(),
-          decoration: InputDecoration(
-            hintText: settings.t('What service or job do you need?'),
-            prefixIcon: const Icon(Icons.search),
-          ),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: locationController,
-          onSubmitted: (_) => onSearch(),
-          decoration: InputDecoration(
-            hintText: settings.t('Type location, street, or area'),
-            prefixIcon: const Icon(Icons.location_on_outlined),
-            suffixIcon: IconButton(
-              onPressed: locating || lookingUpLocation ? null : onUseLocation,
-              icon: locating || lookingUpLocation
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.my_location),
-              tooltip: settings.t('Use phone location'),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _PickerField(
-                label: settings.t('Country'),
-                value: selectedCountry?.name ?? settings.t('Any'),
-                onTap: () async {
-                  final selected = await _pickOption<CountryOption?>(
-                    context,
-                    title: settings.t('Country'),
-                    options: <CountryOption?>[null, ...countries],
-                    labelFor: (country) => country?.name ?? settings.t('Any'),
-                    settings: settings,
-                  );
-                  if (selected != null) onCountryChanged(selected.value);
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _PickerField(
-                label: settings.t('Region'),
-                value: loadingLocations
-                    ? settings.t('Loading...')
-                    : selectedRegion?.name ?? settings.t('Any'),
-                onTap: loadingLocations
-                    ? () {}
-                    : () async {
-                        final selected = await _pickOption<RegionOption?>(
-                          context,
-                          title: settings.t('Region'),
-                          options: <RegionOption?>[
-                            null,
-                            ...regions,
-                          ],
-                          labelFor: (region) =>
-                              region?.name ?? settings.t('Any'),
-                          customOptionForQuery: selectedCountry == null
-                              ? null
-                              : (value) => RegionOption(
-                                    name: value,
-                                    cities: const [],
-                                  ),
-                          settings: settings,
-                        );
-                        if (selected != null) onRegionChanged(selected.value);
-                      },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _PickerField(
-                label: settings.t('City'),
-                value: selectedCity?.name ?? settings.t('Any'),
-                onTap: () async {
-                  final selected = await _pickOption<CityOption?>(
-                    context,
-                    title: settings.t('City'),
-                    options: <CityOption?>[null, ...cities],
-                    labelFor: (city) => city?.name ?? settings.t('Any'),
-                    customOptionForQuery: selectedCountry == null
-                        ? null
-                        : (value) => CityOption(
-                              name: value,
-                              towns: townsForLocation(
-                                countryCode: selectedCountry!.code,
-                                stateName: selectedRegion?.name ?? '',
-                                cityName: value,
-                              ),
-                            ),
-                    settings: settings,
-                  );
-                  if (selected != null) onCityChanged(selected.value);
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _PickerField(
-                label: settings.t('Town'),
-                value: selectedTown ?? settings.t('Any'),
-                onTap: () async {
-                  final selected = await _pickOption<String?>(
-                    context,
-                    title: settings.t('Town'),
-                    options: <String?>[null, ...towns],
-                    labelFor: (town) => town ?? settings.t('Any'),
-                    customOptionForQuery:
-                        selectedCountry == null ? null : (value) => value,
-                    settings: settings,
-                  );
-                  if (selected != null) onTownChanged(selected.value);
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: scheme.primary,
-              foregroundColor: scheme.onPrimary,
-            ),
-            onPressed: onSearch,
-            child: Text(settings.t('Search')),
-          ),
-        ),
-      ],
+    final keyword = TextField(
+      controller: serviceController,
+      onSubmitted: (_) => onSearch(),
+      decoration: InputDecoration(
+        hintText: settings.t('What service or job do you need?'),
+        prefixIcon: const Icon(Icons.search),
+      ),
     );
-    if (!isWide) return column;
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 640),
-        child: column,
+    final location = TextField(
+      controller: locationController,
+      onSubmitted: (_) => onSearch(),
+      decoration: InputDecoration(
+        hintText: settings.t('Type location, street, or area'),
+        prefixIcon: const Icon(Icons.location_on_outlined),
+        suffixIcon: IconButton(
+          onPressed: locating || lookingUpLocation ? null : onUseLocation,
+          icon: locating || lookingUpLocation
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.my_location),
+          tooltip: settings.t('Use phone location'),
+        ),
+      ),
+    );
+    final country = _PickerField(
+      label: settings.t('Country'),
+      value: selectedCountry?.name ?? settings.t('Any'),
+      onTap: () async {
+        final selected = await _pickOption<CountryOption?>(
+          context,
+          title: settings.t('Country'),
+          options: <CountryOption?>[null, ...countries],
+          labelFor: (country) => country?.name ?? settings.t('Any'),
+          settings: settings,
+        );
+        if (selected != null) onCountryChanged(selected.value);
+      },
+    );
+    final region = _PickerField(
+      label: settings.t('Region'),
+      value: loadingLocations
+          ? settings.t('Loading...')
+          : selectedRegion?.name ?? settings.t('Any'),
+      onTap: loadingLocations
+          ? null
+          : () async {
+              final selected = await _pickOption<RegionOption?>(
+                context,
+                title: settings.t('Region'),
+                options: <RegionOption?>[null, ...regions],
+                labelFor: (region) => region?.name ?? settings.t('Any'),
+                customOptionForQuery: selectedCountry == null
+                    ? null
+                    : (value) => RegionOption(name: value, cities: const []),
+                settings: settings,
+              );
+              if (selected != null) onRegionChanged(selected.value);
+            },
+    );
+    final city = _PickerField(
+      label: settings.t('City'),
+      value: selectedCity?.name ?? settings.t('Any'),
+      onTap: () async {
+        final selected = await _pickOption<CityOption?>(
+          context,
+          title: settings.t('City'),
+          options: <CityOption?>[null, ...cities],
+          labelFor: (city) => city?.name ?? settings.t('Any'),
+          customOptionForQuery: selectedCountry == null
+              ? null
+              : (value) => CityOption(
+                    name: value,
+                    towns: townsForLocation(
+                      countryCode: selectedCountry!.code,
+                      stateName: selectedRegion?.name ?? '',
+                      cityName: value,
+                    ),
+                  ),
+          settings: settings,
+        );
+        if (selected != null) onCityChanged(selected.value);
+      },
+    );
+    final town = _PickerField(
+      label: settings.t('Town'),
+      value: selectedTown ?? settings.t('Any'),
+      onTap: () async {
+        final selected = await _pickOption<String?>(
+          context,
+          title: settings.t('Town'),
+          options: <String?>[null, ...towns],
+          labelFor: (town) => town ?? settings.t('Any'),
+          customOptionForQuery:
+              selectedCountry == null ? null : (value) => value,
+          settings: settings,
+        );
+        if (selected != null) onTownChanged(selected.value);
+      },
+    );
+    final search = FilledButton(
+      onPressed: onSearch,
+      child: Text(settings.t('Search')),
+    );
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final filters = [country, region, city, town];
+            if (width >= 1030 &&
+                MediaQuery.textScalerOf(context).scale(14) <= 16) {
+              return Row(
+                children: [
+                  Expanded(flex: 6, child: keyword),
+                  const SizedBox(width: 8),
+                  Expanded(flex: 4, child: location),
+                  for (final filter in filters) ...[
+                    const SizedBox(width: 8),
+                    Expanded(flex: 2, child: filter),
+                  ],
+                  const SizedBox(width: 8),
+                  search,
+                ],
+              );
+            }
+            final columns = width >= 560 ? 4 : 2;
+            final filterWidth =
+                ((width - 8 * (columns - 1)) / columns).floorToDouble();
+            return Wrap(
+              spacing: 8,
+              runSpacing: 10,
+              children: [
+                for (final field in [keyword, location])
+                  SizedBox(
+                    width: width >= 560
+                        ? ((width - 8) / 2).floorToDouble()
+                        : width,
+                    child: field,
+                  ),
+                for (final filter in filters)
+                  SizedBox(width: filterWidth, child: filter),
+                SizedBox(width: width, child: search),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -1487,7 +1459,7 @@ class _PickerField extends StatelessWidget {
 
   final String label;
   final String value;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1495,7 +1467,14 @@ class _PickerField extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       onTap: onTap,
       child: InputDecorator(
-        decoration: InputDecoration(labelText: label),
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 14,
+          ),
+        ),
         child: Row(
           children: [
             Expanded(
@@ -1545,9 +1524,11 @@ Future<_PickerResult<T>?> _pickOption<T>(
                 final filtered = query.isEmpty
                     ? options
                     : options
-                        .where((option) => labelFor(option)
-                            .toLowerCase()
-                            .contains(query.toLowerCase()))
+                        .where(
+                          (option) => labelFor(option)
+                              .toLowerCase()
+                              .contains(query.toLowerCase()),
+                        )
                         .toList(growable: false);
                 final normalizedQuery = query.toLowerCase();
                 final hasExactMatch = normalizedQuery.isEmpty ||
@@ -1598,8 +1579,9 @@ Future<_PickerResult<T>?> _pickOption<T>(
                           if (hasCustomOption && index == 0) {
                             final option = customOptionForQuery(query);
                             return ListTile(
-                              leading:
-                                  const Icon(Icons.add_location_alt_outlined),
+                              leading: const Icon(
+                                Icons.add_location_alt_outlined,
+                              ),
                               title: Text('${settings.t('Use')} "$query"'),
                               onTap: () => Navigator.of(context)
                                   .pop(_PickerResult(option)),
@@ -1720,7 +1702,9 @@ class _OpenJobsPreview extends ConsumerWidget {
                           ? () => context.go(RouteNames.auth)
                           : () {
                               onLeaveHomeContent?.call();
-                              context.push('${RouteNames.jobDetail}/${job.id}');
+                              context.push(
+                                '${RouteNames.jobDetail}/${job.id}',
+                              );
                             },
                     ),
                   ),
@@ -1741,6 +1725,7 @@ class _ProfessionalCard extends StatelessWidget {
     required this.settings,
     required this.onOpenProfile,
     required this.onBook,
+    this.onOpenListing,
   });
 
   final _ProfessionalPreview pro;
@@ -1748,172 +1733,197 @@ class _ProfessionalCard extends StatelessWidget {
   final AppSettings settings;
   final VoidCallback onOpenProfile;
   final VoidCallback onBook;
+  final VoidCallback? onOpenListing;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final colors = Theme.of(context).appColors;
-    final unavailableColor = colors.cancelled;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final colors = theme.appColors;
+    final avatarUrl = pro.avatarUrl?.trim() ?? '';
+    final category =
+        pro.categories.where((name) => name.trim().isNotEmpty).firstOrNull;
+    final artisanName = pro.artisanName;
+    final bookingLabel = pro.listingId.isEmpty
+        ? 'No service listing yet'
+        : pro.isBusy
+            ? 'Busy'
+            : 'Book Now';
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: onOpenProfile,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Stack(
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Hero(
-                    tag: 'artisan-avatar-${pro.artisanId}',
-                    child: CircleAvatar(
-                      radius: 24,
-                      foregroundImage: (pro.avatarUrl?.isNotEmpty ?? false)
-                          ? CachedNetworkImageProvider(pro.avatarUrl!)
-                          : null,
-                      onForegroundImageError:
-                          (pro.avatarUrl?.isNotEmpty ?? false)
-                              ? (_, __) {}
-                              : null,
-                      child: Text(
-                        (pro.name.trim().isNotEmpty ? pro.name.trim()[0] : 'P')
-                            .toUpperCase(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                pro.name,
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
-                            if (pro.isVerified)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color:
-                                      colors.verified.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.verified,
-                                        size: 14, color: colors.verified),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      settings.t('Verified'),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: colors.verified,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          pro.location,
-                          style: TextStyle(color: scheme.onSurfaceVariant),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          pro.listingCount == 0
-                              ? settings.t('No active service listing yet')
-                              : '${pro.listingCount} ${settings.t(pro.listingCount == 1 ? 'active service' : 'active services')}',
-                          style: TextStyle(color: scheme.onSurfaceVariant),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${pro.ratingAverage.toStringAsFixed(1)}/5 (${pro.ratingCount}) - ${pro.wonBidCount} ${settings.t('won bids')}',
-                          style: TextStyle(color: scheme.onSurfaceVariant),
-                        ),
-                        if (pro.isBusy) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            settings.t('Unavailable'),
-                            style: TextStyle(
-                              color: unavailableColor,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: pro.categories
-                    .where((item) => item.trim().isNotEmpty)
-                    .take(3)
-                    .map((item) => Chip(label: Text(item)))
-                    .toList(growable: false),
-              ),
-              const SizedBox(height: 12),
-              if (pro.listingCount > 0) ...[
-                Text(
-                  '${settings.t('From')} ${formatMoney(pro.minPrice, currencyCode)}',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-              ],
-              OutlinedButton.icon(
-                onPressed: onOpenProfile,
-                icon: const Icon(Icons.account_circle_outlined, size: 18),
-                label: Text(
-                  pro.ratingCount > 0
-                      ? '${settings.t('Profile')} & ${pro.ratingCount} ${settings.t(pro.ratingCount == 1 ? 'comment' : 'comments')}'
-                      : settings.t('View profile & comments'),
-                ),
-              ),
-              const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: pro.isBusy || pro.listingId.isEmpty ? null : onBook,
-                  icon: Icon(
-                    pro.isBusy ? Icons.block : Icons.request_quote_outlined,
-                    size: 18,
-                  ),
-                  style: pro.isBusy
-                      ? FilledButton.styleFrom(
-                          backgroundColor: unavailableColor,
-                        )
-                      : null,
-                  label: Text(
-                    settings.t(
-                      pro.listingId.isEmpty
-                          ? 'No service listing yet'
-                          : pro.isBusy
-                              ? 'Busy'
-                              : 'Book Now',
+                height: 108,
+                child: ColoredBox(
+                  color: scheme.secondaryContainer,
+                  child: pro.coverUrl.isEmpty
+                      ? null
+                      : CachedNetworkImage(
+                          imageUrl: pro.coverUrl,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                        ),
+                ),
+              ),
+              PositionedDirectional(
+                start: 14,
+                bottom: 12,
+                child: HeroMode(
+                  enabled: pro.title == null,
+                  child: Hero(
+                    tag: 'artisan-avatar-${pro.artisanId}',
+                    child: CircleAvatar(
+                      radius: 26,
+                      foregroundImage: avatarUrl.isEmpty
+                          ? null
+                          : CachedNetworkImageProvider(avatarUrl),
+                      onForegroundImageError:
+                          avatarUrl.isEmpty ? null : (_, __) {},
+                      child: Text(
+                        (pro.name.trim().isEmpty ? 'P' : pro.name.trim()[0])
+                            .toUpperCase(),
+                      ),
                     ),
                   ),
                 ),
               ),
             ],
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (pro.title case final title?)
+                  InkWell(
+                    onTap: onOpenListing,
+                    child: Text(title, style: theme.textTheme.titleMedium),
+                  ),
+                Text(
+                  pro.name,
+                  style: pro.title == null
+                      ? theme.textTheme.titleMedium
+                      : theme.textTheme.bodyMedium,
+                ),
+                if (artisanName != null &&
+                    artisanName.isNotEmpty &&
+                    artisanName.toLowerCase() != pro.name.toLowerCase())
+                  Text(artisanName, style: theme.textTheme.bodyMedium),
+                if (pro.location.isNotEmpty)
+                  Text(
+                    pro.location,
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (pro.isVerified)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colors.verified.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '✓ ${settings.t('Verified')}',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: colors.verified,
+                          ),
+                        ),
+                      ),
+                    if (category != null)
+                      Container(
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        child: Text(
+                          category,
+                          style: theme.textTheme.labelMedium,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      '★ ${pro.ratingAverage.toStringAsFixed(1)}/5 (${pro.ratingCount})',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    Text(
+                      '${pro.wonBidCount} ${settings.t('won bids')}',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                if (pro.listingCount > 0)
+                  Text(
+                    '${settings.t('From')} ${formatMoney(pro.minPrice, currencyCode)}',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 8,
+                          ),
+                        ),
+                        onPressed: onOpenProfile,
+                        child: Text(
+                          settings.t('View Profile'),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 8,
+                          ),
+                        ),
+                        onPressed:
+                            pro.isBusy || pro.listingId.isEmpty ? null : onBook,
+                        child: Text(
+                          settings.t(bookingLabel),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1925,6 +1935,9 @@ class _ProfessionalPreview {
     required this.listingId,
     required this.name,
     required this.avatarUrl,
+    this.artisanName,
+    this.title,
+    this.coverUrl = '',
     required this.location,
     required this.minPrice,
     required this.categories,
@@ -1940,6 +1953,9 @@ class _ProfessionalPreview {
   final String listingId;
   final String name;
   final String? avatarUrl;
+  final String? artisanName;
+  final String? title;
+  final String coverUrl;
   final String location;
   final double minPrice;
   final Set<String> categories;
@@ -1952,6 +1968,7 @@ class _ProfessionalPreview {
 
   _ProfessionalPreview copyWith({
     String? location,
+    String? listingId,
     double? minPrice,
     Set<String>? categories,
     bool? isVerified,
@@ -1963,9 +1980,11 @@ class _ProfessionalPreview {
   }) {
     return _ProfessionalPreview(
       artisanId: artisanId,
-      listingId: listingId,
+      listingId: listingId ?? this.listingId,
       name: name,
       avatarUrl: avatarUrl,
+      artisanName: artisanName,
+      coverUrl: coverUrl,
       location: location ?? this.location,
       minPrice: minPrice ?? this.minPrice,
       categories: categories ?? this.categories,

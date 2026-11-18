@@ -7,6 +7,7 @@ class SmePageBanner extends StatelessWidget {
     required this.title,
     required this.body,
     this.imageUrl = marketImage,
+    this.height,
   });
 
   static const marketImage =
@@ -31,25 +32,28 @@ class SmePageBanner extends StatelessWidget {
   final String title;
   final String body;
   final String imageUrl;
+  final double? height;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final height = screenWidth < 420 ? 172.0 : 210.0;
+    final bannerHeight = height ?? (screenWidth < 420 ? 172.0 : 210.0);
 
     return Semantics(
       label: '$title. $body',
       child: Container(
-        height: height,
+        height: bannerHeight,
         width: double.infinity,
         margin: const EdgeInsets.fromLTRB(0, 12, 0, 8),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
+          color: const Color(0xFF142E24),
+          borderRadius: BorderRadius.circular(16),
           image: DecorationImage(
             image: CachedNetworkImageProvider(imageUrl),
             fit: BoxFit.cover,
+            onError: (_, __) {},
             colorFilter: ColorFilter.mode(
               Colors.black.withValues(alpha: 0.42),
               BlendMode.darken,
@@ -68,6 +72,8 @@ class SmePageBanner extends StatelessWidget {
                 children: [
                   Text(
                     title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: textTheme.titleLarge?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w800,

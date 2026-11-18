@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../core/widgets/admob_banner.dart';
 import '../../core/widgets/app_scaffold.dart';
 import '../../core/widgets/sme_page_banner.dart';
@@ -56,7 +58,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
       if (!mounted || !_shouldShowBanner) return;
       final banners = _buildBanners(ref.read(appSettingsControllerProvider));
       // +1 for the AdMob slide spliced into the rotation (see _adSlideIndex).
-      final totalSlides = banners.length + 1;
+      final totalSlides = banners.length + (kIsWeb ? 0 : 1);
       if (totalSlides < 2 || !_bannerController.hasClients) return;
       final next = (_bannerIndex + 1) % totalSlides;
       _bannerController.animateToPage(
@@ -84,35 +86,49 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     // specific tab, e.g. Profile, to finish an account item. `_currentIndex`
     // is private State the rest of the app has no other way to reach.
     final requestedTab = ref.watch(requestedHomeTabProvider);
-    if (requestedTab != null && requestedTab != _currentIndex) {
+    if (requestedTab != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() => _currentIndex = requestedTab);
+        if (!mounted || ref.read(requestedHomeTabProvider) != requestedTab) {
+          return;
+        }
+        _openTab(requestedTab);
         ref.read(requestedHomeTabProvider.notifier).state = null;
       });
     }
     final currentIndex = user == null && _currentIndex > 0 ? 0 : _currentIndex;
+    final desktop =
+        MediaQuery.sizeOf(context).width >= AppScaffold.desktopBreakpoint;
     final banners = _buildBanners(settings);
-    final adSlideIndex = _adSlideIndex(banners.length);
+    final adSlideIndex = kIsWeb ? null : _adSlideIndex(banners.length);
     final pages = [
       ListingFeedScreen(
-        openingBanner: _shouldShowBanner
+        openingBanner: desktop ||
+                _shouldShowBanner ||
+                (user != null && user.role != UserRole.admin)
             ? Column(
                 children: [
                   if (user != null && user.role != UserRole.admin)
                     const AccountStatusCard(),
-                  _BannerSlider(
-                    controller: _bannerController,
-                    banners: banners,
-                    adSlideIndex: adSlideIndex,
-                    currentIndex: _bannerIndex,
-                    onPageChanged: (index) => setState(() => _bannerIndex = index),
-                  ),
+                  if (desktop)
+                    SmePageBanner(
+                      height: 168,
+                      title: settings.t('Small businesses move communities'),
+                      body: settings.t(
+                          'Every booking supports local skills, steady income, and better services close to home.'),
+                      imageUrl: SmePageBanner.cafeImage,
+                    )
+                  else if (_shouldShowBanner)
+                    _BannerSlider(
+                      controller: _bannerController,
+                      banners: banners,
+                      adSlideIndex: adSlideIndex,
+                      currentIndex: _bannerIndex,
+                      onPageChanged: (index) =>
+                          setState(() => _bannerIndex = index),
+                    ),
                 ],
               )
-            : (user != null && user.role != UserRole.admin
-                ? const AccountStatusCard()
-                : null),
+            : null,
         onOpenUploadTab: () => _openTab(2),
         onLeaveHomeContent: _hideOpeningBanner,
       ),
@@ -134,8 +150,10 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
       child: StreamBuilder(
         stream: user == null ? null : chatService.watchThreads(user.id),
         builder: (context, snapshot) {
-          final unread = (snapshot.data ?? const [])
-              .fold<int>(0, (sum, thread) => sum + thread.unreadCount);
+          final unread = (snapshot.data ?? const []).fold<int>(
+            0,
+            (sum, thread) => sum + thread.unreadCount,
+          );
           _notifyOnUnreadChat(unread, settings);
           final navigationItems = [
             BottomNavigationBarItem(
@@ -179,23 +197,35 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
                 : settings.t('ProSME'),
             actions: [
               IconButton(
-                onPressed: () async {
-                  await ref.read(listingServiceProvider).fetchListings();
-                  ref.invalidate(listingsStreamProvider);
+                onPressed: () {
+                  unawaited(ref.read(listingServiceProvider).refreshListings());
+                  ref.invalidate(marketplaceArtisansProvider);
                 },
                 icon: const Icon(Icons.refresh),
                 tooltip: settings.t('Refresh'),
               ),
-              IconButton(
-                onPressed: () {
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.person_outline),
+                tooltip: settings.t('Account'),
+                onSelected: (destination) {
                   if (user == null) {
                     context.go(RouteNames.auth);
-                    return;
+                  } else if (destination == RouteNames.wallet) {
+                    context.push(RouteNames.wallet);
+                  } else {
+                    _openTab(3);
                   }
-                  _openTab(3);
                 },
-                icon: const Icon(Icons.person_outline),
-                tooltip: settings.t('Profile'),
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'profile',
+                    child: Text(settings.t('Profile')),
+                  ),
+                  PopupMenuItem(
+                    value: RouteNames.wallet,
+                    child: Text(settings.t('Wallet')),
+                  ),
+                ],
               ),
               IconButton(
                 onPressed: () {
@@ -217,28 +247,14 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
             ],
             selectedIndex: currentIndex,
             onDestinationSelected: selectDestination,
-            desktopDestinations: navigationItems
-                .map(
-                  (item) => NavigationRailDestination(
-                    icon: item.icon,
-                    selectedIcon: item.activeIcon,
-                    label: Text(item.label ?? ''),
-                  ),
-                )
-                .toList(growable: false),
+            destinations: navigationItems,
             body: Column(
               children: [
                 Expanded(
                   child: IndexedStack(index: currentIndex, children: pages),
                 ),
-                if (currentIndex == 0) const AdMobBannerSlot(),
+                if (!kIsWeb && currentIndex == 0) const AdMobBannerSlot(),
               ],
-            ),
-            bottomNavigationBar: BottomNavigationBar(
-              currentIndex: currentIndex,
-              onTap: selectDestination,
-              type: BottomNavigationBarType.fixed,
-              items: navigationItems,
             ),
           );
         },
@@ -379,10 +395,11 @@ class _BannerSlider extends StatelessWidget {
 
   final PageController controller;
   final List<({String title, String body, String image})> banners;
+
   /// Position (0..banners.length) of the AdMob slide spliced into the
   /// rotation. The carousel's own auto-advance timer treats it like any
   /// other slide, so it keeps sliding on to the next one automatically.
-  final int adSlideIndex;
+  final int? adSlideIndex;
   final int currentIndex;
   final ValueChanged<int> onPageChanged;
 
@@ -390,7 +407,8 @@ class _BannerSlider extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final height = screenWidth < 420 ? 196.0 : 234.0;
-    final slideCount = banners.length + 1;
+    final adIndex = adSlideIndex;
+    final slideCount = banners.length + (adIndex == null ? 0 : 1);
     return SizedBox(
       height: height,
       child: Stack(
@@ -401,10 +419,11 @@ class _BannerSlider extends StatelessWidget {
             onPageChanged: onPageChanged,
             itemCount: slideCount,
             itemBuilder: (context, index) {
-              if (index == adSlideIndex) {
+              if (index == adIndex) {
                 return AdMobCarouselSlide(height: height);
               }
-              final contentIndex = index < adSlideIndex ? index : index - 1;
+              final contentIndex =
+                  adIndex == null || index < adIndex ? index : index - 1;
               final banner = banners[contentIndex];
               return SmePageBanner(
                 title: banner.title,

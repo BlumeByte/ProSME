@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/constants.dart';
 import '../config/supabase_options.dart';
+import '../core/widgets/app_scaffold.dart';
 import '../features/admin/admin_dashboard_screen.dart';
 import '../features/auth/artisan_verification_screen.dart';
 import '../features/auth/auth_screen.dart';
@@ -35,6 +36,25 @@ import '../services/app_launch_service.dart';
 import '../services/app_settings_controller.dart';
 import '../services/service_providers.dart';
 
+GoRoute _workspaceRoute({
+  required String path,
+  required GoRouterWidgetBuilder builder,
+}) {
+  return GoRoute(
+    path: path,
+    builder: (context, state) => ColoredBox(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Center(
+        child: ConstrainedBox(
+          constraints:
+              const BoxConstraints(maxWidth: AppScaffold.maxContentWidth),
+          child: SizedBox.expand(child: builder(context, state)),
+        ),
+      ),
+    ),
+  );
+}
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   StreamSubscription<AuthState>? recoverySubscription;
   if (shouldUseSupabase()) {
@@ -62,10 +82,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final fullPath = state.fullPath ?? state.matchedLocation;
       final isOnboarding = fullPath == RouteNames.onboarding;
       final isRecovering = ref.read(passwordRecoveryActiveProvider);
-      final hasStoredSession = shouldUseSupabase() &&
-          supabaseClient.auth.currentSession != null;
-      final isLoggedIn = authState != null ||
-          (authAsync.isLoading && hasStoredSession);
+      final hasStoredSession =
+          shouldUseSupabase() && supabaseClient.auth.currentSession != null;
+      final isLoggedIn =
+          authState != null || (authAsync.isLoading && hasStoredSession);
 
       if (isRecovering && fullPath == RouteNames.home) {
         ref.read(passwordRecoveryActiveProvider.notifier).state = false;
@@ -160,7 +180,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.role,
         builder: (context, state) => const RoleSelectionScreen(),
       ),
-      GoRoute(
+      _workspaceRoute(
         path: RouteNames.artisanVerification,
         builder: (context, state) => const ArtisanVerificationScreen(),
       ),
@@ -184,24 +204,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.adminBroadcast,
         builder: (context, state) => const BroadcastComposerScreen(),
       ),
-      GoRoute(
+      _workspaceRoute(
         path: '${RouteNames.listingDetail}/:id',
         builder: (context, state) => ListingDetailScreen(
           listingId: state.pathParameters['id']!,
           sourceArtisanId: state.uri.queryParameters['fromArtisan'],
         ),
       ),
-      GoRoute(
+      _workspaceRoute(
         path: '${RouteNames.artisanProfile}/:id',
         builder: (context, state) =>
             ArtisanProfileScreen(artisanId: state.pathParameters['id']!),
       ),
-      GoRoute(
+      _workspaceRoute(
         path: '${RouteNames.chatThread}/:id',
         builder: (context, state) =>
             ChatThreadScreen(threadId: state.pathParameters['id']!),
       ),
-      GoRoute(
+      _workspaceRoute(
         path: RouteNames.invoice,
         builder: (context, state) {
           final extra = state.extra;
@@ -211,16 +231,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      GoRoute(
+      _workspaceRoute(
         path: '${RouteNames.jobDetail}/:id',
         builder: (context, state) =>
             JobDetailScreen(jobId: state.pathParameters['id']!),
       ),
-      GoRoute(
+      _workspaceRoute(
         path: RouteNames.aiSupport,
         builder: (context, state) => const AiSupportScreen(),
       ),
-      GoRoute(
+      _workspaceRoute(
         path: RouteNames.notifications,
         builder: (context, state) => const NotificationsScreen(),
       ),
@@ -228,15 +248,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.twoFactor,
         builder: (context, state) => const TwoFactorScreen(),
       ),
-      GoRoute(
+      _workspaceRoute(
         path: RouteNames.saved,
         builder: (context, state) => const SavedScreen(),
       ),
-      GoRoute(
+      _workspaceRoute(
         path: RouteNames.wallet,
         builder: (context, state) => const WalletScreen(),
       ),
-      GoRoute(
+      _workspaceRoute(
         path: RouteNames.workHistory,
         builder: (context, state) => const WorkHistoryScreen(),
       ),
