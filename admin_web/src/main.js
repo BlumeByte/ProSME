@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import readXlsxFile from 'read-excel-file/browser';
 import './styles.css';
+import { createStorefront, renderStorefront } from './storefront.js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -26,6 +27,7 @@ const emptyData = () => ({
 
 const publicRoutes = new Set([
   '/',
+  '/profile',
   '/about',
   '/features',
   '/login',
@@ -85,6 +87,7 @@ const tabs = [
 
 const publicNav = [
   ['/', 'Home'],
+  ['/profile', 'Profile'],
   ['/about', 'About'],
   ['/features', 'Features'],
 ];
@@ -418,6 +421,12 @@ async function safeSelect(name, query) {
 
 async function init() {
   installGoogleTracking();
+  window.addEventListener('popstate', () => {
+    state.publicPage = currentPublicPage();
+    state.authMode =
+      window.location.pathname === '/signup' ? 'signup' : 'login';
+    render();
+  });
   if (!hasConfig) {
     state.loading = false;
     state.error =
@@ -445,13 +454,6 @@ async function init() {
       return;
     }
     loadDashboard();
-  });
-
-  window.addEventListener('popstate', () => {
-    state.publicPage = currentPublicPage();
-    state.authMode =
-      window.location.pathname === '/signup' ? 'signup' : 'login';
-    render();
   });
 
   if (state.recoveringPassword) {
@@ -2834,7 +2836,18 @@ function renderPublicLayout(content) {
   `;
 }
 
+const bindStorefront = createStorefront(supabase, esc, {
+  tailoring: artisanImages.textile,
+  carpentry: artisanImages.workshop,
+  'it services': artisanImages.chat,
+  default: artisanImages.craft,
+});
+
 function renderHome() {
+  return renderPublicLayout(renderStorefront(artisanImages.market));
+}
+
+function renderVisitorProfile() {
   return renderPublicLayout(`
     <section class="hero-section hero-showcase" style="--hero-image:url('${artisanImages.market}')">
       <div class="hero-copy">
@@ -3471,22 +3484,6 @@ function renderContent() {
 function render() {
   if (state.recoveringPassword) {
     app.innerHTML = renderPasswordRecovery();
-  } else if (!hasConfig) {
-    if (state.publicPage === '/about') {
-      app.innerHTML = renderAboutPage();
-    } else if (state.publicPage === '/features') {
-      app.innerHTML = renderFeaturesPage();
-    } else if (
-      ['/terms', '/privacy', '/security', '/cookies'].includes(state.publicPage)
-    ) {
-      app.innerHTML = renderPolicyPage(state.publicPage);
-    } else if (state.publicPage === '/signup') {
-      app.innerHTML = renderAuthPage('signup');
-    } else if (state.publicPage === '/login') {
-      app.innerHTML = renderAuthPage('login');
-    } else {
-      app.innerHTML = renderHome();
-    }
   } else if (!state.session) {
     if (state.publicPage === '/login') {
       app.innerHTML = renderAuthPage('login');
@@ -3494,6 +3491,8 @@ function render() {
       app.innerHTML = renderAuthPage('signup');
     } else if (state.publicPage === '/about') {
       app.innerHTML = renderAboutPage();
+    } else if (state.publicPage === '/profile') {
+      app.innerHTML = renderVisitorProfile();
     } else if (state.publicPage === '/features') {
       app.innerHTML = renderFeaturesPage();
     } else if (
@@ -3513,6 +3512,7 @@ function render() {
     app.innerHTML = renderPortal();
   }
   bindEvents();
+  void bindStorefront(app.querySelector('.storefront'));
   trackPublicPageView().catch(() => {});
 }
 
