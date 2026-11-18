@@ -78,3 +78,20 @@ Add this Paystack webhook URL in Paystack Dashboard > Settings > API Keys & Webh
 ```text
 https://wbnvifrzckjttyxhmlcf.supabase.co/functions/v1/verification-billing
 ```
+
+## Preview integration credentials
+
+The Vercel build uses a Supabase project URL and a public client key. Supabase
+Edge Functions obtain privileged credentials from their own runtime.
+
+Remove unused preview-scoped database credentials and privileged Supabase keys
+from Vercel after verifying the branch has no server-side consumer. Database
+connection URLs that contain passwords are credentials too. If a server-side
+consumer needs a credential, restrict its environment scope and store it as
+Sensitive. Keep publishable or legacy anon keys in browser configuration.
+
+Removing a variable does not retroactively change older deployments. Rebuild
+any preview you intend to keep. If a database credential or privileged key was
+exposed, rotate it at Supabase and update its dependent services. Coordinate
+legacy JWT secret rotation separately because it can invalidate existing keys
+and user sessions.

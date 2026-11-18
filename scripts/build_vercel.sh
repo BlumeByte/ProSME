@@ -5,9 +5,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ADMIN_WEB_DIR="${REPO_ROOT}/admin_web"
 
-# Build the public/admin Vite site without recursively invoking this hybrid build.
+if [ -z "${VITE_SUPABASE_PUBLISHABLE_KEY:-}" ] && [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+  echo "Missing VITE_SUPABASE_PUBLISHABLE_KEY or SUPABASE_ANON_KEY" >&2
+  exit 1
+fi
+
+SUPABASE_URL_VALUE="${VITE_SUPABASE_URL:-${SUPABASE_URL:-https://wbnvifrzckjttyxhmlcf.supabase.co}}"
+SUPABASE_KEY_VALUE="${VITE_SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_ANON_KEY:-}}"
+
+# Vite validates the selected browser key before either bundle is emitted.
+export VITE_SUPABASE_URL="${SUPABASE_URL_VALUE}"
+export VITE_SUPABASE_PUBLISHABLE_KEY="${SUPABASE_KEY_VALUE}"
 npm --prefix "${ADMIN_WEB_DIR}" install
-npm --prefix "${ADMIN_WEB_DIR}" run build:vite
+npm --prefix "${ADMIN_WEB_DIR}" run build
 
 # Build the same Flutter application used on Android as the authenticated web app.
 FLUTTER_DIR="${HOME}/.cache/prosme-flutter"
@@ -18,14 +28,6 @@ if ! command -v flutter >/dev/null 2>&1; then
   fi
   export PATH="${FLUTTER_DIR}/bin:${PATH}"
 fi
-
-if [ -z "${VITE_SUPABASE_PUBLISHABLE_KEY:-}" ] && [ -z "${SUPABASE_ANON_KEY:-}" ]; then
-  echo "Missing VITE_SUPABASE_PUBLISHABLE_KEY or SUPABASE_ANON_KEY" >&2
-  exit 1
-fi
-
-SUPABASE_URL_VALUE="${VITE_SUPABASE_URL:-${SUPABASE_URL:-https://wbnvifrzckjttyxhmlcf.supabase.co}}"
-SUPABASE_KEY_VALUE="${VITE_SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_ANON_KEY:-}}"
 
 cd "${REPO_ROOT}"
 flutter config --enable-web >/dev/null
