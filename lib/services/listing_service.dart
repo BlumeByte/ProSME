@@ -8,6 +8,7 @@ import 'db_service.dart';
 abstract class ListingService {
   Stream<List<Listing>> watchListings();
   Future<List<Listing>> fetchListings();
+  Future<void> refreshListings();
   Future<Listing> createListing(Listing listing);
   Future<Listing> updateListing(Listing listing);
   Future<void> deleteListing(String listingId);
@@ -26,6 +27,9 @@ class MockListingService implements ListingService {
 
   @override
   Future<List<Listing>> fetchListings() async => List<Listing>.from(_listings);
+
+  @override
+  Future<void> refreshListings() async {}
 
   @override
   Future<Listing> createListing(Listing listing) async {
@@ -176,7 +180,8 @@ class SupabaseListingService implements ListingService {
       }
       if (artisanId != null && artisanBusy.containsKey(artisanId)) {
         hydratedRow['artisanBusy'] = artisanBusy[artisanId] ?? false;
-        hydratedRow['artisanDescription'] = artisanDescriptions[artisanId] ?? '';
+        hydratedRow['artisanDescription'] =
+            artisanDescriptions[artisanId] ?? '';
       }
       if (artisanId != null) {
         hydratedRow['ratingAverage'] = ratingAverages[artisanId] ?? 0;
@@ -207,15 +212,16 @@ class SupabaseListingService implements ListingService {
     unawaited(() async {
       final cached = await _localDb?.loadCachedListings() ?? const [];
       _emitListings(cached, force: true);
-      await _refreshListings();
+      await refreshListings();
     }());
     Timer.periodic(
       const Duration(seconds: 30),
-      (_) => unawaited(_refreshListings()),
+      (_) => unawaited(refreshListings()),
     );
   }
 
-  Future<void> _refreshListings() async {
+  @override
+  Future<void> refreshListings() async {
     try {
       _emitListings(await fetchListings());
     } catch (error, stackTrace) {
