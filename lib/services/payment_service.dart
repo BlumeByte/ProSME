@@ -11,7 +11,16 @@ class PaymentService {
   final SupabaseClient? _supabase;
 
   Future<void> launchPaystackCheckout(String url) async {
-    final uri = Uri.parse(url);
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.userInfo.isNotEmpty ||
+        uri.port != 443 ||
+        !(uri.host == 'checkout.paystack.com' ||
+            (uri.host == 'paystack.com' && uri.path.startsWith('/pay/')) ||
+            uri.host == 'paystack.shop')) {
+      throw const FormatException('Invalid Paystack checkout URL');
+    }
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       throw Exception('Could not launch Paystack checkout');
     }

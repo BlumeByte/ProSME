@@ -19,6 +19,11 @@ foreach ($key in @("SUPABASE_URL", "SUPABASE_ANON_KEY")) {
   }
 }
 
+node (Join-Path $PSScriptRoot "check-supabase-browser-key.mjs") --config $configPath
+if ($LASTEXITCODE -ne 0) {
+  throw "The Play release requires a Supabase publishable key or legacy anon key."
+}
+
 Push-Location $projectRoot
 try {
   flutter build appbundle --release --dart-define-from-file=$ConfigFile

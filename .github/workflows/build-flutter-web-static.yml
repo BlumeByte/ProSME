@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${SUPABASE_ANON_KEY:-}" || { echo "SUPABASE_ANON_KEY is missing"; exit 1; }
+          node scripts/check-supabase-browser-key.mjs
       - name: Install Flutter dependencies
         run: flutter pub get
       - name: Build shared Flutter web app
