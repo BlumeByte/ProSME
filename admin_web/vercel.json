@@ -3,9 +3,51 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "routes": [
-    { "src": "/app", "dest": "/app/index.html" },
-    { "src": "/app/", "dest": "/app/index.html" },
-    { "handle": "filesystem" },
-    { "src": "/.*", "dest": "/index.html" }
+    {
+      "src": "/.*",
+      "headers": {
+        "Content-Security-Policy": "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+        "X-Frame-Options": "DENY",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/app(?:/|/index\\.html)?$",
+      "headers": {
+        "Cache-Control": "no-store, max-age=0"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/app/(?:flutter_bootstrap|main\\.dart)\\.js$",
+      "headers": {
+        "Cache-Control": "no-cache, max-age=0, must-revalidate"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/app/flutter_service_worker\\.js$",
+      "headers": {
+        "Cache-Control": "no-store, max-age=0"
+      },
+      "continue": true
+    },
+    {
+      "src": "/app",
+      "dest": "/app/index.html"
+    },
+    {
+      "src": "/app/",
+      "dest": "/app/index.html"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
+    }
   ]
 }

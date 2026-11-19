@@ -94,8 +94,8 @@ Deno.serve(async (req) => {
       p_max: 10,
       p_window_seconds: 3600,
     });
-    if (ipLimitError) console.error('rate limit check failed', ipLimitError.message);
-    else if (ipAllowed === false) return json({ ok: true });
+    if (ipLimitError) throw new Error(`Rate limit check failed: ${ipLimitError.message}`);
+    if (ipAllowed !== true) return json({ ok: true });
 
     const emailHash = await sha256(email);
     await admin

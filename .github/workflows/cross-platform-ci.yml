@@ -27,6 +27,8 @@ jobs:
         env:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
+          set -euo pipefail
+          node scripts/check-supabase-browser-key.mjs --allow-missing
           flutter build web --release --base-href /app/ \
             --dart-define="SUPABASE_URL=https://wbnvifrzckjttyxhmlcf.supabase.co" \
             --dart-define="SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}"
